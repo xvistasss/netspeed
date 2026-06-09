@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Activity, 
-  ArrowDown, 
-  ArrowUp, 
-  Globe, 
-  Wifi, 
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  Download,
+  Globe,
+  Wifi,
   AlertTriangle,
   Play,
   Square
@@ -19,14 +20,15 @@ interface TestServer {
   lon: number;
   url: string; // Will default to current host API endpoints
   region?: string;
+  distance: number;
 }
 
 const GLOBAL_TEST_SERVERS: TestServer[] = [
-  { id: 'local-edge', name: 'Closest Edge (Auto-detected)', lat: 0, lon: 0, url: '' }, // Coordinates populated from IP geo
-  { id: 'us-east', name: 'North America (New York)', lat: 40.7128, lon: -74.0060, url: '', region: 'us-east' },
-  { id: 'eu-central', name: 'Europe (Frankfurt)', lat: 50.1109, lon: 8.6821, url: '', region: 'eu-central' },
-  { id: 'ap-southeast', name: 'Asia Pacific (Singapore)', lat: 1.3521, lon: 103.8198, url: '', region: 'ap-southeast' },
-  { id: 'ap-southern', name: 'Australia (Sydney)', lat: -33.8688, lon: 151.2093, url: '', region: 'ap-southeast' }
+  { id: 'local-edge', name: 'Detecting Location...', lat: 0, lon: 0, url: '', distance: 0 },
+  { id: 'us-east', name: 'New York, United States', lat: 40.7128, lon: -74.0060, url: '', region: 'us-east', distance: 9999 },
+  { id: 'eu-central', name: 'Frankfurt, Germany', lat: 50.1109, lon: 8.6821, url: '', region: 'eu-central', distance: 9999 },
+  { id: 'ap-southeast', name: 'Singapore', lat: 1.3521, lon: 103.8198, url: '', region: 'ap-southeast', distance: 9999 },
+  { id: 'ap-southern', name: 'Sydney, Australia', lat: -33.8688, lon: 151.2093, url: '', region: 'ap-southeast', distance: 9999 }
 ];
 
 // Haversine Math to calculate distance between two coordinates in km
@@ -34,9 +36,9 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const R = 6371; // Radius of the Earth in km
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -78,7 +80,7 @@ const InfoTooltip = ({ content }: { content: string }) => {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative inline-flex items-center ml-1 z-20 group">
-      <button 
+      <button
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
         onClick={() => setVisible(!visible)}
@@ -102,14 +104,14 @@ export default function SpeedTest() {
   const [phase, setPhase] = useState<TestPhase>('idle');
   const [statusMessage, setStatusMessage] = useState('System ready.');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  
+
   // Geolocation & Server State
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [servers, setServers] = useState<TestServer[]>(GLOBAL_TEST_SERVERS);
   const [closestServers, setClosestServers] = useState<TestServer[]>([]);
   const [selectedServer, setSelectedServer] = useState<TestServer | null>(null);
   const [routingResults, setRoutingResults] = useState<{ [key: string]: number }>({});
-  
+
   // Test Metrics
   const [latencyStats, setLatencyStats] = useState<LatencyStats>({
     current: 0, avg: 0, jitter: 0, min: Infinity, max: 0, latencies: []
@@ -118,7 +120,7 @@ export default function SpeedTest() {
   const [uploadStats, setUploadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
   const [stability, setStability] = useState<number>(100);
   const [packetLoss, setPacketLoss] = useState<number>(0);
-  
+
   // Loaded latency and jitter stats (split download vs upload phase pings)
   const [dlLoadedLatency, setDlLoadedLatency] = useState<number>(0);
   const [dlLoadedJitter, setDlLoadedJitter] = useState<number>(0);
@@ -142,27 +144,27 @@ export default function SpeedTest() {
   const downloadSpeedHistory = useRef<number[]>([]);
   const uploadSpeedHistory = useRef<number[]>([]);
 
-  // 1. Initialize client details on load and check local storage theme
+  // 1. Initialize client details on load and check theme state
   useEffect(() => {
     detectClientLocation();
 
-    // Set initial theme
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
-    setTheme(initialTheme);
-    if (initialTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
+    // Initial theme set based on document.documentElement class
+    const isDark = document.documentElement.classList.contains('dark');
+    setTheme(isDark ? 'dark' : 'light');
+
+    const handleThemeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setTheme(customEvent.detail.theme);
+    };
+
+    window.addEventListener('theme-changed', handleThemeChange);
+
     return () => {
-      // Cleanup Web Worker and Chart instances
       if (workerRef.current) {
         workerRef.current.terminate();
       }
       destroyCharts();
+      window.removeEventListener('theme-changed', handleThemeChange);
     };
   }, []);
 
@@ -187,17 +189,21 @@ export default function SpeedTest() {
     }
   }, [theme]);
 
-  // Toggle Theme Switcher
-  const toggleTheme = () => {
-    const nextTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(nextTheme);
-    localStorage.setItem('theme', nextTheme);
-    if (nextTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+  // Dispatch selectedServer details to Astro header
+  useEffect(() => {
+    if (selectedServer) {
+      const distStr = selectedServer.distance && selectedServer.distance > 0
+        ? `${selectedServer.distance} km`
+        : '';
+      const event = new CustomEvent('server-selected', {
+        detail: {
+          name: selectedServer.name,
+          distance: distStr
+        }
+      });
+      window.dispatchEvent(event);
     }
-  };
+  }, [selectedServer]);
 
   // 2. Setup Chart.js instances
   const destroyCharts = () => {
@@ -367,7 +373,7 @@ export default function SpeedTest() {
       setStatusMessage('Locating client IP and network...');
       const response = await fetch('/api/ip-geo');
       let data = await response.json();
-      
+
       // Local development fallback
       if (data.isLocal) {
         try {
@@ -394,14 +400,30 @@ export default function SpeedTest() {
 
       setClientInfo(data);
       setStatusMessage(`Client IP detected: ${data.ip}`);
-      
-      // Update local edge server coordinates in servers list
+
+      // Update local edge server coordinates and name in servers list
       const lat = data.latitude || 0;
       const lon = data.longitude || 0;
-      
-      const updatedServers = servers.map(s => {
+
+      let locality = 'Local Server';
+      if (data.city && data.country) {
+        if (data.city === 'Local Host' || data.country === 'Local') {
+          locality = 'Local Server';
+        } else {
+          locality = `${data.city}, ${data.country}`;
+        }
+      } else if (data.city) {
+        locality = data.city;
+      }
+
+      const updatedServers = (servers || GLOBAL_TEST_SERVERS).map(s => {
         if (s.id === 'local-edge') {
-          return { ...s, lat, lon };
+          return {
+            ...s,
+            name: locality,
+            lat,
+            lon
+          };
         }
         return s;
       });
@@ -413,7 +435,7 @@ export default function SpeedTest() {
     } catch (err) {
       console.error('Failed to locate client:', err);
       setStatusMessage('GeoIP detection failed. Using global defaults.');
-      calculateServerDistances(0, 0, servers);
+      calculateServerDistances(0, 0, servers || GLOBAL_TEST_SERVERS);
     }
   };
 
@@ -451,7 +473,7 @@ export default function SpeedTest() {
     setPhase('routing');
     setProgressPercent(15);
     setStatusMessage('Routing: Selecting closest network edge server...');
-    
+
     const results: { [key: string]: number } = {};
     const serversToPing = closestServers.length > 0 ? closestServers : servers;
 
@@ -459,7 +481,7 @@ export default function SpeedTest() {
     for (const srv of serversToPing) {
       setStatusMessage(`Verifying connection to: ${srv.name}...`);
       const origin = window.location.origin;
-      
+
       let latSum = 0;
       let successes = 0;
 
@@ -469,8 +491,8 @@ export default function SpeedTest() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1200);
         try {
-          const testUrl = srv.region 
-            ? `${origin}/api/ping?region=${srv.region}&cb=${Date.now()}-${i}` 
+          const testUrl = srv.region
+            ? `${origin}/api/ping?region=${srv.region}&cb=${Date.now()}-${i}`
             : `${origin}/api/ping?cb=${Date.now()}-${i}`;
           const res = await fetch(testUrl, {
             cache: 'no-store',
@@ -496,7 +518,7 @@ export default function SpeedTest() {
         await sleep(600);
         return srv;
       }
-      
+
       console.warn(`Connection failed for server ${srv.name}. Trying next closest server...`);
     }
 
@@ -579,19 +601,19 @@ export default function SpeedTest() {
         case 'DOWNLOAD_PROGRESS':
           const downloadMbps = data.instantaneousSpeed / 1000000;
           const downloadAvgMbps = data.averageSpeed / 1000000;
-          
+
           setDownloadStats({
             current: data.instantaneousSpeed,
             avg: data.averageSpeed,
             peak: data.peakSpeed
           });
-          
+
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart('download', downloadMbps);
           setProgressPercent(50 + Math.round((data.elapsedTime / 8) * 25)); // 25% of progress bar
-          
+
           // Compute simple live stability percentage based on variance
           if (downloadSpeedHistory.current.length > 5) {
             const devSum = downloadSpeedHistory.current.reduce((sum, speed) => sum + Math.abs(speed - downloadAvgMbps), 0);
@@ -606,7 +628,7 @@ export default function SpeedTest() {
           // Transition to Upload
           setPhase('upload');
           setStatusMessage('Measuring upload throughput (concurrent streams)...');
-          
+
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
@@ -626,7 +648,7 @@ export default function SpeedTest() {
             avg: data.averageSpeed,
             peak: data.peakSpeed
           });
-          
+
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
@@ -637,7 +659,7 @@ export default function SpeedTest() {
         case 'UPLOAD_COMPLETE':
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
-          
+
           // Run packet loss simulator checks
           runPacketLossCheck();
           break;
@@ -668,7 +690,7 @@ export default function SpeedTest() {
     setProgressPercent(100);
     setStatusMessage('Speed test complete.');
     setCompletionTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    
+
     // Simulate packet drops evaluation
     const lossPercentage = Math.random() < 0.2 ? parseFloat((Math.random() * 0.4).toFixed(1)) : 0.0;
     setPacketLoss(lossPercentage);
@@ -784,41 +806,8 @@ export default function SpeedTest() {
         <p className="text-sm md:text-base text-body max-w-2xl mt-1">
           A professional-grade, latency-critical speed test engine measuring packet jitters, concurrent downloads, and uploads at the edge.
         </p>
-      </div>
 
-      {/* 2. Top Action Controls Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-canvas border border-hairline p-4 rounded-lg shadow-xs">
-        <div className="flex items-center gap-3">
-          <Globe className="w-5 h-5 text-mute" />
-          <div className="flex flex-col">
-            <span className="text-xs text-mute font-mono">TEST SERVER</span>
-            <span className="text-sm font-semibold text-ink">
-              {selectedServer 
-                ? `${selectedServer.name} ${selectedServer.distance !== undefined && selectedServer.distance > 0 ? `(${selectedServer.distance} km)` : ''}` 
-                : 'Auto-detecting closest...'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          {/* Light/Dark mode switcher to enhance accessibility */}
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink active:scale-90 transition-all duration-150 cursor-pointer shadow-xs flex items-center justify-center select-none"
-            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
-            aria-label="Toggle dark mode"
-          >
-            {theme === 'light' ? (
-              <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
-          </button>
-
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-stretch">
           {phase === 'idle' || phase === 'complete' || phase === 'error' ? (
             <button
               onClick={startSpeedTest}
@@ -834,33 +823,61 @@ export default function SpeedTest() {
               <Square className="w-4 h-4 fill-on-primary text-on-primary" /> Stop Test
             </button>
           )}
+
+          {completionTime && downloadStats.avg > 0 ? (
+            <button
+              onClick={() => {
+                const resultsTxt = `Speed Test Results:\nDownload: ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '—'} ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).unit : ''}\nUpload: ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '—'} ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).unit : ''}\nLatency: ${latencyStats.avg > 0 ? latencyStats.avg.toFixed(1) : '—'} ms\nJitter: ${latencyStats.jitter > 0 ? latencyStats.jitter.toFixed(1) : '—'} ms\nPacket Loss: ${packetLoss}%`;
+                const blob = new Blob([resultsTxt], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `netspeed-results-${Date.now()}.txt`;
+                a.click();
+              }}
+              title="Download results"
+              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
+            >
+              <Download className="w-4 h-4 fill-on-primary text-on-primary" /> Download Results
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex items-center gap-4">
+          {completionTime && (
+            <span className="text-[11px] text-mute">
+              Measured at {completionTime}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Progress Bar & Status Text */}
-      <div className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs">
-        <div className="flex justify-between items-center text-xs font-mono text-mute">
-          <span>PROGRESS</span>
-          <span>{progressPercent}%</span>
+      {phase !== 'idle' && phase !== 'complete' && phase !== 'error' ? (
+        <div className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs">
+          <div className="flex justify-between items-center text-xs font-mono text-mute">
+            <span>PROGRESS</span>
+            <span>{progressPercent}%</span>
+          </div>
+          <div className="w-full bg-canvas-soft-2 h-1.5 rounded-full overflow-hidden">
+            <div
+              className="h-full transition-all duration-300 rounded-full"
+              style={{
+                width: `${progressPercent}%`,
+                backgroundColor: phase === 'download' ? '#eb6f20' : phase === 'upload' ? '#8b5cf6' : 'var(--color-primary)'
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="w-2 h-2 rounded-full bg-success animate-ping" />
+            <span className="text-xs text-body font-mono truncate">{statusMessage}</span>
+          </div>
         </div>
-        <div className="w-full bg-canvas-soft-2 h-1.5 rounded-full overflow-hidden">
-          <div 
-            className="h-full transition-all duration-300 rounded-full"
-            style={{ 
-              width: `${progressPercent}%`,
-              backgroundColor: phase === 'download' ? '#eb6f20' : phase === 'upload' ? '#8b5cf6' : 'var(--color-primary)'
-            }}
-          />
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="w-2 h-2 rounded-full bg-success animate-ping" />
-          <span className="text-xs text-body font-mono truncate">{statusMessage}</span>
-        </div>
-      </div>
+      ) : null}
 
       {/* 3. Main Dashboard Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-        
+
         {/* Column 1: Download */}
         <div className="md:col-span-4 flex flex-col gap-4 bg-canvas border border-hairline p-6 rounded-lg shadow-xs justify-between">
           <div>
@@ -868,16 +885,16 @@ export default function SpeedTest() {
               <span>DOWNLOAD</span>
               <InfoTooltip content="The speed at which data is transferred from the internet to your device. Higher download speeds enable smoother video streaming, faster file downloads, and quicker webpage loading." />
             </div>
-            
+
             <div className="flex items-baseline gap-2 mb-4">
               <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === 'download' 
-                  ? formatSpeed(downloadStats.current).value 
+                {phase === 'download'
+                  ? formatSpeed(downloadStats.current).value
                   : (downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '0.0')}
               </span>
               <span className="text-xl text-mute font-mono">
-                {phase === 'download' 
-                  ? formatSpeed(downloadStats.current).unit 
+                {phase === 'download'
+                  ? formatSpeed(downloadStats.current).unit
                   : (downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).unit : 'Mbps')}
               </span>
             </div>
@@ -908,16 +925,16 @@ export default function SpeedTest() {
               <span>UPLOAD</span>
               <InfoTooltip content="The speed at which data is transferred from your device to the internet. Higher upload speeds are critical for smooth video calls, online gaming, uploading large files, and sending emails with attachments." />
             </div>
-            
+
             <div className="flex items-baseline gap-2 mb-4">
               <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === 'upload' 
-                  ? formatSpeed(uploadStats.current).value 
+                {phase === 'upload'
+                  ? formatSpeed(uploadStats.current).value
                   : (uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '0.0')}
               </span>
               <span className="text-xl text-mute font-mono">
-                {phase === 'upload' 
-                  ? formatSpeed(uploadStats.current).unit 
+                {phase === 'upload'
+                  ? formatSpeed(uploadStats.current).unit
                   : (uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).unit : 'Mbps')}
               </span>
             </div>
@@ -943,7 +960,7 @@ export default function SpeedTest() {
 
         {/* Column 3: Latency, Jitter, Packet Loss Stack */}
         <div className="md:col-span-4 flex flex-col gap-4">
-          
+
           {/* Latency card */}
           <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-col gap-2">
             <div className="flex justify-between items-center">
@@ -953,14 +970,14 @@ export default function SpeedTest() {
               </div>
               <Wifi className="w-4 h-4 text-mute" />
             </div>
-            
+
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
                 {latencyStats.avg > 0 ? latencyStats.avg.toFixed(1) : '—'}
               </span>
               <span className="text-xs text-mute font-mono">ms (unloaded)</span>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
                 {/* ArrowDown color matched to orange download theme */}
@@ -984,7 +1001,7 @@ export default function SpeedTest() {
               </div>
               <Activity className="w-4 h-4 text-mute" />
             </div>
-            
+
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
                 {latencyStats.jitter > 0 ? latencyStats.jitter.toFixed(1) : '—'}
@@ -1014,7 +1031,7 @@ export default function SpeedTest() {
                 </div>
                 <AlertTriangle className="w-4 h-4 text-mute" />
               </div>
-              
+
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
                   {phase === 'complete' ? `${packetLoss}%` : phase === 'idle' ? '—' : '0.0%'}
@@ -1039,9 +1056,9 @@ export default function SpeedTest() {
           <span>NETWORK QUALITY SCORE</span>
           <InfoTooltip content="Estimates how well your current connection supports common online tasks based on speeds and latency scores." />
         </div>
-        
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-hairline">
-          
+
           <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
             <span className="text-xs font-mono text-mute uppercase tracking-wider">Video Streaming</span>
             <span className={`text-lg font-bold ${getQualityScores().streaming.color}`}>
@@ -1066,80 +1083,6 @@ export default function SpeedTest() {
         </div>
       </div>
 
-      {/* 5. Bottom Share & Navigation Controls */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-hairline pt-6 text-xs text-mute font-mono">
-        <div className="flex items-center gap-3">
-          {/* Improved accessibility and UX button classes */}
-          <button 
-            onClick={() => {
-              if (phase === 'download' || phase === 'upload' || phase === 'ping') {
-                cancelSpeedTest();
-              } else {
-                startSpeedTest();
-              }
-            }}
-            disabled={phase === 'routing'}
-            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink px-5 py-2.5 rounded-full font-medium transition-all active:scale-[0.98] duration-150 cursor-pointer disabled:opacity-50 select-none shadow-xs"
-          >
-            {phase === 'download' || phase === 'upload' || phase === 'ping' ? 'Pause' : 'Retest'}
-          </button>
-          
-          <a
-            href="https://radar.cloudflare.com"
-            target="_blank"
-            rel="noreferrer"
-            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink px-5 py-2.5 rounded-full font-medium transition-all active:scale-[0.98] duration-150 cursor-pointer select-none shadow-xs flex items-center gap-1.5"
-          >
-            Compare results on Radar ↗
-          </a>
-        </div>
-
-        <div className="flex items-center gap-4">
-          {completionTime && (
-            <span className="text-[11px] text-mute">
-              Measured at {completionTime}
-            </span>
-          )}
-          
-          {/* Premium Share links */}
-          <div className="flex items-center gap-2">
-            <a 
-              href={`https://twitter.com/intent/tweet?text=My%20internet%20speed%20is%20${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '0'}%20Mbps%20download%20and%20${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '0'}%20Mbps%20upload!`}
-              target="_blank"
-              rel="noreferrer"
-              title="Share on X"
-              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 cursor-pointer select-none"
-            >
-              𝕏
-            </a>
-            <a 
-              href="https://facebook.com"
-              target="_blank"
-              rel="noreferrer"
-              title="Share on Facebook"
-              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 font-sans text-sm font-bold cursor-pointer select-none"
-            >
-              f
-            </a>
-            <button 
-              onClick={() => {
-                const resultsTxt = `Speed Test Results:\nDownload: ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '—'} ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).unit : ''}\nUpload: ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '—'} ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).unit : ''}\nLatency: ${latencyStats.avg > 0 ? latencyStats.avg.toFixed(1) : '—'} ms\nJitter: ${latencyStats.jitter > 0 ? latencyStats.jitter.toFixed(1) : '—'} ms\nPacket Loss: ${packetLoss}%`;
-                const blob = new Blob([resultsTxt], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `netspeed-results-${Date.now()}.txt`;
-                a.click();
-              }}
-              title="Download results"
-              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 cursor-pointer select-none"
-            >
-              ↓
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* 6. Technical Details Drawer */}
       {clientInfo && (
         <details className="group border border-hairline rounded-lg overflow-hidden bg-canvas">
@@ -1154,7 +1097,7 @@ export default function SpeedTest() {
               <div>ISP: <span className="text-ink">{clientInfo.org}</span></div>
               <div>Location: <span className="text-ink">{clientInfo.city}, {clientInfo.region}, {clientInfo.country}</span></div>
             </div>
-            
+
             <div className="flex flex-col gap-2">
               <span className="text-mute font-semibold">ANCHOR ROUTING INFO</span>
               <div>Server: <span className="text-ink">{selectedServer?.name || 'Evaluating...'}</span></div>
@@ -1168,8 +1111,8 @@ export default function SpeedTest() {
                 <div>Distance: <span className="text-ink">0 km (Local Loopback)</span></div>
               )}
               <div>Pre-Ping Latency: <span className="text-ink">
-                {routingResults[selectedServer?.id || ''] 
-                  ? `${Math.round(routingResults[selectedServer?.id || ''])}ms` 
+                {routingResults[selectedServer?.id || '']
+                  ? `${Math.round(routingResults[selectedServer?.id || ''])}ms`
                   : 'Not pinged'}
               </span></div>
             </div>
