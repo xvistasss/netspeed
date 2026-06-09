@@ -357,25 +357,27 @@ export default function SpeedTest() {
   };
 
   // 5. Automated 3-step Routing Cycle (IP Detection, Haversine, Pre-Ping)
-  const runRoutingCycle = async (targetServer: TestServer) => {
+  const runRoutingCycle = async () => {
     setPhase('routing');
-    setProgressPercent(10);
-    setStatusMessage('Automating routing cycle: measuring server latencies...');
+    setProgressPercent(15);
+    setStatusMessage('Routing: Selecting closest network edge server...');
     
     const results: { [key: string]: number } = {};
-    const serversToPing = closestServers.slice(0, 3); // Ping top 3 closest servers
+    const serversToPing = closestServers.length > 0 ? closestServers : servers;
 
+    // Sequentially check closest servers until one succeeds
     for (const srv of serversToPing) {
-      setStatusMessage(`Pre-pinging ${srv.name}...`);
+      setStatusMessage(`Verifying connection to: ${srv.name}...`);
       const origin = window.location.origin;
       
       let latSum = 0;
       let successes = 0;
 
-      for (let i = 0; i < 3; i++) {
+      // Make 2 quick latency pings to verify route availability
+      for (let i = 0; i < 2; i++) {
         const start = performance.now();
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1500);
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
         try {
           const testUrl = srv.region 
             ? `${origin}/api/ping?region=${srv.region}&cb=${Date.now()}-${i}` 
@@ -394,30 +396,28 @@ export default function SpeedTest() {
         }
       }
 
-      const avgLat = successes > 0 ? latSum / successes : 9999;
-      results[srv.id] = avgLat;
+      if (successes > 0) {
+        // First successful server is formally locked in as the anchor
+        const avgLat = latSum / successes;
+        results[srv.id] = avgLat;
+        setRoutingResults(results);
+        setSelectedServer(srv);
+        setStatusMessage(`Connected to nearest edge: ${srv.name} (${Math.round(avgLat)}ms)`);
+        setProgressPercent(30);
+        await sleep(600);
+        return srv;
+      }
+      
+      console.warn(`Connection failed for server ${srv.name}. Trying next closest server...`);
     }
 
-    setRoutingResults(results);
+    // Ultimate fallback if all pings fail
+    const fallback = serversToPing[0] || servers[0];
+    setSelectedServer(fallback);
+    setStatusMessage(`Connected to default local edge server`);
     setProgressPercent(30);
-
-    // Lock in server with absolute lowest latency
-    let lockedSrv = targetServer;
-    let minLat = 9999;
-
-    serversToPing.forEach(srv => {
-      const lat = results[srv.id];
-      if (lat < minLat) {
-        minLat = lat;
-        lockedSrv = srv;
-      }
-    });
-
-    setSelectedServer(lockedSrv);
-    setStatusMessage(`Routing locked anchor server: ${lockedSrv.name} (${Math.round(minLat)}ms)`);
-    await sleep(800);
-
-    return lockedSrv;
+    await sleep(600);
+    return fallback;
   };
 
   // 6. Primary Speed Test Orchestrator
@@ -433,8 +433,7 @@ export default function SpeedTest() {
     setProgressPercent(0);
 
     // Initial routing pre-ping
-    const target = selectedServer || closestServers[0] || servers[0];
-    const anchorServer = await runRoutingCycle(target);
+    const anchorServer = await runRoutingCycle();
 
     // Launch worker thread
     initCharts();
@@ -629,24 +628,11 @@ export default function SpeedTest() {
           <Globe className="w-5 h-5 text-mute" />
           <div className="flex flex-col">
             <span className="text-xs text-mute font-mono">TEST SERVER</span>
-            <select 
-              value={selectedServer?.id || ''} 
-              onChange={(e) => {
-                const s = servers.find(srv => srv.id === e.target.value);
-                if (s) {
-                  setSelectedServer(s);
-                  setStatusMessage(`Target server updated: ${s.name}`);
-                }
-              }}
-              disabled={phase !== 'idle' && phase !== 'complete' && phase !== 'error'}
-              className="text-sm font-semibold bg-transparent text-ink border-0 p-0 focus:ring-0 cursor-pointer"
-            >
-              {closestServers.map((srv) => (
-                <option key={srv.id} value={srv.id} className="bg-canvas">
-                  {srv.name} {srv.distance !== undefined && srv.distance > 0 ? `(${srv.distance} km)` : ''}
-                </option>
-              ))}
-            </select>
+            <span className="text-sm font-semibold text-ink">
+              {selectedServer 
+                ? `${selectedServer.name} ${selectedServer.distance !== undefined && selectedServer.distance > 0 ? `(${selectedServer.distance} km)` : ''}` 
+                : 'Auto-detecting closest...'}
+            </span>
           </div>
         </div>
 
