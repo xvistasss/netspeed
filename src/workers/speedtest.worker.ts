@@ -95,7 +95,6 @@ async function runPingTest(baseUrl: string, region: string | undefined, signal: 
       // Brief sleep between pings to prevent queueing overhead
       await sleep(60);
     } catch (err) {
-      // If single request fails, report and continue or throw depending on abort
       if (signal.aborted) throw err;
       self.postMessage({
         type: 'PING_FAILED_ITERATION',
@@ -121,6 +120,40 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
   let lastReportTime = startTime;
   let lastReportBytes = 0;
 
+  // Track loaded latency pings under download stress
+  const loadedLatencies: number[] = [];
+  let loadedJitter = 0;
+  let loadedAvg = 0;
+
+  // Background latency pinger under download load
+  const pingInterval = setInterval(async () => {
+    if (signal.aborted || performance.now() - startTime >= durationMs) {
+      clearInterval(pingInterval);
+      return;
+    }
+    const pingStart = performance.now();
+    try {
+      const url = region 
+        ? `${baseUrl}/ping?region=${region}&cb=loaded-dl-${Date.now()}` 
+        : `${baseUrl}/ping?cb=loaded-dl-${Date.now()}`;
+      const res = await fetch(url, { signal, cache: 'no-store' });
+      if (res.ok) {
+        await res.text();
+        const lat = performance.now() - pingStart;
+        loadedLatencies.push(lat);
+        
+        loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
+        if (loadedLatencies.length > 1) {
+          let sumDiffs = 0;
+          for (let j = 1; j < loadedLatencies.length; j++) {
+            sumDiffs += Math.abs(loadedLatencies[j] - loadedLatencies[j - 1]);
+          }
+          loadedJitter = sumDiffs / (loadedLatencies.length - 1);
+        }
+      }
+    } catch (_) {}
+  }, 800); // Ping every 800ms
+
   // Monitor progress on timer
   const progressInterval = setInterval(() => {
     const now = performance.now();
@@ -128,6 +161,7 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
 
     if (elapsed >= durationMs / 1000 || signal.aborted) {
       clearInterval(progressInterval);
+      clearInterval(pingInterval);
       return;
     }
 
@@ -151,7 +185,9 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
       totalBytes: totalBytesDownloaded,
       instantaneousSpeed: instSpeedBps,
       averageSpeed: avgSpeedBps,
-      peakSpeed
+      peakSpeed,
+      loadedLatency: loadedAvg,
+      loadedJitter: loadedJitter
     });
   }, 100);
 
@@ -197,10 +233,6 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
         activeFetches--;
         const chunkDuration = performance.now() - chunkStart;
 
-        // Progressive size adjustment: 
-        // We want a chunk to take between 300ms and 1000ms to download.
-        // If it completed in less than 300ms, increase the chunk size to saturate faster networks.
-        // If it took longer than 1500ms, decrease it to stay responsive on slower networks.
         if (chunkDuration < 300 && currentChunkSize < 25 * 1024 * 1024) {
           currentChunkSize = Math.min(25 * 1024 * 1024, currentChunkSize * 2);
         } else if (chunkDuration > 1500 && currentChunkSize > 1 * 1024 * 1024) {
@@ -210,7 +242,6 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
       } catch (err) {
         activeFetches--;
         if (signal.aborted) throw err;
-        // Small delay on connection error before retrying
         await sleep(200);
       }
     }
@@ -221,6 +252,7 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
   await Promise.all(streams);
 
   clearInterval(progressInterval);
+  clearInterval(pingInterval);
   const totalDuration = (performance.now() - startTime) / 1000;
   const finalAvgSpeedBps = totalDuration > 0 ? (totalBytesDownloaded * 8) / totalDuration : 0;
 
@@ -228,7 +260,9 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
     type: 'DOWNLOAD_COMPLETE',
     totalBytes: totalBytesDownloaded,
     averageSpeed: finalAvgSpeedBps,
-    peakSpeed
+    peakSpeed,
+    loadedLatency: loadedAvg,
+    loadedJitter: loadedJitter
   });
 }
 
@@ -251,6 +285,40 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
   const payloadSize2MB = 2 * 1024 * 1024;
   const chunk1MB = new Uint8Array(payloadSize1MB);
   const chunk2MB = new Uint8Array(payloadSize2MB);
+
+  // Track loaded latency pings under upload stress
+  const loadedLatencies: number[] = [];
+  let loadedJitter = 0;
+  let loadedAvg = 0;
+
+  // Background latency pinger under upload load
+  const pingInterval = setInterval(async () => {
+    if (signal.aborted || performance.now() - startTime >= durationMs) {
+      clearInterval(pingInterval);
+      return;
+    }
+    const pingStart = performance.now();
+    try {
+      const url = region 
+        ? `${baseUrl}/ping?region=${region}&cb=loaded-ul-${Date.now()}` 
+        : `${baseUrl}/ping?cb=loaded-ul-${Date.now()}`;
+      const res = await fetch(url, { signal, cache: 'no-store' });
+      if (res.ok) {
+        await res.text();
+        const lat = performance.now() - pingStart;
+        loadedLatencies.push(lat);
+        
+        loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
+        if (loadedLatencies.length > 1) {
+          let sumDiffs = 0;
+          for (let j = 1; j < loadedLatencies.length; j++) {
+            sumDiffs += Math.abs(loadedLatencies[j] - loadedLatencies[j - 1]);
+          }
+          loadedJitter = sumDiffs / (loadedLatencies.length - 1);
+        }
+      }
+    } catch (_) {}
+  }, 800); // Ping every 800ms
 
   // Helper to safely generate random values within Crypto.getRandomValues 65536 byte limits
   const fillRandomValues = (array: Uint8Array) => {
@@ -282,6 +350,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
 
     if (elapsed >= durationMs / 1000 || signal.aborted) {
       clearInterval(progressInterval);
+      clearInterval(pingInterval);
       return;
     }
 
@@ -305,7 +374,9 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
       totalBytes: totalBytesUploaded,
       instantaneousSpeed: instSpeedBps,
       averageSpeed: avgSpeedBps,
-      peakSpeed
+      peakSpeed,
+      loadedLatency: loadedAvg,
+      loadedJitter: loadedJitter
     });
   }, 100);
 
@@ -361,6 +432,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
   await Promise.all(streams);
 
   clearInterval(progressInterval);
+  clearInterval(pingInterval);
   const totalDuration = (performance.now() - startTime) / 1000;
   const finalAvgSpeedBps = totalDuration > 0 ? (totalBytesUploaded * 8) / totalDuration : 0;
 
@@ -368,6 +440,8 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
     type: 'UPLOAD_COMPLETE',
     totalBytes: totalBytesUploaded,
     averageSpeed: finalAvgSpeedBps,
-    peakSpeed
+    peakSpeed,
+    loadedLatency: loadedAvg,
+    loadedJitter: loadedJitter
   });
 }
