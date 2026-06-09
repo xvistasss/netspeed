@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@theme {
+:root {
   --color-primary: #171717;
   --color-on-primary: #ffffff;
   --color-ink: #171717;
@@ -18,6 +18,46 @@
   --color-error-soft: #f7d4d6;
   --color-warning: #f5a623;
   --color-warning-soft: #ffefcf;
+}
+
+.dark {
+  --color-primary: #ffffff;
+  --color-on-primary: #000000;
+  --color-ink: #ffffff;
+  --color-body: #a1a1a1;
+  --color-mute: #666666;
+  --color-hairline: #222222;
+  --color-hairline-strong: #444444;
+  --color-canvas: #0a0a0a;
+  --color-canvas-soft: #000000;
+  --color-canvas-soft-2: #111111;
+  --color-link: #3291ff;
+  --color-link-deep: #0070f3;
+  --color-success: #3291ff;
+  --color-error: #ff1a1a;
+  --color-error-soft: #2c0d0e;
+  --color-warning: #f5a623;
+  --color-warning-soft: #2b1d0c;
+}
+
+@theme {
+  --color-primary: var(--color-primary);
+  --color-on-primary: var(--color-on-primary);
+  --color-ink: var(--color-ink);
+  --color-body: var(--color-body);
+  --color-mute: var(--color-mute);
+  --color-hairline: var(--color-hairline);
+  --color-hairline-strong: var(--color-hairline-strong);
+  --color-canvas: var(--color-canvas);
+  --color-canvas-soft: var(--color-canvas-soft);
+  --color-canvas-soft-2: var(--color-canvas-soft-2);
+  --color-link: var(--color-link);
+  --color-link-deep: var(--color-link-deep);
+  --color-success: var(--color-success);
+  --color-error: var(--color-error);
+  --color-error-soft: var(--color-error-soft);
+  --color-warning: var(--color-warning);
+  --color-warning-soft: var(--color-warning-soft);
   
   --color-gradient-dev-start: #007cf0;
   --color-gradient-dev-end: #00dfd8;
@@ -42,6 +82,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
@@ -56,6 +97,11 @@
   z-index: 0;
   pointer-events: none;
   opacity: 0.65;
+  transition: opacity 0.2s ease;
+}
+
+.dark .mesh-gradient-container {
+  opacity: 0.3;
 }
 
 .mesh-gradient {
@@ -108,20 +154,6 @@
   border-radius: 12px; /* rounded.lg */
   box-shadow: 0px 2px 2px #0000000a, 
               0px 8px 16px -4px #0000000a;
-}
-
-/* Custom speed gauge pulse animations */
-.glow-pulse {
-  animation: pulse-glow 2s infinite ease-in-out;
-}
-
-@keyframes pulse-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 4px rgba(0, 112, 243, 0.2));
-  }
-  50% {
-    filter: drop-shadow(0 0 16px rgba(0, 112, 243, 0.6));
-  }
 }
 
 /* Custom Scrollbar for Monospace fields */

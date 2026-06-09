@@ -73,7 +73,7 @@ interface ClientInfo {
   isLocal: boolean;
 }
 
-// Reusable elegant tooltip component adhering to Vercel's design aesthetic
+// Reusable tooltip component
 const InfoTooltip = ({ content }: { content: string }) => {
   const [visible, setVisible] = useState(false);
   return (
@@ -83,7 +83,7 @@ const InfoTooltip = ({ content }: { content: string }) => {
         onMouseLeave={() => setVisible(false)}
         onClick={() => setVisible(!visible)}
         type="button"
-        className="w-4 h-4 rounded-full border border-hairline-strong text-mute flex items-center justify-center text-[10px] font-mono hover:bg-canvas-soft-2 hover:text-ink transition-colors cursor-pointer"
+        className="w-4 h-4 rounded-full border border-hairline-strong text-mute flex items-center justify-center text-[10px] font-mono hover:bg-canvas-soft-2 hover:text-ink transition-colors cursor-pointer select-none"
         aria-label="More information"
       >
         i
@@ -101,6 +101,7 @@ const InfoTooltip = ({ content }: { content: string }) => {
 export default function SpeedTest() {
   const [phase, setPhase] = useState<TestPhase>('idle');
   const [statusMessage, setStatusMessage] = useState('System ready.');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
   // Geolocation & Server State
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
@@ -141,9 +142,20 @@ export default function SpeedTest() {
   const downloadSpeedHistory = useRef<number[]>([]);
   const uploadSpeedHistory = useRef<number[]>([]);
 
-  // 1. Initialize client details on load
+  // 1. Initialize client details on load and check local storage theme
   useEffect(() => {
     detectClientLocation();
+
+    // Set initial theme
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+    setTheme(initialTheme);
+    if (initialTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
     
     return () => {
       // Cleanup Web Worker and Chart instances
@@ -153,6 +165,39 @@ export default function SpeedTest() {
       destroyCharts();
     };
   }, []);
+
+  // Sync Chart.js scale colors with light/dark theme switch
+  useEffect(() => {
+    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
+    const textColor = theme === 'dark' ? '#a1a1a1' : '#888888';
+
+    if (downloadChartInstance.current) {
+      // @ts-ignore
+      downloadChartInstance.current.options.scales.y.grid.color = gridColor;
+      // @ts-ignore
+      downloadChartInstance.current.options.scales.y.ticks.color = textColor;
+      downloadChartInstance.current.update('none');
+    }
+    if (uploadChartInstance.current) {
+      // @ts-ignore
+      uploadChartInstance.current.options.scales.y.grid.color = gridColor;
+      // @ts-ignore
+      uploadChartInstance.current.options.scales.y.ticks.color = textColor;
+      uploadChartInstance.current.update('none');
+    }
+  }, [theme]);
+
+  // Toggle Theme Switcher
+  const toggleTheme = () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    localStorage.setItem('theme', nextTheme);
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   // 2. Setup Chart.js instances
   const destroyCharts = () => {
@@ -172,6 +217,9 @@ export default function SpeedTest() {
     // Reset history
     downloadSpeedHistory.current = [];
     uploadSpeedHistory.current = [];
+
+    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
+    const textColor = theme === 'dark' ? '#a1a1a1' : '#888888';
 
     // Download Chart Initializer
     if (downloadChartRef.current) {
@@ -193,7 +241,7 @@ export default function SpeedTest() {
             {
               label: '90th Percentile',
               data: [],
-              borderColor: '#b5b5b5', // Dashed line for percentile
+              borderColor: theme === 'dark' ? '#444444' : '#b5b5b5',
               borderWidth: 1.5,
               borderDash: [4, 4],
               pointRadius: 0,
@@ -215,9 +263,9 @@ export default function SpeedTest() {
             },
             y: {
               beginAtZero: true,
-              grid: { color: '#ebebeb' },
+              grid: { color: gridColor },
               ticks: {
-                color: '#888888',
+                color: textColor,
                 font: { family: 'JetBrains Mono', size: 10 },
                 callback: (val) => `${val} M`
               }
@@ -247,7 +295,7 @@ export default function SpeedTest() {
             {
               label: '90th Percentile',
               data: [],
-              borderColor: '#b5b5b5',
+              borderColor: theme === 'dark' ? '#444444' : '#b5b5b5',
               borderWidth: 1.5,
               borderDash: [4, 4],
               pointRadius: 0,
@@ -269,9 +317,9 @@ export default function SpeedTest() {
             },
             y: {
               beginAtZero: true,
-              grid: { color: '#ebebeb' },
+              grid: { color: gridColor },
               ticks: {
-                color: '#888888',
+                color: textColor,
                 font: { family: 'JetBrains Mono', size: 10 },
                 callback: (val) => `${val} M`
               }
@@ -283,6 +331,7 @@ export default function SpeedTest() {
   };
 
   const updateThroughputChart = (type: 'download' | 'upload', mbps: number) => {
+    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
     if (type === 'download') {
       const chart = downloadChartInstance.current;
       if (!chart) return;
@@ -291,7 +340,6 @@ export default function SpeedTest() {
       chart.data.labels = downloadSpeedHistory.current.map(() => '');
       chart.data.datasets[0].data = downloadSpeedHistory.current;
 
-      // Compute 90th percentile value
       const sorted = [...downloadSpeedHistory.current].sort((a, b) => a - b);
       const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
       chart.data.datasets[1].data = downloadSpeedHistory.current.map(() => p90);
@@ -305,7 +353,6 @@ export default function SpeedTest() {
       chart.data.labels = uploadSpeedHistory.current.map(() => '');
       chart.data.datasets[0].data = uploadSpeedHistory.current;
 
-      // Compute 90th percentile value
       const sorted = [...uploadSpeedHistory.current].sort((a, b) => a - b);
       const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
       chart.data.datasets[1].data = uploadSpeedHistory.current.map(() => p90);
@@ -440,7 +487,6 @@ export default function SpeedTest() {
       }
 
       if (successes > 0) {
-        // First successful server is formally locked in as the anchor
         const avgLat = latSum / successes;
         results[srv.id] = avgLat;
         setRoutingResults(results);
@@ -540,7 +586,6 @@ export default function SpeedTest() {
             peak: data.peakSpeed
           });
           
-          // Loaded latency values are computed in background pinger in worker
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
@@ -756,19 +801,37 @@ export default function SpeedTest() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          {/* Light/Dark mode switcher to enhance accessibility */}
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink active:scale-90 transition-all duration-150 cursor-pointer shadow-xs flex items-center justify-center select-none"
+            title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+            aria-label="Toggle dark mode"
+          >
+            {theme === 'light' ? (
+              <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
+
           {phase === 'idle' || phase === 'complete' || phase === 'error' ? (
             <button
               onClick={startSpeedTest}
-              className="w-full sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Play className="w-4 h-4 fill-on-primary" /> Start Speed Test
+              <Play className="w-4 h-4 fill-on-primary text-on-primary" /> Start Speed Test
             </button>
           ) : (
             <button
               onClick={cancelSpeedTest}
-              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Square className="w-4 h-4 fill-on-primary" /> Stop Test
+              <Square className="w-4 h-4 fill-on-primary text-on-primary" /> Stop Test
             </button>
           )}
         </div>
@@ -782,8 +845,11 @@ export default function SpeedTest() {
         </div>
         <div className="w-full bg-canvas-soft-2 h-1.5 rounded-full overflow-hidden">
           <div 
-            className="bg-primary h-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
+            className="h-full transition-all duration-300 rounded-full"
+            style={{ 
+              width: `${progressPercent}%`,
+              backgroundColor: phase === 'download' ? '#eb6f20' : phase === 'upload' ? '#8b5cf6' : 'var(--color-primary)'
+            }}
           />
         </div>
         <div className="flex items-center gap-2 mt-1">
@@ -897,11 +963,13 @@ export default function SpeedTest() {
             
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5 text-link" />
+                {/* ArrowDown color matched to orange download theme */}
+                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" />
                 <span>Down: <span className="font-semibold text-ink font-mono">{dlLoadedLatency > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5 text-highlight-pink" />
+                {/* ArrowUp color matched to purple upload theme */}
+                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" />
                 <span>Up: <span className="font-semibold text-ink font-mono">{ulLoadedLatency > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
@@ -926,11 +994,11 @@ export default function SpeedTest() {
 
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5 text-link" />
+                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" />
                 <span>Down: <span className="font-semibold text-ink font-mono">{dlLoadedJitter > 0 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5 text-highlight-pink" />
+                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" />
                 <span>Up: <span className="font-semibold text-ink font-mono">{ulLoadedJitter > 0 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
@@ -1001,6 +1069,7 @@ export default function SpeedTest() {
       {/* 5. Bottom Share & Navigation Controls */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 border-t border-hairline pt-6 text-xs text-mute font-mono">
         <div className="flex items-center gap-3">
+          {/* Improved accessibility and UX button classes */}
           <button 
             onClick={() => {
               if (phase === 'download' || phase === 'upload' || phase === 'ping') {
@@ -1010,7 +1079,7 @@ export default function SpeedTest() {
               }
             }}
             disabled={phase === 'routing'}
-            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 text-ink px-4 py-2 rounded font-medium transition-colors cursor-pointer disabled:opacity-50"
+            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink px-5 py-2.5 rounded-full font-medium transition-all active:scale-[0.98] duration-150 cursor-pointer disabled:opacity-50 select-none shadow-xs"
           >
             {phase === 'download' || phase === 'upload' || phase === 'ping' ? 'Pause' : 'Retest'}
           </button>
@@ -1019,7 +1088,7 @@ export default function SpeedTest() {
             href="https://radar.cloudflare.com"
             target="_blank"
             rel="noreferrer"
-            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 text-ink px-4 py-2 rounded font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+            className="border border-hairline bg-canvas hover:bg-canvas-soft-2 hover:border-hairline-strong text-ink px-5 py-2.5 rounded-full font-medium transition-all active:scale-[0.98] duration-150 cursor-pointer select-none shadow-xs flex items-center gap-1.5"
           >
             Compare results on Radar ↗
           </a>
@@ -1032,14 +1101,14 @@ export default function SpeedTest() {
             </span>
           )}
           
-          {/* Share links */}
+          {/* Premium Share links */}
           <div className="flex items-center gap-2">
             <a 
               href={`https://twitter.com/intent/tweet?text=My%20internet%20speed%20is%20${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '0'}%20Mbps%20download%20and%20${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '0'}%20Mbps%20upload!`}
               target="_blank"
               rel="noreferrer"
               title="Share on X"
-              className="w-8 h-8 rounded-full border border-hairline flex items-center justify-center hover:bg-canvas-soft-2 text-ink transition-colors"
+              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 cursor-pointer select-none"
             >
               𝕏
             </a>
@@ -1048,7 +1117,7 @@ export default function SpeedTest() {
               target="_blank"
               rel="noreferrer"
               title="Share on Facebook"
-              className="w-8 h-8 rounded-full border border-hairline flex items-center justify-center hover:bg-canvas-soft-2 text-ink transition-colors font-sans text-sm font-bold"
+              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 font-sans text-sm font-bold cursor-pointer select-none"
             >
               f
             </a>
@@ -1063,7 +1132,7 @@ export default function SpeedTest() {
                 a.click();
               }}
               title="Download results"
-              className="w-8 h-8 rounded-full border border-hairline flex items-center justify-center hover:bg-canvas-soft-2 text-ink transition-colors cursor-pointer"
+              className="w-9 h-9 rounded-full border border-hairline bg-canvas flex items-center justify-center hover:bg-canvas-soft-2 hover:border-hairline-strong active:scale-90 text-ink transition-all duration-150 cursor-pointer select-none"
             >
               ↓
             </button>
