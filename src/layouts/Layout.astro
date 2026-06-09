@@ -1,23 +1,36 @@
+---
+import "../styles/global.css";
+interface Props {
+	title?: string;
+	description?: string;
+}
+const { 
+	title = "NetSpeed — Professional Edge Speed Test", 
+	description = "A highly accurate, edge-optimized network throughput and latency speed test application."
+} = Astro.props;
+---
 <!doctype html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<!-- Fonts -->
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" rel="stylesheet">
 	</head>
-	<body>
-		<slot />
+	<body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen relative">
+		<!-- Mesh gradient overlay -->
+		<div class="mesh-gradient-container">
+			<div class="mesh-gradient"></div>
+		</div>
+		<div class="relative z-10 flex flex-col min-h-screen">
+			<slot />
+		</div>
 	</body>
 </html>
-
-<style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
-</style>

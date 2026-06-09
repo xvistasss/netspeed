@@ -1,11 +1,54 @@
 ---
-import Welcome from '../components/Welcome.astro';
+import SpeedTest from '../components/SpeedTest';
 import Layout from '../layouts/Layout.astro';
-
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 ---
 
 <Layout>
-	<Welcome />
+	{/* Sticky Top Header Navigation */}
+	<header class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-16 flex items-center z-50">
+		<div class="w-full max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
+			<div class="flex items-center gap-6">
+				{/* Modern logo placeholder */}
+				<div class="flex items-center gap-2">
+					<svg viewBox="0 0 75 65" class="w-5 h-5 fill-ink">
+						<path d="M37.5 0L75 65H0L37.5 0Z" />
+					</svg>
+					<span class="font-bold tracking-tight text-sm font-sans text-ink">NetSpeed</span>
+				</div>
+				<nav class="hidden md:flex items-center gap-4">
+					<span class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute">v1.0.0-edge</span>
+				</nav>
+			</div>
+			
+			<div class="flex items-center gap-3">
+				<a 
+					href="https://speed.cloudflare.com/"
+					target="_blank"
+					rel="noreferrer"
+					class="text-xs font-mono text-mute hover:text-ink hover:underline transition-colors flex items-center gap-1.5"
+				>
+					Cloudflare Speed Test ↗
+				</a>
+			</div>
+		</div>
+	</header>
+
+	{/* Main Speed Test Island */}
+	<main class="flex-1 flex flex-col justify-center">
+		<SpeedTest client:load />
+	</main>
+
+	{/* Professional Footer */}
+	<footer class="border-t border-hairline bg-canvas py-8 mt-12">
+		<div class="w-full max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-mute">
+			<div class="flex items-center gap-2">
+				<span>© 2026 NetSpeed. Engineered at the Edge.</span>
+			</div>
+			<div class="flex items-center gap-6">
+				<span>NO COMPRESSION</span>
+				<span>ZERO BROWSER CACHING</span>
+				<span>CONCURRENT PIPES</span>
+			</div>
+		</div>
+	</footer>
 </Layout>
