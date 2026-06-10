@@ -144,6 +144,10 @@ export default function SpeedTest() {
   const downloadSpeedHistory = useRef<number[]>([]);
   const uploadSpeedHistory = useRef<number[]>([]);
 
+  // Request logs for Cloudflare CSV export
+  const downloadRequestsRef = useRef<any[]>([]);
+  const uploadRequestsRef = useRef<any[]>([]);
+
   // 1. Initialize client details on load and check theme state
   useEffect(() => {
     detectClientLocation();
@@ -536,6 +540,8 @@ export default function SpeedTest() {
     if (phase !== 'idle' && phase !== 'complete' && phase !== 'error') return;
 
     // Reset stats
+    downloadRequestsRef.current = [];
+    uploadRequestsRef.current = [];
     setLatencyStats({ current: 0, avg: 0, jitter: 0, min: Infinity, max: 0, latencies: [] });
     setDownloadStats({ current: 0, avg: 0, peak: 0 });
     setUploadStats({ current: 0, avg: 0, peak: 0 });
@@ -632,6 +638,10 @@ export default function SpeedTest() {
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
+          if (data.requests) {
+            downloadRequestsRef.current = data.requests;
+          }
+
           workerRef.current?.postMessage({
             type: 'START_UPLOAD',
             baseUrl,
@@ -659,6 +669,10 @@ export default function SpeedTest() {
         case 'UPLOAD_COMPLETE':
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
+
+          if (data.requests) {
+            uploadRequestsRef.current = data.requests;
+          }
 
           // Run packet loss simulator checks
           runPacketLossCheck();
@@ -827,13 +841,38 @@ export default function SpeedTest() {
           {completionTime && downloadStats.avg > 0 ? (
             <button
               onClick={() => {
-                const resultsTxt = `Speed Test Results:\nDownload: ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '—'} ${downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).unit : ''}\nUpload: ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '—'} ${uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).unit : ''}\nLatency: ${latencyStats.avg > 0 ? latencyStats.avg.toFixed(1) : '—'} ms\nJitter: ${latencyStats.jitter > 0 ? latencyStats.jitter.toFixed(1) : '—'} ms\nPacket Loss: ${packetLoss}%`;
-                const blob = new Blob([resultsTxt], { type: 'text/plain' });
+                const allRequests = [
+                  ...downloadRequestsRef.current,
+                  ...uploadRequestsRef.current
+                ].sort((a, b) => a.time - b.time);
+
+                const headers = ['time', 'direction', 'bytes', 'latency', 'bps', 'duration', 'serverTime', 'responseSize', 'loadedLatencies'];
+                const csvRows = [headers.join(',')];
+
+                for (const req of allRequests) {
+                  const pingsStr = req.loadedLatencies && req.loadedLatencies.length > 0 
+                    ? req.loadedLatencies.join(' ') 
+                    : '';
+                  csvRows.push([
+                    req.time,
+                    req.direction,
+                    req.bytes,
+                    req.latency,
+                    req.bps,
+                    req.duration,
+                    req.serverTime,
+                    req.responseSize,
+                    pingsStr
+                  ].join(','));
+                }
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `netspeed-results-${Date.now()}.txt`;
+                a.download = `speed-results-${Math.floor(Date.now() / 1000)}.csv`;
                 a.click();
+                URL.revokeObjectURL(url);
               }}
               title="Download results"
               className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"

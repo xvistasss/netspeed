@@ -125,6 +125,9 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
   let loadedJitter = 0;
   let loadedAvg = 0;
 
+  // Track loaded latency ping timestamps and values
+  const pingLog: { time: number; latency: number }[] = [];
+
   // Background latency pinger under download load
   const pingInterval = setInterval(async () => {
     if (signal.aborted || performance.now() - startTime >= durationMs) {
@@ -141,6 +144,7 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
         await res.text();
         const lat = performance.now() - pingStart;
         loadedLatencies.push(lat);
+        pingLog.push({ time: pingStart, latency: lat });
         
         loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
         if (loadedLatencies.length > 1) {
@@ -191,12 +195,15 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
     });
   }, 100);
 
+  const downloadRequests: any[] = [];
+
   // Stream downloader function
   const runStream = async () => {
     let currentChunkSize = 1 * 1024 * 1024; // Start with 1MB chunk
 
     while (performance.now() - startTime < durationMs && !signal.aborted && !isCancelled) {
       const chunkStart = performance.now();
+      const requestTimestamp = Date.now();
       
       try {
         activeFetches++;
@@ -212,15 +219,20 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
           signal
         });
 
+        const headersReceived = performance.now();
+        const latency = headersReceived - chunkStart;
+
         if (!response.body) {
           throw new Error('ReadableStream not supported on download body');
         }
 
+        let bytesReceived = 0;
         const reader = response.body.getReader();
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           if (value) {
+            bytesReceived += value.length;
             totalBytesDownloaded += value.length;
           }
           // Check for timeout / abort inside reading loop
@@ -231,7 +243,26 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
         }
 
         activeFetches--;
-        const chunkDuration = performance.now() - chunkStart;
+        const chunkEnd = performance.now();
+        const chunkDuration = chunkEnd - chunkStart;
+        const bps = chunkDuration > 0 ? (bytesReceived * 8) / (chunkDuration / 1000) : 0;
+
+        // Filter loaded pings that occurred during this request
+        const requestPings = pingLog
+          .filter(p => p.time >= chunkStart && p.time <= chunkEnd)
+          .map(p => p.latency);
+
+        downloadRequests.push({
+          time: requestTimestamp,
+          direction: 'download',
+          bytes: currentChunkSize,
+          latency,
+          bps,
+          duration: chunkDuration,
+          serverTime: -1,
+          responseSize: bytesReceived,
+          loadedLatencies: requestPings
+        });
 
         if (chunkDuration < 300 && currentChunkSize < 25 * 1024 * 1024) {
           currentChunkSize = Math.min(25 * 1024 * 1024, currentChunkSize * 2);
@@ -262,7 +293,8 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
     averageSpeed: finalAvgSpeedBps,
     peakSpeed,
     loadedLatency: loadedAvg,
-    loadedJitter: loadedJitter
+    loadedJitter: loadedJitter,
+    requests: downloadRequests
   });
 }
 
@@ -291,6 +323,9 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
   let loadedJitter = 0;
   let loadedAvg = 0;
 
+  // Track loaded latency ping timestamps and values
+  const pingLog: { time: number; latency: number }[] = [];
+
   // Background latency pinger under upload load
   const pingInterval = setInterval(async () => {
     if (signal.aborted || performance.now() - startTime >= durationMs) {
@@ -307,6 +342,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
         await res.text();
         const lat = performance.now() - pingStart;
         loadedLatencies.push(lat);
+        pingLog.push({ time: pingStart, latency: lat });
         
         loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
         if (loadedLatencies.length > 1) {
@@ -380,12 +416,15 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
     });
   }, 100);
 
+  const uploadRequests: any[] = [];
+
   // Stream uploader function
   const runStream = async () => {
     let currentPayload = chunk1MB; // Start with 1MB payload
 
     while (performance.now() - startTime < durationMs && !signal.aborted && !isCancelled) {
       const chunkStart = performance.now();
+      const requestTimestamp = Date.now();
       const payloadSize = currentPayload.length;
 
       try {
@@ -406,11 +445,34 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
           signal
         });
 
-        await response.json(); // Wait for body discard response
+        const headersReceived = performance.now();
+        const latency = headersReceived - chunkStart;
+
+        const resData = await response.json(); // Wait for body discard response
+        const responseSize = JSON.stringify(resData).length;
 
         activeFetches--;
         totalBytesUploaded += payloadSize;
-        const chunkDuration = performance.now() - chunkStart;
+        const chunkEnd = performance.now();
+        const chunkDuration = chunkEnd - chunkStart;
+        const bps = chunkDuration > 0 ? (payloadSize * 8) / (chunkDuration / 1000) : 0;
+
+        // Filter loaded pings that occurred during this request
+        const requestPings = pingLog
+          .filter(p => p.time >= chunkStart && p.time <= chunkEnd)
+          .map(p => p.latency);
+
+        uploadRequests.push({
+          time: requestTimestamp,
+          direction: 'upload',
+          bytes: payloadSize,
+          latency,
+          bps,
+          duration: chunkDuration,
+          serverTime: -1,
+          responseSize,
+          loadedLatencies: requestPings
+        });
 
         // Progressive size: Adjust block sizing depending on speed
         if (chunkDuration < 250 && currentPayload === chunk1MB) {
@@ -442,6 +504,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
     averageSpeed: finalAvgSpeedBps,
     peakSpeed,
     loadedLatency: loadedAvg,
-    loadedJitter: loadedJitter
+    loadedJitter: loadedJitter,
+    requests: uploadRequests
   });
 }
