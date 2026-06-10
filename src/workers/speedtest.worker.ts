@@ -49,10 +49,13 @@ async function runPingTest(baseUrl: string, region: string | undefined, signal: 
   const iterations = 15;
   const latencies: number[] = [];
   let jitter = 0;
+  let pingSent = 0;
+  let pingLost = 0;
 
   for (let i = 0; i < iterations; i++) {
     if (isCancelled || signal.aborted) break;
 
+    pingSent++;
     const start = performance.now();
     try {
       const url = region 
@@ -66,6 +69,10 @@ async function runPingTest(baseUrl: string, region: string | undefined, signal: 
         },
         signal
       });
+      
+      if (!response.ok) {
+        throw new Error('Ping request failed');
+      }
       
       await response.text(); // Fully read response body
       
@@ -89,21 +96,26 @@ async function runPingTest(baseUrl: string, region: string | undefined, signal: 
         totalIterations: iterations,
         latency,
         jitter,
-        latencies: [...latencies]
+        latencies: [...latencies],
+        pingSent,
+        pingLost
       });
 
       // Brief sleep between pings to prevent queueing overhead
       await sleep(60);
     } catch (err) {
       if (signal.aborted) throw err;
+      pingLost++;
       self.postMessage({
         type: 'PING_FAILED_ITERATION',
         iteration: i + 1,
+        pingSent,
+        pingLost
       });
     }
   }
 
-  self.postMessage({ type: 'PING_COMPLETE', latencies, jitter });
+  self.postMessage({ type: 'PING_COMPLETE', latencies, jitter, pingSent, pingLost });
 }
 
 /**
@@ -124,6 +136,8 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
   const loadedLatencies: number[] = [];
   let loadedJitter = 0;
   let loadedAvg = 0;
+  let dlPingSent = 0;
+  let dlPingLost = 0;
 
   // Track loaded latency ping timestamps and values
   const pingLog: { time: number; latency: number }[] = [];
@@ -134,6 +148,7 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
       clearInterval(pingInterval);
       return;
     }
+    dlPingSent++;
     const pingStart = performance.now();
     try {
       const url = region 
@@ -154,8 +169,12 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
           }
           loadedJitter = sumDiffs / (loadedLatencies.length - 1);
         }
+      } else {
+        dlPingLost++;
       }
-    } catch (_) {}
+    } catch (_) {
+      dlPingLost++;
+    }
   }, 800); // Ping every 800ms
 
   // Monitor progress on timer
@@ -199,7 +218,7 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
 
   // Stream downloader function
   const runStream = async () => {
-    let currentChunkSize = 1 * 1024 * 1024; // Start with 1MB chunk
+    let currentChunkSize = 100 * 1024; // Start with 100KB chunk to capture small file stats
 
     while (performance.now() - startTime < durationMs && !signal.aborted && !isCancelled) {
       const chunkStart = performance.now();
@@ -266,8 +285,8 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
 
         if (chunkDuration < 300 && currentChunkSize < 25 * 1024 * 1024) {
           currentChunkSize = Math.min(25 * 1024 * 1024, currentChunkSize * 2);
-        } else if (chunkDuration > 1500 && currentChunkSize > 1 * 1024 * 1024) {
-          currentChunkSize = Math.max(1 * 1024 * 1024, currentChunkSize / 2);
+        } else if (chunkDuration > 1500 && currentChunkSize > 100 * 1024) {
+          currentChunkSize = Math.max(100 * 1024, currentChunkSize / 2);
         }
 
       } catch (err) {
@@ -294,6 +313,9 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
     peakSpeed,
     loadedLatency: loadedAvg,
     loadedJitter: loadedJitter,
+    loadedLatencies: loadedLatencies,
+    loadedPingSent: dlPingSent,
+    loadedPingLost: dlPingLost,
     requests: downloadRequests
   });
 }
@@ -312,16 +334,20 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
   let lastReportTime = startTime;
   let lastReportBytes = 0;
 
-  // Generate standard 1MB and 2MB non-compressible upload chunks
+  // Generate standard 100KB, 1MB, and 10MB non-compressible upload chunks
+  const payloadSize100KB = 100 * 1024;
   const payloadSize1MB = 1 * 1024 * 1024;
-  const payloadSize2MB = 2 * 1024 * 1024;
+  const payloadSize10MB = 10 * 1024 * 1024;
+  const chunk100KB = new Uint8Array(payloadSize100KB);
   const chunk1MB = new Uint8Array(payloadSize1MB);
-  const chunk2MB = new Uint8Array(payloadSize2MB);
+  const chunk10MB = new Uint8Array(payloadSize10MB);
 
   // Track loaded latency pings under upload stress
   const loadedLatencies: number[] = [];
   let loadedJitter = 0;
   let loadedAvg = 0;
+  let ulPingSent = 0;
+  let ulPingLost = 0;
 
   // Track loaded latency ping timestamps and values
   const pingLog: { time: number; latency: number }[] = [];
@@ -332,6 +358,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
       clearInterval(pingInterval);
       return;
     }
+    ulPingSent++;
     const pingStart = performance.now();
     try {
       const url = region 
@@ -352,8 +379,12 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
           }
           loadedJitter = sumDiffs / (loadedLatencies.length - 1);
         }
+      } else {
+        ulPingLost++;
       }
-    } catch (_) {}
+    } catch (_) {
+      ulPingLost++;
+    }
   }, 800); // Ping every 800ms
 
   // Helper to safely generate random values within Crypto.getRandomValues 65536 byte limits
@@ -367,15 +398,19 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
 
   // Fill chunks with random values to make them uncompressible
   if (self.crypto && self.crypto.getRandomValues) {
+    fillRandomValues(chunk100KB);
     fillRandomValues(chunk1MB);
-    fillRandomValues(chunk2MB);
+    fillRandomValues(chunk10MB);
   } else {
     // Fallback if crypto is unavailable in environment
+    for (let i = 0; i < payloadSize100KB; i++) {
+      chunk100KB[i] = Math.floor(Math.random() * 256);
+    }
     for (let i = 0; i < payloadSize1MB; i++) {
       chunk1MB[i] = Math.floor(Math.random() * 256);
     }
-    for (let i = 0; i < payloadSize2MB; i++) {
-      chunk2MB[i] = Math.floor(Math.random() * 256);
+    for (let i = 0; i < payloadSize10MB; i++) {
+      chunk10MB[i] = Math.floor(Math.random() * 256);
     }
   }
 
@@ -420,7 +455,7 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
 
   // Stream uploader function
   const runStream = async () => {
-    let currentPayload = chunk1MB; // Start with 1MB payload
+    let currentPayload = chunk100KB; // Start with 100KB payload to collect low-range stats
 
     while (performance.now() - startTime < durationMs && !signal.aborted && !isCancelled) {
       const chunkStart = performance.now();
@@ -475,10 +510,18 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
         });
 
         // Progressive size: Adjust block sizing depending on speed
-        if (chunkDuration < 250 && currentPayload === chunk1MB) {
-          currentPayload = chunk2MB; // Scale to 2MB chunk
-        } else if (chunkDuration > 1500 && currentPayload === chunk2MB) {
-          currentPayload = chunk1MB; // Downscale to 1MB chunk
+        if (chunkDuration < 250) {
+          if (currentPayload === chunk100KB) {
+            currentPayload = chunk1MB;
+          } else if (currentPayload === chunk1MB) {
+            currentPayload = chunk10MB;
+          }
+        } else if (chunkDuration > 1500) {
+          if (currentPayload === chunk10MB) {
+            currentPayload = chunk1MB;
+          } else if (currentPayload === chunk1MB) {
+            currentPayload = chunk100KB;
+          }
         }
 
       } catch (err) {
@@ -505,6 +548,9 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
     peakSpeed,
     loadedLatency: loadedAvg,
     loadedJitter: loadedJitter,
+    loadedLatencies: loadedLatencies,
+    loadedPingSent: ulPingSent,
+    loadedPingLost: ulPingLost,
     requests: uploadRequests
   });
 }
