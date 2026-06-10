@@ -1,28 +1,49 @@
 ---
-import SpeedTest from '../components/SpeedTest';
-import Layout from '../layouts/Layout.astro';
+import SpeedTest from "../components/SpeedTest";
+import Layout from "../layouts/Layout.astro";
 ---
 
 <Layout>
 	{/* Sticky Top Header Navigation */}
-	<header class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-16 flex items-center z-50">
-		<div class="w-full max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
+	<header
+		class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-16 flex items-center z-50"
+	>
+		<div
+			class="w-full max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center"
+		>
 			<div class="flex items-center gap-6">
 				{/* Modern logo placeholder */}
 				<div class="flex items-center gap-2">
-					<svg viewBox="0 0 75 65" class="w-5 h-5 fill-ink">
-						<path d="M37.5 0L75 65H0L37.5 0Z" />
-					</svg>
-					<span class="font-bold tracking-tight text-sm font-sans text-ink">NetSpeed</span>
+					<img
+						src="favicon.svg"
+						alt="Company Logo"
+						width="40"
+						height="40"
+					/>
+					<span
+						class="font-bold tracking-tight text-sm font-sans text-ink"
+						>NetSpeed</span
+					>
 				</div>
 				<nav class="hidden md:flex items-center gap-4">
-					<span class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute">v1.0.0-edge</span>
+					<span
+						class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
+						>v1.0.0-edge</span
+					>
 				</nav>
 			</div>
 			<div class="flex items-center gap-4">
-				<div class="flex items-center gap-3 bg-canvas border border-hairline px-3.5 py-1.5 rounded-full shadow-xs">
-					<div id="header-server-info" class="text-xs font-mono text-mute flex items-center gap-2 select-none">
-						<span id="server-status-dot" class="w-1.5 h-1.5 rounded-full bg-mute animate-pulse"></span>
+				<div
+					class="flex items-center gap-3 bg-canvas border border-hairline px-3.5 py-1.5 rounded-full shadow-xs"
+				>
+					<div
+						id="header-server-info"
+						class="text-xs font-mono text-mute flex items-center gap-2 select-none"
+					>
+						<span
+							id="server-status-dot"
+							class="w-1.5 h-1.5 rounded-full bg-mute animate-pulse"
+						></span>
 						<span id="server-status-text">Server: Detecting…</span>
 					</div>
 
@@ -35,12 +56,30 @@ import Layout from '../layouts/Layout.astro';
 						aria-label="Toggle dark mode"
 					>
 						{/* Sun icon for light mode (hidden in dark mode) */}
-						<svg id="sun-icon" class="w-3.5 h-3.5 fill-none stroke-current block dark:hidden" viewBox="0 0 24 24" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
+						<svg
+							id="sun-icon"
+							class="w-3.5 h-3.5 fill-none stroke-current block dark:hidden"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"
+							></path>
 						</svg>
 						{/* Moon icon for dark mode (hidden in light mode) */}
-						<svg id="moon-icon" class="w-3.5 h-3.5 fill-none stroke-current hidden dark:block" viewBox="0 0 24 24" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+						<svg
+							id="moon-icon"
+							class="w-3.5 h-3.5 fill-none stroke-current hidden dark:block"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+							></path>
 						</svg>
 					</button>
 				</div>
@@ -55,7 +94,9 @@ import Layout from '../layouts/Layout.astro';
 
 	{/* Professional Footer */}
 	<footer class="border-t border-hairline bg-canvas py-8 mt-12">
-		<div class="w-full max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-mute">
+		<div
+			class="w-full max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs font-mono text-mute"
+		>
 			<div class="flex items-center gap-2">
 				<span>© 2026 NetSpeed. Engineered at the Edge.</span>
 			</div>
@@ -70,48 +111,53 @@ import Layout from '../layouts/Layout.astro';
 
 <script>
 	// Theme toggle setup
-	const savedTheme = localStorage.getItem('theme');
-	const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-	const isDark = savedTheme === 'dark' || (!savedTheme && prefersDark);
-	
+	const savedTheme = localStorage.getItem("theme");
+	const prefersDark = window.matchMedia(
+		"(prefers-color-scheme: dark)",
+	).matches;
+	const isDark = savedTheme === "dark" || (!savedTheme && prefersDark);
+
 	if (isDark) {
-		document.documentElement.classList.add('dark');
+		document.documentElement.classList.add("dark");
 	} else {
-		document.documentElement.classList.remove('dark');
+		document.documentElement.classList.remove("dark");
 	}
 
-	const themeToggle = document.getElementById('header-theme-toggle');
+	const themeToggle = document.getElementById("header-theme-toggle");
 	if (themeToggle) {
-		themeToggle.addEventListener('click', () => {
-			const wasDark = document.documentElement.classList.contains('dark');
+		themeToggle.addEventListener("click", () => {
+			const wasDark = document.documentElement.classList.contains("dark");
 			const nextDark = !wasDark;
-			
+
 			if (nextDark) {
-				document.documentElement.classList.add('dark');
-				localStorage.setItem('theme', 'dark');
+				document.documentElement.classList.add("dark");
+				localStorage.setItem("theme", "dark");
 			} else {
-				document.documentElement.classList.remove('dark');
-				localStorage.setItem('theme', 'light');
+				document.documentElement.classList.remove("dark");
+				localStorage.setItem("theme", "light");
 			}
-			
+
 			// Broadcast change event to React
-			window.dispatchEvent(new CustomEvent('theme-changed', {
-				detail: { theme: nextDark ? 'dark' : 'light' }
-			}));
+			window.dispatchEvent(
+				new CustomEvent("theme-changed", {
+					detail: { theme: nextDark ? "dark" : "light" },
+				}),
+			);
 		});
 	}
 
 	// Server info receiver
-	window.addEventListener('server-selected', (e: any) => {
-		const textEl = document.getElementById('server-status-text');
-		const dotEl = document.getElementById('server-status-dot');
+	window.addEventListener("server-selected", (e: any) => {
+		const textEl = document.getElementById("server-status-text");
+		const dotEl = document.getElementById("server-status-dot");
 		if (textEl && dotEl) {
 			const { name, distance } = e.detail;
-			const distStr = distance ? ` (${distance})` : '';
-			
+			const distStr = distance ? ` (${distance})` : "";
+
 			// Change dot styling to indicate active server
-			dotEl.className = "w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse";
-			
+			dotEl.className =
+				"w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse";
+
 			// Update location text
 			textEl.className = "text-ink font-semibold";
 			textEl.textContent = `Server: ${name}${distStr}`;
