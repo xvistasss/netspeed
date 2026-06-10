@@ -1,0 +1,79 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Get request path and referer from SSR request context
+const requestUrl = Astro.url.pathname;
+const referrer = Astro.request.headers.get("referer") || "Direct (no referrer)";
+const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19) + " UTC";
+---
+
+<Layout
+  title="404: Page Not Found — NetSpeed"
+  description="The page you are looking for does not exist on NetSpeed. Verify the URL or return to the speed test home page."
+>
+  <main class="flex-1 flex items-center justify-center py-16 px-4 md:px-8">
+    <div class="max-w-xl w-full flex flex-col gap-10 text-center md:text-left">
+      
+      {/* Visual Error Code and Title Stack */}
+      <div class="flex flex-col gap-4">
+        <div class="flex justify-center md:justify-start items-center gap-3">
+          <span class="font-mono text-xs font-semibold px-2 py-0.5 bg-error-soft text-error rounded border border-error/20 uppercase tracking-widest">
+            Error 404
+          </span>
+          <span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span>
+        </div>
+        <h1 class="text-4xl md:text-5xl font-semibold tracking-tighter text-ink font-sans leading-tight">
+          This page does not exist.
+        </h1>
+        <p class="text-sm md:text-base text-body leading-relaxed max-w-lg">
+          The link you followed may be broken, the page could have been deleted, or it has been migrated to another directory.
+        </p>
+      </div>
+
+      {/* Action Buttons Row */}
+      <div class="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+        <a
+          href="/"
+          class="bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 hover:opacity-90 active:scale-95 transition-all text-center select-none cursor-pointer"
+        >
+          Go back home
+        </a>
+        <a
+          href="/?autorun=true"
+          class="bg-canvas border border-hairline hover:border-hairline-strong text-ink font-medium text-sm rounded-full py-2.5 px-6 active:scale-95 transition-all text-center select-none cursor-pointer"
+        >
+          Run speed test
+        </a>
+      </div>
+
+      {/* Developer System Diagnostics Block */}
+      <div class="flex flex-col gap-2.5 text-left">
+        <div class="flex items-center justify-between px-1">
+          <span class="font-mono text-[10px] uppercase tracking-wider text-mute block">
+            System Diagnostics
+          </span>
+          <span class="font-mono text-[9px] text-mute">
+            NETSPEED_EDGE_TELEMETRY
+          </span>
+        </div>
+        
+        <div class="relative rounded-lg border border-hairline bg-canvas-soft-2 p-5 font-mono text-xs text-body overflow-x-auto shadow-xs group">
+          {/* Header dots style decoration */}
+          <div class="flex gap-1.5 mb-3 opacity-60">
+            <span class="w-2.5 h-2.5 rounded-full bg-hairline-strong"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-hairline-strong"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-hairline-strong"></span>
+          </div>
+
+          <div class="flex flex-col gap-1.5 whitespace-pre font-mono">
+            <div><span class="text-mute font-semibold">ROUTE     :</span> <span class="text-ink select-all">{requestUrl}</span></div>
+            <div><span class="text-mute font-semibold">REFERRER  :</span> <span class="text-ink select-all">{referrer}</span></div>
+            <div><span class="text-mute font-semibold">TIMESTAMP :</span> <span class="text-ink select-all">{timestamp}</span></div>
+            <div><span class="text-mute font-semibold">STATUS    :</span> <span class="text-error font-semibold">404_NOT_FOUND</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</Layout>

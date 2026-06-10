@@ -93,6 +93,7 @@ export default function SpeedTest() {
   // Request logs for Cloudflare CSV export
   const downloadRequestsRef = useRef<any[]>([]);
   const uploadRequestsRef = useRef<any[]>([]);
+  const autorunTriggered = useRef(false);
 
   // 1. Initialize client details on load and check theme state
   useEffect(() => {
@@ -117,6 +118,21 @@ export default function SpeedTest() {
       window.removeEventListener('theme-changed', handleThemeChange);
     };
   }, []);
+
+  // Handle automatic speed test execution via URL parameter
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.get('autorun') === 'true' && !autorunTriggered.current && clientInfo !== null) {
+      autorunTriggered.current = true;
+      
+      // Clean query parameter from URL so page reload doesn't auto-run again
+      const url = new URL(window.location.href);
+      url.searchParams.delete('autorun');
+      window.history.replaceState({}, document.title, url.pathname + url.search);
+      
+      startSpeedTest();
+    }
+  }, [clientInfo]);
 
   // Sync Chart.js scale colors with light/dark theme switch
   useEffect(() => {
@@ -385,6 +401,7 @@ export default function SpeedTest() {
       console.error('Failed to locate client:', err);
       setStatusMessage('GeoIP detection failed. Using global defaults.');
       calculateServerDistances(0, 0, servers || GLOBAL_TEST_SERVERS);
+      setClientInfo({ ip: '0.0.0.0', city: 'Unknown', country: 'Unknown' } as any);
     }
   };
 
