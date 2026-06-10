@@ -764,7 +764,7 @@ export default function SpeedTest() {
           Network Speed Engine
         </span>
         <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
-          Your Internet Speed
+          Network Speed Test
         </h1>
         <p className="text-sm md:text-base text-body max-w-2xl mt-1">
           A professional-grade, latency-critical speed test engine measuring packet jitters, concurrent downloads, and uploads at the edge.
