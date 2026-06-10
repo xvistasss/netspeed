@@ -23,14 +23,14 @@ import Layout from '../layouts/Layout.astro';
 				<div class="flex items-center gap-3 bg-canvas border border-hairline px-3.5 py-1.5 rounded-full shadow-xs">
 					<div id="header-server-info" class="text-xs font-mono text-mute flex items-center gap-2 select-none">
 						<span id="server-status-dot" class="w-1.5 h-1.5 rounded-full bg-mute animate-pulse"></span>
-						<span id="server-status-text">Server: Detecting...</span>
+						<span id="server-status-text">Server: Detecting…</span>
 					</div>
 
 					<div class="h-3 w-px bg-hairline"></div>
 
 					<button
 						id="header-theme-toggle"
-						class="text-mute hover:text-ink active:scale-90 transition-all duration-150 cursor-pointer flex items-center justify-center select-none"
+						class="text-mute hover:text-ink active:scale-90 transition-[color,transform] duration-150 cursor-pointer flex items-center justify-center select-none"
 						title="Switch Theme"
 						aria-label="Toggle dark mode"
 					>

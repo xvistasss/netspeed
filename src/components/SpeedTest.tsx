@@ -4,7 +4,6 @@ import {
   ArrowDown,
   ArrowUp,
   Download,
-  Globe,
   Wifi,
   AlertTriangle,
   Play,
@@ -12,131 +11,27 @@ import {
 } from 'lucide-react';
 import Chart from 'chart.js/auto';
 
-// Configured array of globally distributed test servers
-interface TestServer {
-  id: string;
-  name: string;
-  lat: number;
-  lon: number;
-  url: string; // Will default to current host API endpoints
-  region?: string;
-  distance: number;
-}
+// Import sub-components
+import InfoTooltip from './SpeedTest/InfoTooltip';
+import QualityScores from './SpeedTest/QualityScores';
+import DetailedMeasurements from './SpeedTest/DetailedMeasurements';
+import TechnicalLogs from './SpeedTest/TechnicalLogs';
 
-const GLOBAL_TEST_SERVERS: TestServer[] = [
-  { id: 'local-edge', name: 'Detecting Location...', lat: 0, lon: 0, url: '', distance: 0 },
-  { id: 'us-east', name: 'New York, United States', lat: 40.7128, lon: -74.0060, url: '', region: 'us-east', distance: 9999 },
-  { id: 'eu-central', name: 'Frankfurt, Germany', lat: 50.1109, lon: 8.6821, url: '', region: 'eu-central', distance: 9999 },
-  { id: 'ap-southeast', name: 'Singapore', lat: 1.3521, lon: 103.8198, url: '', region: 'ap-southeast', distance: 9999 },
-  { id: 'ap-southern', name: 'Sydney, Australia', lat: -33.8688, lon: 151.2093, url: '', region: 'ap-southeast', distance: 9999 }
-];
-
-// Haversine Math to calculate distance between two coordinates in km
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the Earth in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-// Helper to delay execution
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-type TestPhase = 'idle' | 'routing' | 'ping' | 'download' | 'upload' | 'complete' | 'error';
-
-interface LatencyStats {
-  current: number;
-  avg: number;
-  jitter: number;
-  min: number;
-  max: number;
-  latencies: number[];
-}
-
-interface SpeedStats {
-  current: number; // bps
-  avg: number; // bps
-  peak: number; // bps
-}
-
-interface ClientInfo {
-  ip: string;
-  city: string;
-  region: string;
-  country: string;
-  org: string;
-  latitude: number;
-  longitude: number;
-  isLocal: boolean;
-}
-
-interface DetailPingStats {
-  sent: number;
-  lost: number;
-  latencies: number[];
-}
-
-// Statistical calculation helpers
-const calculateMean = (arr: number[]): number => {
-  if (arr.length === 0) return 0;
-  return arr.reduce((sum, val) => sum + val, 0) / arr.length;
-};
-
-const calculateMedian = (arr: number[]): number => {
-  if (arr.length === 0) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
-
-const calculateMin = (arr: number[]): number => {
-  if (arr.length === 0) return 0;
-  return Math.min(...arr);
-};
-
-const calculateMax = (arr: number[]): number => {
-  if (arr.length === 0) return 0;
-  return Math.max(...arr);
-};
-
-const calculateJitter = (arr: number[]): number => {
-  if (arr.length <= 1) return 0;
-  let sumDiffs = 0;
-  for (let i = 1; i < arr.length; i++) {
-    sumDiffs += Math.abs(arr[i] - arr[i - 1]);
-  }
-  return sumDiffs / (arr.length - 1);
-};
-
-// Reusable tooltip component
-const InfoTooltip = ({ content }: { content: string }) => {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className="relative inline-flex items-center ml-1 z-20 group">
-      <button
-        onMouseEnter={() => setVisible(true)}
-        onMouseLeave={() => setVisible(false)}
-        onClick={() => setVisible(!visible)}
-        type="button"
-        className="w-4 h-4 rounded-full border border-hairline-strong text-mute flex items-center justify-center text-[10px] font-mono hover:bg-canvas-soft-2 hover:text-ink transition-colors cursor-pointer select-none"
-        aria-label="More information"
-      >
-        i
-      </button>
-      {visible && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left">
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-primary" />
-          {content}
-        </div>
-      )}
-    </div>
-  );
-};
+// Import utilities, types and configuration
+import type {
+  TestServer,
+  TestPhase,
+  LatencyStats,
+  SpeedStats,
+  ClientInfo,
+  DetailPingStats
+} from '../utils/speedTestUtils';
+import {
+  GLOBAL_TEST_SERVERS,
+  haversineDistance,
+  sleep,
+  formatSpeed
+} from '../utils/speedTestUtils';
 
 export default function SpeedTest() {
   const [phase, setPhase] = useState<TestPhase>('idle');
@@ -392,7 +287,6 @@ export default function SpeedTest() {
   };
 
   const updateThroughputChart = (type: 'download' | 'upload', mbps: number) => {
-    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
     if (type === 'download') {
       const chart = downloadChartInstance.current;
       if (!chart) return;
@@ -425,7 +319,7 @@ export default function SpeedTest() {
   // 3. Detect client geolocation from server
   const detectClientLocation = async () => {
     try {
-      setStatusMessage('Locating client IP and network...');
+      setStatusMessage('Locating client IP and network…');
       const response = await fetch('/api/ip-geo');
       let data = await response.json();
 
@@ -527,14 +421,14 @@ export default function SpeedTest() {
   const runRoutingCycle = async () => {
     setPhase('routing');
     setProgressPercent(15);
-    setStatusMessage('Routing: Selecting closest network edge server...');
+    setStatusMessage('Routing: Selecting closest network edge server…');
 
     const results: { [key: string]: number } = {};
     const serversToPing = closestServers.length > 0 ? closestServers : servers;
 
     // Sequentially check closest servers until one succeeds
     for (const srv of serversToPing) {
-      setStatusMessage(`Verifying connection to: ${srv.name}...`);
+      setStatusMessage(`Verifying connection to: ${srv.name}…`);
       const origin = window.location.origin;
 
       let latSum = 0;
@@ -574,7 +468,7 @@ export default function SpeedTest() {
         return srv;
       }
 
-      console.warn(`Connection failed for server ${srv.name}. Trying next closest server...`);
+      console.warn(`Connection failed for server ${srv.name}. Trying next closest server…`);
     }
 
     // Ultimate fallback if all pings fail
@@ -671,7 +565,7 @@ export default function SpeedTest() {
           setProgressPercent(50);
           // Transition to Download
           setPhase('download');
-          setStatusMessage('Measuring download throughput (concurrent streams)...');
+          setStatusMessage('Measuring download throughput (concurrent streams)…');
           workerRef.current?.postMessage({
             type: 'START_DOWNLOAD',
             baseUrl,
@@ -719,7 +613,7 @@ export default function SpeedTest() {
           setProgressPercent(75);
           // Transition to Upload
           setPhase('upload');
-          setStatusMessage('Measuring upload throughput (concurrent streams)...');
+          setStatusMessage('Measuring upload throughput (concurrent streams)…');
 
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
@@ -805,10 +699,10 @@ export default function SpeedTest() {
 
     const totalSent = unloadedPingStatsRef.current.sent + dlLoadedPingStatsRef.current.sent + ulLoadedPingStatsRef.current.sent;
     const totalLost = unloadedPingStatsRef.current.lost + dlLoadedPingStatsRef.current.lost + ulLoadedPingStatsRef.current.lost;
-    
+
     // Calculated packet loss based on actual pings; fallback if zero packets were sent
-    const lossPercentage = totalSent > 0 
-      ? parseFloat(((totalLost / totalSent) * 100).toFixed(1)) 
+    const lossPercentage = totalSent > 0
+      ? parseFloat(((totalLost / totalSent) * 100).toFixed(1))
       : (Math.random() < 0.2 ? parseFloat((Math.random() * 0.4).toFixed(1)) : 0.0);
     setPacketLoss(lossPercentage);
 
@@ -827,87 +721,39 @@ export default function SpeedTest() {
     }
   };
 
-  // Convert bits to string helper (standard decimal base-10 network metrics)
-  const formatSpeed = (bps: number) => {
-    const mbps = bps / 1000000;
-    if (mbps >= 1000) {
-      return { value: (mbps / 1000).toFixed(1), unit: 'Gbps' };
+  const downloadTestResult = () => {
+    const allRequests = [
+      ...downloadRequestsRef.current,
+      ...uploadRequestsRef.current
+    ].sort((a, b) => a.time - b.time);
+
+    const headers = ['time', 'direction', 'bytes', 'latency', 'bps', 'duration', 'serverTime', 'responseSize', 'loadedLatencies'];
+    const csvRows = [headers.join(',')];
+
+    for (const req of allRequests) {
+      const pingsStr = req.loadedLatencies && req.loadedLatencies.length > 0
+        ? req.loadedLatencies.join(' ')
+        : '';
+      csvRows.push([
+        req.time,
+        req.direction,
+        req.bytes,
+        req.latency,
+        req.bps,
+        req.duration,
+        req.serverTime,
+        req.responseSize,
+        pingsStr
+      ].join(','));
     }
-    return { value: mbps.toFixed(1), unit: 'Mbps' };
-  };
-
-  // Calculate dynamic Network Quality Scores depending on actual metrics
-  const getQualityScores = () => {
-    const dlMbps = downloadStats.avg / 1000000;
-    const ulMbps = uploadStats.avg / 1000000;
-    const lat = latencyStats.avg;
-    const jit = latencyStats.jitter;
-
-    // Initial defaults before metrics are available
-    if (phase === 'idle' || phase === 'routing') {
-      return {
-        streaming: { rating: '—', color: 'text-mute' },
-        gaming: { rating: '—', color: 'text-mute' },
-        chatting: { rating: '—', color: 'text-mute' }
-      };
-    }
-
-    let streamingRating = 'Good';
-    let streamingColor = 'text-link';
-    if (dlMbps >= 25) {
-      streamingRating = 'Great';
-      streamingColor = 'text-link';
-    } else if (dlMbps >= 5) {
-      streamingRating = 'Good';
-      streamingColor = 'text-link';
-    } else if (dlMbps > 0) {
-      streamingRating = 'Bad';
-      streamingColor = 'text-error';
-    } else {
-      streamingRating = 'Evaluating...';
-      streamingColor = 'text-mute';
-    }
-
-    let gamingRating = 'Good';
-    let gamingColor = 'text-link';
-    if (lat > 0) {
-      if (lat <= 30 && jit <= 10) {
-        gamingRating = 'Great';
-        gamingColor = 'text-link';
-      } else if (lat <= 80 && jit <= 30) {
-        gamingRating = 'Good';
-        gamingColor = 'text-link';
-      } else {
-        gamingRating = 'Bad';
-        gamingColor = 'text-error';
-      }
-    } else {
-      gamingRating = 'Evaluating...';
-      gamingColor = 'text-mute';
-    }
-
-    let chattingRating = 'Good';
-    let chattingColor = 'text-link';
-    if (dlMbps > 0 || ulMbps > 0 || lat > 0) {
-      const meetsSpeed = (dlMbps === 0 || dlMbps >= 4) && (ulMbps === 0 || ulMbps >= 1.5);
-      const meetsLatency = lat === 0 || lat <= 120;
-      if (meetsSpeed && meetsLatency) {
-        chattingRating = (dlMbps >= 10 && ulMbps >= 3 && lat <= 50) ? 'Great' : 'Good';
-        chattingColor = chattingRating === 'Great' ? 'text-link' : 'text-link';
-      } else {
-        chattingRating = 'Bad';
-        chattingColor = 'text-error';
-      }
-    } else {
-      chattingRating = 'Evaluating...';
-      chattingColor = 'text-mute';
-    }
-
-    return {
-      streaming: { rating: streamingRating, color: streamingColor },
-      gaming: { rating: gamingRating, color: gamingColor },
-      chatting: { rating: chattingRating, color: chattingColor }
-    };
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `speed-results-${Math.floor(Date.now() / 1000)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -928,59 +774,29 @@ export default function SpeedTest() {
           {phase === 'idle' || phase === 'complete' || phase === 'error' ? (
             <button
               onClick={startSpeedTest}
-              className="w-full sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
+              type="button"
+              className="w-full h-[60px] sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Play className="w-4 h-4 fill-on-primary text-on-primary" /> Start Speed Test
+              <Play className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Start Speed Test
             </button>
           ) : (
             <button
               onClick={cancelSpeedTest}
-              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
+              type="button"
+              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Square className="w-4 h-4 fill-on-primary text-on-primary" /> Stop Test
+              <Square className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Stop Test
             </button>
           )}
 
           {completionTime && downloadStats.avg > 0 ? (
             <button
-              onClick={() => {
-                const allRequests = [
-                  ...downloadRequestsRef.current,
-                  ...uploadRequestsRef.current
-                ].sort((a, b) => a.time - b.time);
-
-                const headers = ['time', 'direction', 'bytes', 'latency', 'bps', 'duration', 'serverTime', 'responseSize', 'loadedLatencies'];
-                const csvRows = [headers.join(',')];
-
-                for (const req of allRequests) {
-                  const pingsStr = req.loadedLatencies && req.loadedLatencies.length > 0 
-                    ? req.loadedLatencies.join(' ') 
-                    : '';
-                  csvRows.push([
-                    req.time,
-                    req.direction,
-                    req.bytes,
-                    req.latency,
-                    req.bps,
-                    req.duration,
-                    req.serverTime,
-                    req.responseSize,
-                    pingsStr
-                  ].join(','));
-                }
-                const csvContent = csvRows.join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `speed-results-${Math.floor(Date.now() / 1000)}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
+              onClick={downloadTestResult}
+              type="button"
               title="Download results"
-              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer select-none"
+              className="w-full h-[60px] sm:w-auto bg-error text-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Download className="w-4 h-4 fill-on-primary text-on-primary" /> Download Results
+              <Download className="w-4 h-4 fill-primary text-primary" aria-hidden="true" /> Download Results
             </button>
           ) : null}
         </div>
@@ -996,14 +812,14 @@ export default function SpeedTest() {
 
       {/* Progress Bar & Status Text */}
       {phase !== 'idle' && phase !== 'complete' && phase !== 'error' ? (
-        <div className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs">
+        <div className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs" aria-live="polite">
           <div className="flex justify-between items-center text-xs font-mono text-mute">
             <span>PROGRESS</span>
-            <span>{progressPercent}%</span>
+            <span className="tabular-nums">{progressPercent}%</span>
           </div>
           <div className="w-full bg-canvas-soft-2 h-1.5 rounded-full overflow-hidden">
             <div
-              className="h-full transition-all duration-300 rounded-full"
+              className="h-full rounded-full transition-[width,background-color] duration-300"
               style={{
                 width: `${progressPercent}%`,
                 backgroundColor: phase === 'download' ? '#eb6f20' : phase === 'upload' ? '#8b5cf6' : 'var(--color-primary)'
@@ -1011,7 +827,7 @@ export default function SpeedTest() {
             />
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-2 h-2 rounded-full bg-success animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-success animate-ping" aria-hidden="true" />
             <span className="text-xs text-body font-mono truncate">{statusMessage}</span>
           </div>
         </div>
@@ -1054,7 +870,7 @@ export default function SpeedTest() {
 
           <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
             <span>Peak Speed:</span>
-            <span className="font-semibold text-ink">
+            <span className="font-semibold text-ink tabular-nums">
               {downloadStats.peak > 0 ? `${formatSpeed(downloadStats.peak).value} ${formatSpeed(downloadStats.peak).unit}` : '—'}
             </span>
           </div>
@@ -1094,7 +910,7 @@ export default function SpeedTest() {
 
           <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
             <span>Peak Speed:</span>
-            <span className="font-semibold text-ink">
+            <span className="font-semibold text-ink tabular-nums">
               {uploadStats.peak > 0 ? `${formatSpeed(uploadStats.peak).value} ${formatSpeed(uploadStats.peak).unit}` : '—'}
             </span>
           </div>
@@ -1110,7 +926,7 @@ export default function SpeedTest() {
                 <span>LATENCY</span>
                 <InfoTooltip content="Latency (ping) measures the round-trip response time for data. Lower latency is vital for real-time applications like online gaming or voice calls. Unloaded represents idle latency, while Loaded (Down/Up Arrow) measures latency under heavy network load." />
               </div>
-              <Wifi className="w-4 h-4 text-mute" />
+              <Wifi className="w-4 h-4 text-mute" aria-hidden="true" />
             </div>
 
             <div className="flex items-baseline gap-1.5">
@@ -1122,14 +938,12 @@ export default function SpeedTest() {
 
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                {/* ArrowDown color matched to orange download theme */}
-                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" />
-                <span>Down: <span className="font-semibold text-ink font-mono">{dlLoadedLatency > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
+                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedLatency > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
-                {/* ArrowUp color matched to purple upload theme */}
-                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" />
-                <span>Up: <span className="font-semibold text-ink font-mono">{ulLoadedLatency > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
+                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedLatency > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
           </div>
@@ -1141,7 +955,7 @@ export default function SpeedTest() {
                 <span>JITTER</span>
                 <InfoTooltip content="Jitter is the variance in latency over time. Steady, consistent latency results in lower jitter, which is essential for smooth audio streams and live gaming. High jitter causes sudden lag spikes." />
               </div>
-              <Activity className="w-4 h-4 text-mute" />
+              <Activity className="w-4 h-4 text-mute" aria-hidden="true" />
             </div>
 
             <div className="flex items-baseline gap-1.5">
@@ -1153,12 +967,12 @@ export default function SpeedTest() {
 
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" />
-                <span>Down: <span className="font-semibold text-ink font-mono">{dlLoadedJitter > 0 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
+                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedJitter > 0 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" />
-                <span>Up: <span className="font-semibold text-ink font-mono">{ulLoadedJitter > 0 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
+                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedJitter > 0 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
           </div>
@@ -1171,7 +985,7 @@ export default function SpeedTest() {
                   <span>PACKET LOSS</span>
                   <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. It results in choppy voice calls, freezing videos, and gaming lag. Ideally, packet loss should be 0.0%." />
                 </div>
-                <AlertTriangle className="w-4 h-4 text-mute" />
+                <AlertTriangle className="w-4 h-4 text-mute" aria-hidden="true" />
               </div>
 
               <div className="flex items-baseline gap-1">
@@ -1183,7 +997,7 @@ export default function SpeedTest() {
 
             <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex justify-between items-center">
               <span>Measured Packet Loss</span>
-              <span className={packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}>
+              <span className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}>
                 {packetLoss > 0 ? "Suboptimal" : "Excellent"}
               </span>
             </div>
@@ -1193,300 +1007,31 @@ export default function SpeedTest() {
       </div>
 
       {/* 4. Network Quality Score Panel */}
-      <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs">
-        <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-4 pb-2 border-b border-hairline">
-          <span>NETWORK QUALITY SCORE</span>
-          <InfoTooltip content="Estimates how well your current connection supports common online tasks based on speeds and latency scores." />
-        </div>
+      <QualityScores
+        phase={phase}
+        downloadAvg={downloadStats.avg}
+        uploadAvg={uploadStats.avg}
+        latencyAvg={latencyStats.avg}
+        latencyJitter={latencyStats.jitter}
+      />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-hairline">
-
-          <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-            <span className="text-xs font-mono text-mute uppercase tracking-wider">Video Streaming</span>
-            <span className={`text-lg font-bold ${getQualityScores().streaming.color}`}>
-              {getQualityScores().streaming.rating}
-            </span>
-          </div>
-
-          <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-            <span className="text-xs font-mono text-mute uppercase tracking-wider">Online Gaming</span>
-            <span className={`text-lg font-bold ${getQualityScores().gaming.color}`}>
-              {getQualityScores().gaming.rating}
-            </span>
-          </div>
-
-          <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-            <span className="text-xs font-mono text-mute uppercase tracking-wider">Video Chatting</span>
-            <span className={`text-lg font-bold ${getQualityScores().chatting.color}`}>
-              {getQualityScores().chatting.rating}
-            </span>
-          </div>
-
-        </div>
-      </div>
-
-      {/* 5. Detailed Measurements Breakdown (Cloudflare Speed Test style) */}
-      <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs flex flex-col gap-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-hairline pb-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-mono text-mute uppercase tracking-wider">Detailed Analytics</span>
-            <h2 className="text-lg font-semibold text-ink font-sans">Measurements Breakdown</h2>
-          </div>
-          
-          {/* Tab selector */}
-          <div className="flex flex-wrap gap-1 bg-canvas-soft-2 p-1 rounded-full border border-hairline">
-            {(['latency', 'packetLoss', 'download', 'upload'] as const).map((tab) => {
-              const isActive = activeTab === tab;
-              const labels: Record<string, string> = {
-                latency: 'Latency',
-                packetLoss: 'Packet Loss',
-                download: 'Download Speeds',
-                upload: 'Upload Speeds'
-              };
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1 rounded-full text-xs font-mono select-none cursor-pointer transition-all duration-150 ${
-                    isActive
-                      ? 'bg-primary text-on-primary font-semibold shadow-xs'
-                      : 'text-mute hover:text-ink'
-                  }`}
-                >
-                  {labels[tab]}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Tab contents */}
-        <div className="overflow-x-auto w-full transition-opacity duration-200">
-          {activeTab === 'latency' && (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">STAGE</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">AVG (MS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MEDIAN (MS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MIN (MS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MAX (MS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">JITTER (MS)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {/* Unloaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
-                    Unloaded (Idle)
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.latencies.length > 0 ? calculateMean(unloadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.latencies.length > 0 ? calculateMedian(unloadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.latencies.length > 0 ? calculateMin(unloadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.latencies.length > 0 ? calculateMax(unloadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.latencies.length > 0 ? calculateJitter(unloadedPingStats.latencies).toFixed(1) : '—'}</td>
-                </tr>
-                {/* Download Loaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#eb6f20]"></span>
-                    Download Loaded
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.latencies.length > 0 ? calculateMean(dlLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.latencies.length > 0 ? calculateMedian(dlLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.latencies.length > 0 ? calculateMin(dlLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.latencies.length > 0 ? calculateMax(dlLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.latencies.length > 0 ? calculateJitter(dlLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                </tr>
-                {/* Upload Loaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></span>
-                    Upload Loaded
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.latencies.length > 0 ? calculateMean(ulLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.latencies.length > 0 ? calculateMedian(ulLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.latencies.length > 0 ? calculateMin(ulLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.latencies.length > 0 ? calculateMax(ulLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.latencies.length > 0 ? calculateJitter(ulLoadedPingStats.latencies).toFixed(1) : '—'}</td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-
-          {activeTab === 'packetLoss' && (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">STAGE</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">PACKETS SENT</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">PACKETS LOST</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">LOSS RATE (%)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {/* Unloaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
-                    Unloaded (Idle)
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.sent > 0 ? unloadedPingStats.sent : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{unloadedPingStats.sent > 0 ? unloadedPingStats.lost : '—'}</td>
-                  <td className={`py-3 px-4 font-mono font-semibold ${unloadedPingStats.lost > 0 ? 'text-error' : 'text-body'}`}>
-                    {unloadedPingStats.sent > 0 ? `${((unloadedPingStats.lost / unloadedPingStats.sent) * 100).toFixed(1)}%` : '—'}
-                  </td>
-                </tr>
-                {/* Download Loaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#eb6f20]"></span>
-                    Download Loaded
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.sent > 0 ? dlLoadedPingStats.sent : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{dlLoadedPingStats.sent > 0 ? dlLoadedPingStats.lost : '—'}</td>
-                  <td className={`py-3 px-4 font-mono font-semibold ${dlLoadedPingStats.lost > 0 ? 'text-error' : 'text-body'}`}>
-                    {dlLoadedPingStats.sent > 0 ? `${((dlLoadedPingStats.lost / dlLoadedPingStats.sent) * 100).toFixed(1)}%` : '—'}
-                  </td>
-                </tr>
-                {/* Upload Loaded Row */}
-                <tr className="hover:bg-canvas-soft/40 transition-colors">
-                  <td className="py-3 px-4 font-medium text-ink flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></span>
-                    Upload Loaded
-                  </td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.sent > 0 ? ulLoadedPingStats.sent : '—'}</td>
-                  <td className="py-3 px-4 font-mono text-body">{ulLoadedPingStats.sent > 0 ? ulLoadedPingStats.lost : '—'}</td>
-                  <td className={`py-3 px-4 font-mono font-semibold ${ulLoadedPingStats.lost > 0 ? 'text-error' : 'text-body'}`}>
-                    {ulLoadedPingStats.sent > 0 ? `${((ulLoadedPingStats.lost / ulLoadedPingStats.sent) * 100).toFixed(1)}%` : '—'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-
-          {activeTab === 'download' && (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">PAYLOAD SIZE</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">AVG SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MEDIAN (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MIN SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MAX SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MEASUREMENTS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {(() => {
-                  const bins = [
-                    { name: '100 kB', filter: (r: any) => r.bytes < 500 * 1024 },
-                    { name: '1 MB', filter: (r: any) => r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024 },
-                    { name: '10 MB', filter: (r: any) => r.bytes >= 5 * 1024 * 1024 && r.bytes < 15 * 1024 * 1024 },
-                    { name: '25 MB', filter: (r: any) => r.bytes >= 15 * 1024 * 1024 }
-                  ];
-
-                  return bins.map((bin) => {
-                    const binReqs = downloadRequests.filter(bin.filter);
-                    const speeds = binReqs.map(r => r.bps / 1000000);
-                    const hasData = speeds.length > 0;
-
-                    return (
-                      <tr key={bin.name} className="hover:bg-canvas-soft/40 transition-colors">
-                        <td className="py-3 px-4 font-medium text-ink">{bin.name}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMean(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMedian(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMin(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMax(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-mute">{speeds.length}</td>
-                      </tr>
-                    );
-                  });
-                })()}
-              </tbody>
-            </table>
-          )}
-
-          {activeTab === 'upload' && (
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">PAYLOAD SIZE</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">AVG SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MEDIAN (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MIN SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MAX SPEED (MBPS)</th>
-                  <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">MEASUREMENTS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {(() => {
-                  const bins = [
-                    { name: '100 kB', filter: (r: any) => r.bytes < 500 * 1024 },
-                    { name: '1 MB', filter: (r: any) => r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024 },
-                    { name: '10 MB', filter: (r: any) => r.bytes >= 5 * 1024 * 1024 }
-                  ];
-
-                  return bins.map((bin) => {
-                    const binReqs = uploadRequests.filter(bin.filter);
-                    const speeds = binReqs.map(r => r.bps / 1000000);
-                    const hasData = speeds.length > 0;
-
-                    return (
-                      <tr key={bin.name} className="hover:bg-canvas-soft/40 transition-colors">
-                        <td className="py-3 px-4 font-medium text-ink">{bin.name}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMean(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMedian(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMin(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-body">{hasData ? calculateMax(speeds).toFixed(1) : '—'}</td>
-                        <td className="py-3 px-4 font-mono text-mute">{speeds.length}</td>
-                      </tr>
-                    );
-                  });
-                })()}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      {/* 5. Detailed Measurements Breakdown */}
+      <DetailedMeasurements
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        unloadedPingStats={unloadedPingStats}
+        dlLoadedPingStats={dlLoadedPingStats}
+        ulLoadedPingStats={ulLoadedPingStats}
+        downloadRequests={downloadRequests}
+        uploadRequests={uploadRequests}
+      />
 
       {/* 6. Technical Details Drawer */}
-      {clientInfo && (
-        <details className="group border border-hairline rounded-lg overflow-hidden bg-canvas">
-          <summary className="bg-canvas-soft-2 p-4 cursor-pointer text-xs font-mono text-mute select-none flex justify-between items-center hover:bg-canvas-soft-2/80 transition-colors">
-            <span>SHOW TECHNICAL DETAIL LOGS</span>
-            <span className="text-[10px] text-mute group-open:rotate-180 transition-transform">▼</span>
-          </summary>
-          <div className="p-5 border-t border-hairline flex flex-col md:flex-row justify-between gap-6 text-xs text-body font-mono">
-            <div className="flex flex-col gap-2">
-              <span className="text-mute font-semibold">YOUR CONNECTION</span>
-              <div>IP: <span className="text-ink">{clientInfo.ip}</span></div>
-              <div>ISP: <span className="text-ink">{clientInfo.org}</span></div>
-              <div>Location: <span className="text-ink">{clientInfo.city}, {clientInfo.region}, {clientInfo.country}</span></div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-mute font-semibold">ANCHOR ROUTING INFO</span>
-              <div>Server: <span className="text-ink">{selectedServer?.name || 'Evaluating...'}</span></div>
-              <div>Region URL: <span className="text-ink">{selectedServer?.region ? `?region=${selectedServer.region}` : '/api (Local Edge)'}</span></div>
-              {selectedServer && selectedServer.id !== 'local-edge' && clientInfo.latitude !== 0 && (
-                <div>Distance: <span className="text-ink">
-                  {Math.round(haversineDistance(clientInfo.latitude, clientInfo.longitude, selectedServer.lat, selectedServer.lon))} km
-                </span></div>
-              )}
-              {selectedServer && selectedServer.id === 'local-edge' && (
-                <div>Distance: <span className="text-ink">0 km (Local Loopback)</span></div>
-              )}
-              <div>Pre-Ping Latency: <span className="text-ink">
-                {routingResults[selectedServer?.id || '']
-                  ? `${Math.round(routingResults[selectedServer?.id || ''])}ms`
-                  : 'Not pinged'}
-              </span></div>
-            </div>
-          </div>
-        </details>
-      )}
+      <TechnicalLogs
+        clientInfo={clientInfo}
+        selectedServer={selectedServer}
+        routingResults={routingResults}
+      />
 
     </div>
   );
