@@ -1,0 +1,96 @@
+---
+interface Props {
+  showServerStatus?: boolean;
+}
+
+const { showServerStatus = false } = Astro.props;
+---
+
+<header
+  class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-16 flex items-center z-50"
+>
+  <div
+    class="w-full max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center"
+  >
+    <div class="flex items-center gap-6">
+      <a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
+        <img
+          src="/favicon.svg"
+          alt="NetSpeed Logo"
+          width="40"
+          height="40"
+          class="dark:invert-0"
+        />
+        <span
+          class="font-bold tracking-tight text-sm font-sans text-ink"
+        >
+          NetSpeed
+        </span>
+      </a>
+      <nav class="hidden md:flex items-center gap-4">
+        <span
+          class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
+        >
+          v1.0.0-edge
+        </span>
+      </nav>
+    </div>
+    <div class="flex items-center gap-4">
+      <div
+        class="flex items-center gap-3 bg-canvas border border-hairline px-3.5 py-1.5 rounded-full shadow-xs"
+      >
+        {
+          showServerStatus && (
+            <>
+              <div
+                id="header-server-info"
+                class="text-xs font-mono text-mute flex items-center gap-2 select-none"
+              >
+                <span
+                  id="server-status-dot"
+                  class="w-1.5 h-1.5 rounded-full bg-mute animate-pulse"
+                />
+                <span id="server-status-text">Server: Detecting…</span>
+              </div>
+              <div class="h-3 w-px bg-hairline" />
+            </>
+          )
+        }
+
+        <button
+          id="header-theme-toggle"
+          class="text-mute hover:text-ink active:scale-90 transition-[color,transform] duration-150 cursor-pointer flex items-center justify-center select-none"
+          title="Switch Theme"
+          aria-label="Toggle dark mode"
+        >
+          {/* Sun icon for light mode (hidden in dark mode) */}
+          <svg
+            id="sun-icon"
+            class="w-3.5 h-3.5 fill-none stroke-current block dark:hidden"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"
+            ></path>
+          </svg>
+          {/* Moon icon for dark mode (hidden in light mode) */}
+          <svg
+            id="moon-icon"
+            class="w-3.5 h-3.5 fill-none stroke-current hidden dark:block"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+            ></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>

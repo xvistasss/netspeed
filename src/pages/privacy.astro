@@ -1,0 +1,78 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="Privacy Policy — NetSpeed Network Diagnostics"
+  description="Review the NetSpeed privacy policy. Learn about telemetry data gathering, local cache bypass, and how we keep your diagnostics anonymous."
+>
+  <main class="flex-1 py-16 px-4 md:px-8">
+    <div class="max-w-3xl mx-auto flex flex-col gap-10">
+      {/* Header */}
+      <div class="flex flex-col gap-3 border-b border-hairline pb-6">
+        <span class="font-mono text-xs uppercase tracking-wider text-mute block">
+          Compliance & Transparency
+        </span>
+        <h1 class="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
+          Privacy Policy.
+        </h1>
+        <p class="text-xs font-mono text-mute mt-1">
+          LAST MODIFIED: JUNE 10, 2026
+        </p>
+      </div>
+
+      {/* Main Content Layout */}
+      <div class="flex flex-col gap-8 text-sm md:text-base text-body leading-relaxed">
+        <section class="flex flex-col gap-3">
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            1. Telemetry and connection diagnostics.
+          </h2>
+          <p>
+            When you initiate a connection benchmark on NetSpeed, our platform temporarily gathers network-level telemetries. This includes your external Internet Protocol (IP) address, approximate geolocation (city, region, and country level), your Internet Service Provider (ISP) network name (ASN), and transit metrics such as download speeds, upload speeds, round-trip ping time, and packet jitter variables.
+          </p>
+          <p>
+            These details are analyzed on-the-fly inside local worker threads and are displayed in your browser dashboard. Geolocation lookup is conducted entirely server-side in a secure runtime, and raw IPs are processed to output approximate coordinates for distance calculations.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-3 border-t border-hairline pt-8">
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            2. Storage and persistence rules.
+          </h2>
+          <p>
+            NetSpeed operates with a strict no-collection priority. We do not maintain databases tracking individual speed histories, name details, search profiles, or account contexts:
+          </p>
+          <ul class="list-disc pl-5 flex flex-col gap-2 text-xs md:text-sm">
+            <li>
+              <strong>Connection Logs</strong>: Telemetry metrics captured during tests are ephemeral. We do not store log lines of speed tests permanently unless you choose to export them locally as a CSV output.
+            </li>
+            <li>
+              <strong>Cookies</strong>: We do not deploy third-party trackers, retargeting mechanisms, or profile trackers.
+            </li>
+            <li>
+              <strong>Local Storage</strong>: We use local storage variables (e.g. <code>theme</code>) to preserve preferences (like Light / Dark themes) client-side. This data remains on your machine and is never sent to our servers.
+            </li>
+          </ul>
+        </section>
+
+        <section class="flex flex-col gap-3 border-t border-hairline pt-8">
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            3. Data retention and sharing.
+          </h2>
+          <p>
+            Because we do not store personal details, we do not trade, sell, or rent user diagnostic metrics to advertisers or research coalitions. Any aggregate diagnostic reports analyzed in memory are strictly utilized to assess regional routing efficiency and server utilization rates to optimize routing tables.
+          </p>
+        </section>
+
+        <section class="flex flex-col gap-3 border-t border-hairline pt-8">
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            4. Adjustments and inquiries.
+          </h2>
+          <p>
+            We reserve the right to modify this telemetry privacy declaration to conform to international data standards. If you have questions regarding our edge pipeline execution or geoip analysis, please direct your questions through our <a href="/contact" class="text-link hover:underline">Contact page</a>.
+          </p>
+        </section>
+      </div>
+    </div>
+  </main>
+</Layout>

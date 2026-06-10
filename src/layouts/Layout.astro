@@ -1,12 +1,17 @@
 ---
 import "../styles/global.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+
 interface Props {
 	title?: string;
 	description?: string;
+	showServerStatus?: boolean;
 }
 const {
 	title = "Network Speed Test — NetSpeed Professional Internet Speed Test",
 	description = "Run a highly accurate network speed test tool to check your internet download, upload, and latency speeds at the edge. Clean, ads-free, and professional.",
+	showServerStatus = false,
 } = Astro.props;
 ---
 
@@ -60,6 +65,18 @@ const {
 			href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap"
 			rel="stylesheet"
 		/>
+
+		<!-- Inline theme initialization to prevent FOUC -->
+		<script is:inline>
+			const savedTheme = localStorage.getItem("theme");
+			const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+			const isDark = savedTheme === "dark" || (!savedTheme && prefersDark);
+			if (isDark) {
+				document.documentElement.classList.add("dark");
+			} else {
+				document.documentElement.classList.remove("dark");
+			}
+		</script>
 	</head>
 	<body
 		class="bg-canvas-soft text-ink font-sans antialiased min-h-screen relative"
@@ -69,7 +86,58 @@ const {
 			<div class="mesh-gradient"></div>
 		</div>
 		<div class="relative z-10 flex flex-col min-h-screen">
+			<Header showServerStatus={showServerStatus} />
 			<slot />
+			<Footer />
 		</div>
+
+		<script>
+			// Theme toggle setup on page load
+			const setupThemeToggle = () => {
+				const themeToggle = document.getElementById("header-theme-toggle");
+				if (themeToggle) {
+					themeToggle.addEventListener("click", () => {
+						const wasDark = document.documentElement.classList.contains("dark");
+						const nextDark = !wasDark;
+
+						if (nextDark) {
+							document.documentElement.classList.add("dark");
+							localStorage.setItem("theme", "dark");
+						} else {
+							document.documentElement.classList.remove("dark");
+							localStorage.setItem("theme", "light");
+						}
+
+						// Broadcast change event to React
+						window.dispatchEvent(
+							new CustomEvent("theme-changed", {
+								detail: { theme: nextDark ? "dark" : "light" },
+							}),
+						);
+					});
+				}
+			};
+
+			setupThemeToggle();
+			document.addEventListener("astro:after-swap", setupThemeToggle);
+
+			// Server info receiver
+			window.addEventListener("server-selected", (e: any) => {
+				const textEl = document.getElementById("server-status-text");
+				const dotEl = document.getElementById("server-status-dot");
+				if (textEl && dotEl) {
+					const { name, distance } = e.detail;
+					const distStr = distance ? ` (${distance})` : "";
+
+					// Change dot styling to indicate active server
+					dotEl.className =
+						"w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse";
+
+					// Update location text
+					textEl.className = "text-ink font-semibold";
+					textEl.textContent = `Server: ${name}${distStr}`;
+				}
+			});
+		</script>
 	</body>
 </html>

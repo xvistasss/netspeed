@@ -770,6 +770,16 @@ export default function SpeedTest() {
           A professional-grade, latency-critical speed test engine measuring packet jitters, concurrent downloads, and uploads at the edge.
         </p>
 
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 mb-4">
+          <a href="/about" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">About Us</a>
+          <span className="text-hairline-strong text-[10px] select-none">•</span>
+          <a href="/contact" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Contact Us</a>
+          <span className="text-hairline-strong text-[10px] select-none">•</span>
+          <a href="/privacy" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Privacy Policy</a>
+          <span className="text-hairline-strong text-[10px] select-none">•</span>
+          <a href="/terms" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Terms & Conditions</a>
+        </div>
+
         <div className="flex items-center gap-3 w-full sm:w-auto justify-stretch">
           {phase === 'idle' || phase === 'complete' || phase === 'error' ? (
             <button
@@ -794,7 +804,7 @@ export default function SpeedTest() {
               onClick={downloadTestResult}
               type="button"
               title="Download results"
-              className="w-full h-[60px] sm:w-auto bg-error text-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
+              className="w-full h-[60px] sm:w-auto bg-error-soft text-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
               <Download className="w-4 h-4 fill-primary text-primary" aria-hidden="true" /> Download Results
             </button>

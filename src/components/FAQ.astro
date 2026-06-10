@@ -1,0 +1,199 @@
+---
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is a good internet speed?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "A good internet speed is typically defined as a download speed of 100 Mbps or higher and an upload speed of at least 10 Mbps. At these rates, a standard household can comfortably stream 4K Ultra HD video, participate in high-definition Zoom meetings, and play online multiplayer games simultaneously. For light usage, 25 Mbps is sufficient, while power users and remote workers utilizing large cloud transfers may benefit from fiber-optic gigabit connections (1,000 Mbps).",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Why is my internet speed so slow?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Slow internet speeds can stem from various network issues. Common culprits include: local network congestion (too many devices sharing your bandwidth), WiFi signal interference or physical distance from the router, outdated hardware (older modems or routers), background processes (unseen application downloads or backups), and ISP limitations (such as routing degradation or throttling).",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How can I make my internet faster?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "You can optimize your network speed by performing several adjustments: power cycle your modem and router, connect critical devices directly via an Ethernet cable to eliminate wireless interference, position your router in an open, elevated location, disconnect inactive devices from your network, and ensure your router's firmware is up to date.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Why doesn't my speed test match the plan I pay for?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Speed tests reflect the real-time capacity of your connection, which is often lower than your ISP's advertised plan due to protocol overhead (which consumes about 5-10% of total bandwidth for routing headers), WiFi bottlenecks, active background network usage by other devices, and physical distance from the nearest speed test server.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What is the best netspeed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "The best netspeed test is one that uses edge-optimized, non-compressible binary data payloads processed across concurrent network connections. A professional, direct-to-edge service like NetSpeed measures raw, un-cached network performance, providing an unbiased diagnostic profile of your real-world internet capability.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How to test internet speed?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "To test your internet speed accurately: disconnect any active VPNs, close background downloads or active streaming apps, connect via Ethernet if testing your line capacity (or WiFi for local wireless performance), open a reliable speed testing tool like NetSpeed, and click the start button.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Whats my speed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Your speed test measures the real-time upload speed, download speed, and overall connection quality (including latency and jitter) between your current browser session and a nearby data center. This allows you to evaluate your current network throughput and check if your ISP is delivering promised performance.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What is an internet speed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "An internet speed test is a digital tool that measures the transfer rate of data between your device and a test server. It does this by downloading and uploading specific data payloads, recording the speeds achieved, and measuring the responsiveness (latency/ping) of the connection.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What is Latency?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Latency (or ping) is the time delay (measured in milliseconds) it takes for a data packet to travel from your device to a destination server and return. Low latency (under 30 ms) is essential for lag-free online gaming, video conferencing, and real-time interactive services.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What is ping on speed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "On a network speed test, the 'ping' value represents the round-trip latency time in milliseconds (ms) for a small packet of data to navigate to the test server and return. A lower ping indicates a highly responsive, immediate connection.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What is jitter on speed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Jitter represents the variance or fluctuation in latency over time. Low jitter (ideally under 5 ms) is a critical indicator of connection stability; high jitter causes voice drops, video buffering, and sudden lag spikes.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How to read an internet speed test?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "When reading your speed test, look at four primary metrics: Download Speed (how fast you retrieve files; higher is better), Upload Speed (how fast you send files; higher is better), Latency/Ping (connection responsiveness; lower is better), and Jitter (signal stability; lower is better).",
+      },
+    },
+  ],
+};
+
+const mainEntity = faqJsonLd.mainEntity;
+---
+
+<!-- JSON-LD Structured Schema for FAQ Page SEO -->
+<script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+
+<section
+  id="faq-section"
+  class="border-t border-hairline bg-canvas py-16 relative overflow-hidden"
+>
+  <div class="max-w-4xl mx-auto px-4 md:px-8">
+    <div class="flex flex-col gap-8">
+      {
+        /* Title block using design principles (sentence case, period terminated) */
+      }
+      <div class="flex flex-col gap-2">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+          id="faq-eyebrow"
+        >
+          Frequently Asked Questions
+        </span>
+        <h2
+          class="text-2xl md:text-3xl font-semibold tracking-tight text-ink font-sans"
+          id="faq-heading"
+        >
+          Frequently asked questions.
+        </h2>
+        <p class="text-sm md:text-base text-body leading-relaxed max-w-2xl">
+          Find answers to common questions about network metrics, speed
+          diagnostic performance, and how to optimize your internet connection.
+        </p>
+      </div>
+
+      {/* Accordion List */}
+      <div
+        class="flex flex-col border-t border-hairline divide-y divide-hairline"
+      >
+        {
+          mainEntity.map((item, index) => (
+            <details class="group py-4 select-none">
+              <summary class="flex justify-between items-center cursor-pointer list-none text-sm md:text-base font-semibold text-ink hover:text-link transition-colors duration-150 py-1">
+                <span>{item.name}</span>
+                <span class="ml-4 flex items-center justify-center w-5 h-5 rounded-full border border-hairline group-hover:border-hairline-strong transition-colors duration-150">
+                  <svg
+                    class="w-3 h-3 text-mute group-open:rotate-180 transition-transform duration-200"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </span>
+              </summary>
+              <div class="faq-answer mt-3 text-xs md:text-sm text-body leading-relaxed max-w-3xl pb-2 pl-1">
+                {item.acceptedAnswer.text}
+              </div>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Reset standard details arrow across all browsers */
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary {
+    list-style: none;
+  }
+
+  /* Apply premium micro-animation to answer visibility */
+  details[open] .faq-answer {
+    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
