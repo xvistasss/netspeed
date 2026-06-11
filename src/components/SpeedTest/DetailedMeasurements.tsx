@@ -7,6 +7,7 @@ import {
   calculateMax,
   calculateJitter
 } from '../../utils/speedTestUtils';
+import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react';
 
 interface DetailedMeasurementsProps {
   activeTab: 'latency' | 'packetLoss' | 'download' | 'upload';
@@ -34,32 +35,40 @@ export default function DetailedMeasurements({
           <span className="text-xs font-mono text-mute uppercase tracking-wider">Detailed Analytics</span>
           <h2 className="text-lg font-semibold text-ink font-sans">Measurements Breakdown</h2>
         </div>
-        
-        {/* Tab selector */}
-        <div className="flex flex-wrap gap-1 bg-canvas-soft-2 p-1 rounded-full border border-hairline">
-          {(['latency', 'packetLoss', 'download', 'upload'] as const).map((tab) => {
-            const isActive = activeTab === tab;
-            const labels: Record<string, string> = {
-              latency: 'Latency',
-              packetLoss: 'Packet Loss',
-              download: 'Download Speeds',
-              upload: 'Upload Speeds'
-            };
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                type="button"
-                className={`px-3 py-1 rounded-full text-xs font-mono select-none cursor-pointer transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary ${
-                  isActive
+
+        {/* Tab selector container with horizontal scroll on mobile */}
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar scroll-smooth flex">
+          <div className="flex bg-canvas-soft-2 p-1 rounded-full border border-hairline min-w-max">
+            {(['latency', 'packetLoss', 'download', 'upload'] as const).map((tab) => {
+              const isActive = activeTab === tab;
+              const labels: Record<string, string> = {
+                latency: 'Latency',
+                packetLoss: 'Packet Loss',
+                download: 'Download Speeds',
+                upload: 'Upload Speeds'
+              };
+              const icons: Record<string, React.ReactNode> = {
+                latency: <Wifi className="w-3.5 h-3.5" />,
+                packetLoss: <AlertTriangle className="w-3.5 h-3.5" />,
+                download: <ArrowDown className="w-3.5 h-3.5" />,
+                upload: <ArrowUp className="w-3.5 h-3.5" />
+              };
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  type="button"
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono select-none cursor-pointer transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary ${isActive
                     ? 'bg-primary text-on-primary font-semibold shadow-xs'
                     : 'text-mute hover:text-ink'
-                }`}
-              >
-                {labels[tab]}
-              </button>
-            );
-          })}
+                    }`}
+                >
+                  {icons[tab]}
+                  <span>{labels[tab]}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 

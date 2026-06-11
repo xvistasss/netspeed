@@ -283,10 +283,23 @@ async function runDownloadTest(baseUrl: string, region: string | undefined, para
           loadedLatencies: requestPings
         });
 
-        if (chunkDuration < 300 && currentChunkSize < 25 * 1024 * 1024) {
-          currentChunkSize = Math.min(25 * 1024 * 1024, currentChunkSize * 2);
-        } else if (chunkDuration > 1500 && currentChunkSize > 100 * 1024) {
-          currentChunkSize = Math.max(100 * 1024, currentChunkSize / 2);
+        // Determine the target chunk size based on current measured speed in Mbps
+        const speedMbps = bps / 1000000;
+        if (speedMbps > 80) {
+          currentChunkSize = Math.min(25 * 1024 * 1024, currentChunkSize * 4);
+        } else if (speedMbps > 30) {
+          currentChunkSize = Math.min(10 * 1024 * 1024, currentChunkSize * 2);
+        } else if (speedMbps > 8) {
+          currentChunkSize = Math.min(5 * 1024 * 1024, currentChunkSize * 2);
+        } else if (speedMbps > 2) {
+          currentChunkSize = Math.min(1 * 1024 * 1024, currentChunkSize * 2);
+        } else {
+          currentChunkSize = 100 * 1024;
+        }
+
+        // Safety valve: if a single chunk takes too long (> 1800ms), scale down to prevent blocking
+        if (chunkDuration > 1800 && currentChunkSize > 100 * 1024) {
+          currentChunkSize = Math.max(100 * 1024, Math.floor(currentChunkSize / 2));
         }
 
       } catch (err) {
@@ -509,14 +522,18 @@ async function runUploadTest(baseUrl: string, region: string | undefined, parall
           loadedLatencies: requestPings
         });
 
-        // Progressive size: Adjust block sizing depending on speed
-        if (chunkDuration < 250) {
-          if (currentPayload === chunk100KB) {
-            currentPayload = chunk1MB;
-          } else if (currentPayload === chunk1MB) {
-            currentPayload = chunk10MB;
-          }
-        } else if (chunkDuration > 1500) {
+        // Progressive size: Adjust block sizing depending on upload speed in Mbps
+        const speedMbps = bps / 1000000;
+        if (speedMbps > 40) {
+          currentPayload = chunk10MB;
+        } else if (speedMbps > 8) {
+          currentPayload = chunk1MB;
+        } else {
+          currentPayload = chunk100KB;
+        }
+
+        // Safety valve: if upload chunk takes too long (> 2000ms), scale down
+        if (chunkDuration > 2000) {
           if (currentPayload === chunk10MB) {
             currentPayload = chunk1MB;
           } else if (currentPayload === chunk1MB) {
