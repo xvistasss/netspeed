@@ -25,28 +25,38 @@ export const POST: APIRoute = async ({ request }) => {
     };
 
     // 2. Local Storage (Save to src/data/contacts.json)
-    const dataDir = path.resolve('src/data');
-    await fs.mkdir(dataDir, { recursive: true });
-    const filePath = path.join(dataDir, 'contacts.json');
-
-    let submissions = [];
+    let savedLocally = false;
     try {
-      const existingData = await fs.readFile(filePath, 'utf-8');
-      submissions = JSON.parse(existingData);
-    } catch (e) {
-      // File doesn't exist or is empty
+      const dataDir = path.resolve('src/data');
+      await fs.mkdir(dataDir, { recursive: true });
+      const filePath = path.join(dataDir, 'contacts.json');
+
+      let submissions = [];
+      try {
+        const existingData = await fs.readFile(filePath, 'utf-8');
+        submissions = JSON.parse(existingData);
+      } catch (e) {
+        // File doesn't exist or is empty
+      }
+
+      submissions.push(submission);
+      await fs.writeFile(filePath, JSON.stringify(submissions, null, 2), 'utf-8');
+      savedLocally = true;
+      console.log(`[Contact Submission] Saved locally. Timestamp: ${submission.timestamp}`);
+    } catch (fsErr: any) {
+      console.warn(`[Contact Submission] Local storage is not available/failed: ${fsErr.message}`);
     }
 
-    submissions.push(submission);
-    await fs.writeFile(filePath, JSON.stringify(submissions, null, 2), 'utf-8');
-
-    console.log(`[Contact Submission] Saved locally. Timestamp: ${submission.timestamp}`);
+    console.log(`[Contact Submission Details]`);
+    console.log(`- Timestamp: ${submission.timestamp}`);
     console.log(`- From: ${name} <${email}>`);
     console.log(`- Subject: ${subject}`);
     console.log(`- Message: ${message}`);
 
     let emailSent = false;
-    let emailMessage = 'Saved locally to src/data/contacts.json';
+    let emailMessage = savedLocally 
+      ? 'Saved locally to src/data/contacts.json' 
+      : 'Submission received (local file storage unavailable)';
 
     // 3. Optional Email dispatch (SMTP via nodemailer if configured)
     if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -77,11 +87,15 @@ export const POST: APIRoute = async ({ request }) => {
 
         await transporter.sendMail(mailOptions);
         emailSent = true;
-        emailMessage = 'Saved locally & email dispatched successfully';
+        emailMessage = savedLocally 
+          ? 'Saved locally & email dispatched successfully' 
+          : 'Email dispatched successfully (local storage unavailable)';
         console.log('[Contact Submission] Email sent successfully.');
       } catch (err: any) {
         console.error('[Contact Submission] Failed to send email via SMTP:', err.message);
-        emailMessage = `Saved locally, but SMTP email dispatch failed: ${err.message}`;
+        emailMessage = savedLocally
+          ? `Saved locally, but SMTP email dispatch failed: ${err.message}`
+          : `Submission received, but SMTP email dispatch failed: ${err.message}`;
       }
     } else {
       console.log('[Contact Submission] SMTP environment variables not configured. Skipping email dispatch.');
