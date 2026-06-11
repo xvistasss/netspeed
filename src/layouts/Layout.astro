@@ -133,20 +133,20 @@ const {
 
 			// Server info receiver
 			window.addEventListener("server-selected", (e: any) => {
-				const textEl = document.getElementById("server-status-text");
-				const dotEl = document.getElementById("server-status-dot");
-				if (textEl && dotEl) {
-					const { name, distance } = e.detail;
-					const distStr = distance ? ` (${distance})` : "";
+				const textElms = document.querySelectorAll(".server-status-text");
+				const dotElms = document.querySelectorAll(".server-status-dot");
+				const { name, distance } = e.detail;
+				const distStr = distance ? ` (${distance})` : "";
 
-					// Change dot styling to indicate active server
+				dotElms.forEach((dotEl) => {
 					dotEl.className =
-						"w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse";
+						"w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse server-status-dot";
+				});
 
-					// Update location text
-					textEl.className = "text-ink font-semibold";
+				textElms.forEach((textEl) => {
+					textEl.className = "text-ink font-semibold server-status-text";
 					textEl.textContent = `Server: ${name}${distStr}`;
-				}
+				});
 			});
 		</script>
 	</body>
