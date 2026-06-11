@@ -124,12 +124,12 @@ export default function SpeedTest() {
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get('autorun') === 'true' && !autorunTriggered.current && clientInfo !== null) {
       autorunTriggered.current = true;
-      
+
       // Clean query parameter from URL so page reload doesn't auto-run again
       const url = new URL(window.location.href);
       url.searchParams.delete('autorun');
       window.history.replaceState({}, document.title, url.pathname + url.search);
-      
+
       startSpeedTest();
     }
   }, [clientInfo]);
@@ -855,7 +855,7 @@ export default function SpeedTest() {
           </div>
           <div className="flex items-center gap-2 mt-1">
             <span className="w-2 h-2 rounded-full bg-success animate-ping" aria-hidden="true" />
-            <span className="text-xs text-body font-mono truncate">{statusMessage}</span>
+            <span className="text-wrap text-xs text-body font-mono truncate">{statusMessage}</span>
           </div>
         </div>
       ) : null}
