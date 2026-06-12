@@ -40,14 +40,15 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
-  // 2. Geolocation parsing from Edge headers (Vercel / Cloudflare)
-  const latitude = headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude');
-  const longitude = headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude');
-  const city = headers.get('x-vercel-ip-city') || headers.get('cf-ipcity') || 'Unknown City';
-  const country = headers.get('x-vercel-ip-country') || headers.get('cf-ipcountry') || 'Unknown Country';
-  const region = headers.get('x-vercel-ip-country-region') || headers.get('cf-region') || 'Unknown Region';
-  const asn = headers.get('cf-asn') || '';
-  const org = headers.get('cf-as-organization') || 'Edge Network Provider';
+  // 2. Geolocation parsing from Edge headers (Vercel / Cloudflare) or request.cf object
+  const cf = (request as any).cf;
+  const latitude = headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude;
+  const longitude = headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude;
+  const city = headers.get('x-vercel-ip-city') || headers.get('cf-ipcity') || cf?.city || 'Unknown City';
+  const country = headers.get('x-vercel-ip-country') || headers.get('cf-ipcountry') || cf?.country || 'Unknown Country';
+  const region = headers.get('x-vercel-ip-country-region') || headers.get('cf-region') || cf?.region || 'Unknown Region';
+  const asn = headers.get('cf-asn') || cf?.asn?.toString() || '';
+  const org = headers.get('cf-as-organization') || cf?.asOrganization || 'Edge Network Provider';
 
   return new Response(JSON.stringify({
     isLocal: false,

@@ -82,8 +82,13 @@ export const POST: APIRoute = async ({ request, url }) => {
 
   if (region && region !== 'local-edge') {
     const headers = request.headers;
-    const clientLat = clientLatParam ? parseFloat(clientLatParam) : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || '0');
-    const clientLon = clientLonParam ? parseFloat(clientLonParam) : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || '0');
+    const cf = (request as any).cf;
+    const clientLat = clientLatParam 
+      ? parseFloat(clientLatParam) 
+      : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude || '0');
+    const clientLon = clientLonParam 
+      ? parseFloat(clientLonParam) 
+      : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude || '0');
     const basePing = basePingParam ? parseFloat(basePingParam) : 0;
 
     let serverLat = 0;

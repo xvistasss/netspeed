@@ -23,10 +23,15 @@ export const GET: APIRoute = async ({ request, url }) => {
     hostname.startsWith('10.') || 
     /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
 
-  // Parse client location from params or fallback to headers
+  // Parse client location from params or fallback to headers or request.cf object
   const headers = request.headers;
-  const clientLat = clientLatParam ? parseFloat(clientLatParam) : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || '0');
-  const clientLon = clientLonParam ? parseFloat(clientLonParam) : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || '0');
+  const cf = (request as any).cf;
+  const clientLat = clientLatParam 
+    ? parseFloat(clientLatParam) 
+    : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude || '0');
+  const clientLon = clientLonParam 
+    ? parseFloat(clientLonParam) 
+    : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude || '0');
 
   // Find target server coordinates
   let serverLat = 0;
