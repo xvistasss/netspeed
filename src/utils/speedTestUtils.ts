@@ -9,13 +9,6 @@ export interface TestServer {
   distance: number;
 }
 
-export const GLOBAL_TEST_SERVERS: TestServer[] = [
-  { id: 'local-edge', name: 'Detecting Location…', lat: 0, lon: 0, url: '', distance: 0 },
-  { id: 'us-east', name: 'New York, United States', lat: 40.7128, lon: -74.0060, url: '', region: 'us-east', distance: 9999 },
-  { id: 'eu-central', name: 'Frankfurt, Germany', lat: 50.1109, lon: 8.6821, url: '', region: 'eu-central', distance: 9999 },
-  { id: 'ap-southeast', name: 'Singapore', lat: 1.3521, lon: 103.8198, url: '', region: 'ap-southeast', distance: 9999 },
-  { id: 'ap-southern', name: 'Sydney, Australia', lat: -33.8688, lon: 151.2093, url: '', region: 'ap-southeast', distance: 9999 }
-];
 
 // Haversine Math to calculate distance between two coordinates in km
 export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {

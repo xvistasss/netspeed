@@ -193,10 +193,26 @@ export default function DetailedMeasurements({
             <tbody className="divide-y divide-hairline">
               {(() => {
                 const bins = [
-                  { name: '100 kB', filter: (r: any) => r.bytes < 500 * 1024 },
-                  { name: '1 MB', filter: (r: any) => r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024 },
-                  { name: '10 MB', filter: (r: any) => r.bytes >= 5 * 1024 * 1024 && r.bytes < 15 * 1024 * 1024 },
-                  { name: '25 MB', filter: (r: any) => r.bytes >= 15 * 1024 * 1024 }
+                  { name: '100 kB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 100 * 1024 : r.bytes < 500 * 1024;
+                    }
+                  },
+                  { name: '1 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 1 * 1024 * 1024 : (r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024);
+                    }
+                  },
+                  { name: '10 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 10 * 1024 * 1024 : (r.bytes >= 5 * 1024 * 1024 && r.bytes < 15 * 1024 * 1024);
+                    }
+                  },
+                  { name: '25 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 25 * 1024 * 1024 : r.bytes >= 15 * 1024 * 1024;
+                    }
+                  }
                 ];
 
                 return bins.map((bin) => {
@@ -235,9 +251,26 @@ export default function DetailedMeasurements({
             <tbody className="divide-y divide-hairline">
               {(() => {
                 const bins = [
-                  { name: '100 kB', filter: (r: any) => r.bytes < 500 * 1024 },
-                  { name: '1 MB', filter: (r: any) => r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024 },
-                  { name: '10 MB', filter: (r: any) => r.bytes >= 5 * 1024 * 1024 }
+                  { name: '100 kB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 100 * 1024 : r.bytes < 500 * 1024;
+                    }
+                  },
+                  { name: '1 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 1 * 1024 * 1024 : (r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024);
+                    }
+                  },
+                  { name: '10 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 10 * 1024 * 1024 : (r.bytes >= 5 * 1024 * 1024 && r.bytes < 15 * 1024 * 1024);
+                    }
+                  },
+                  { name: '25 MB', filter: (r: any) => {
+                      const size = r.phaseSize || r.payloadSize;
+                      return size ? size === 25 * 1024 * 1024 : r.bytes >= 15 * 1024 * 1024;
+                    }
+                  }
                 ];
 
                 return bins.map((bin) => {

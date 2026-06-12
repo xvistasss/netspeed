@@ -131,23 +131,7 @@ const {
 			setupThemeToggle();
 			document.addEventListener("astro:after-swap", setupThemeToggle);
 
-			// Server info receiver
-			window.addEventListener("server-selected", (e: any) => {
-				const textElms = document.querySelectorAll(".server-status-text");
-				const dotElms = document.querySelectorAll(".server-status-dot");
-				const { name, distance } = e.detail;
-				const distStr = distance ? ` (${distance})` : "";
 
-				dotElms.forEach((dotEl) => {
-					dotEl.className =
-						"w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse server-status-dot";
-				});
-
-				textElms.forEach((textEl) => {
-					textEl.className = "text-ink font-semibold server-status-text";
-					textEl.textContent = `Server: ${name}${distStr}`;
-				});
-			});
 		</script>
 	</body>
 </html>

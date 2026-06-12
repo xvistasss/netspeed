@@ -12,57 +12,48 @@ const { showServerStatus = false } = Astro.props;
   <div
     class="w-full max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center"
   >
-    <div class="flex items-center gap-6">
-      <a href="/" class="flex items-center gap-3 hover:opacity-90 transition-opacity">
-        <img
-          src="/favicon.svg"
-          alt="NetSpeed Logo"
-          width="40"
-          height="40"
-          class="dark:invert-0 shrink-0"
-        />
-        <div class="flex flex-col">
+    <div class="flex flex-1 flex-col md:flex-row md:justify-between mr-10">
+      <div class="flex items-center gap-6">
+        <a
+          href="/"
+          class="flex items-center gap-3 hover:opacity-90 transition-opacity shrink-0"
+        >
+          <img
+            src="/favicon.svg"
+            alt="NetSpeed Logo"
+            width="40"
+            height="40"
+            class="dark:invert-0 shrink-0"
+          />
           <span
             class="font-bold tracking-tight text-sm font-sans text-ink leading-tight"
           >
             NetSpeed
           </span>
-          {
-            showServerStatus && (
-              <div
-                class="flex items-center gap-1.5 text-[10px] font-mono text-mute select-none leading-none mt-0.5 md:hidden"
-              >
-                <span
-                  class="server-status-dot w-1.5 h-1.5 rounded-full bg-mute animate-pulse"
-                />
-                <span class="server-status-text">Server: Detecting…</span>
-              </div>
-            )
-          }
-        </div>
-      </a>
-      <nav class="hidden md:flex items-center gap-4">
-        <span
-          class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
-        >
-          v1.0.0-edge
-        </span>
-      </nav>
-    </div>
-    <div class="flex items-center gap-3">
+        </a>
+        <nav class="hidden md:flex items-center gap-4">
+          <span
+            class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
+          >
+            v1.0.0-edge
+          </span>
+        </nav>
+      </div>
       {
         showServerStatus && (
-          <div
-            class="hidden md:flex items-center gap-1.5 text-xs font-mono text-mute select-none"
-          >
+          <div class="flex flex-1 md:flex-none items-center gap-1.5 text-xs font-mono text-mute select-none">
+            <span class="server-status-dot w-1.5 h-1.5 rounded-full bg-mute animate-pulse shrink-0" />
             <span
-              class="server-status-dot w-1.5 h-1.5 rounded-full bg-mute animate-pulse"
-            />
-            <span class="server-status-text">Server: Detecting…</span>
+              id="header-server-text"
+              class="bg-transparent text-mute border-none text-xs font-mono truncate"
+            >
+              Auto: Detecting…
+            </span>
           </div>
         )
       }
-
+    </div>
+    <div class="flex items-center gap-3">
       <button
         id="header-theme-toggle"
         class="w-9 h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-all shadow-xs flex items-center justify-center cursor-pointer select-none"
@@ -99,3 +90,42 @@ const { showServerStatus = false } = Astro.props;
     </div>
   </div>
 </header>
+
+<script>
+  const serverText = document.getElementById(
+    "header-server-text",
+  ) as HTMLSpanElement | null;
+  const statusDots = document.querySelectorAll(".server-status-dot");
+
+  window.addEventListener("servers-discovered", (e: any) => {
+    const { servers } = e.detail;
+    if (!serverText) return;
+
+    const first =
+      Array.isArray(servers) && servers.length > 0 ? servers[0] : null;
+    if (!first) {
+      serverText.textContent = "Server: Auto Detecting…";
+      return;
+    }
+
+    const distStr = first.distance ? ` (${first.distance})` : "";
+    serverText.textContent = `Server (Auto): ${first.name}${distStr}`;
+  });
+
+  window.addEventListener("server-selected", (e: any) => {
+    const { name, distance, latency } = e.detail;
+
+    const distStr = distance ? ` (${distance})` : "";
+    const latStr =
+      latency !== undefined && latency > 0 ? ` [${Math.round(latency)}ms]` : "";
+
+    statusDots.forEach((dot) => {
+      dot.className =
+        "server-status-dot w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse shrink-0";
+    });
+
+    if (serverText) {
+      serverText.textContent = `Server (Auto): ${name}${distStr}${latStr}`;
+    }
+  });
+</script>

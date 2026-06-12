@@ -26,12 +26,8 @@ import type {
   ClientInfo,
   DetailPingStats
 } from '../utils/speedTestUtils';
-import {
-  GLOBAL_TEST_SERVERS,
-  haversineDistance,
-  sleep,
-  formatSpeed
-} from '../utils/speedTestUtils';
+import { sleep, formatSpeed } from '../utils/speedTestUtils';
+import { SERVER_LIST, withDistances, pickClosestN } from '../utils/serverListUtils';
 
 export default function SpeedTest() {
   const [phase, setPhase] = useState<TestPhase>('idle');
@@ -41,7 +37,6 @@ export default function SpeedTest() {
 
   // Geolocation & Server State
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [servers, setServers] = useState<TestServer[]>(GLOBAL_TEST_SERVERS);
   const [closestServers, setClosestServers] = useState<TestServer[]>([]);
   const [selectedServer, setSelectedServer] = useState<TestServer | null>(null);
   const [routingResults, setRoutingResults] = useState<{ [key: string]: number }>({});
@@ -157,19 +152,32 @@ export default function SpeedTest() {
 
   // Dispatch selectedServer details to Astro header
   useEffect(() => {
-    if (selectedServer) {
-      const distStr = selectedServer.distance && selectedServer.distance > 0
-        ? `${selectedServer.distance} km`
-        : '';
-      const event = new CustomEvent('server-selected', {
+    if (!selectedServer) return;
+    const distStr = selectedServer.distance && selectedServer.distance > 0 ? `${selectedServer.distance} km` : '';
+    const latencyVal = routingResults[selectedServer.id];
+    const event = new CustomEvent('server-selected', {
+      detail: { id: selectedServer.id, name: selectedServer.name, distance: distStr, latency: latencyVal }
+    });
+    window.dispatchEvent(event);
+  }, [selectedServer, routingResults]);
+
+  // Dispatch dynamic servers list to Astro header
+  useEffect(() => {
+    if (closestServers.length > 0) {
+      const event = new CustomEvent('servers-discovered', {
         detail: {
-          name: selectedServer.name,
-          distance: distStr
+          servers: closestServers.map(s => ({
+            id: s.id,
+            name: s.name,
+            distance: s.distance !== undefined && s.distance > 0 ? `${s.distance} km` : ''
+          }))
         }
       });
       window.dispatchEvent(event);
     }
-  }, [selectedServer]);
+  }, [closestServers]);
+
+  // Server dropdown selection no longer used: routing now auto-locks the best server
 
   // 2. Setup Chart.js instances
   const destroyCharts = () => {
@@ -332,174 +340,293 @@ export default function SpeedTest() {
     }
   };
 
+  // Helper to fetch geo fallback from external services in a chain
+  const fetchClientGeoFallback = async (): Promise<any> => {
+    // 1. Try ipapi.co
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      const fallbackData = await res.json();
+      if (fallbackData && fallbackData.ip && typeof fallbackData.latitude === 'number') {
+        return {
+          ip: fallbackData.ip,
+          city: fallbackData.city || 'Unknown City',
+          region: fallbackData.region || 'Unknown Region',
+          country: fallbackData.country_name || 'Unknown Country',
+          countryCode: fallbackData.country || '',
+          loc: `${fallbackData.latitude},${fallbackData.longitude}`,
+          org: fallbackData.org || 'Unknown ISP',
+          latitude: parseFloat(fallbackData.latitude),
+          longitude: parseFloat(fallbackData.longitude)
+        };
+      }
+    } catch (err) {
+      console.warn('ipapi.co fallback failed, trying freeipapi.com...', err);
+    }
+
+    // 2. Try freeipapi.com (Supports HTTPS, no API key, high limit)
+    try {
+      const res = await fetch('https://freeipapi.com/api/json');
+      const fallbackData = await res.json();
+      if (fallbackData && fallbackData.ipAddress && typeof fallbackData.latitude === 'number') {
+        return {
+          ip: fallbackData.ipAddress,
+          city: fallbackData.cityName || 'Unknown City',
+          region: fallbackData.regionName || 'Unknown Region',
+          country: fallbackData.countryName || 'Unknown Country',
+          countryCode: fallbackData.countryCode || '',
+          loc: `${fallbackData.latitude},${fallbackData.longitude}`,
+          org: 'Unknown ISP',
+          latitude: parseFloat(fallbackData.latitude),
+          longitude: parseFloat(fallbackData.longitude)
+        };
+      }
+    } catch (err) {
+      console.warn('freeipapi.com fallback failed, trying ipinfo.io...', err);
+    }
+
+    // 3. Try ipinfo.io
+    try {
+      const res = await fetch('https://ipinfo.io/json');
+      const fallbackData = await res.json();
+      if (fallbackData && fallbackData.ip && fallbackData.loc) {
+        const [latStr, lonStr] = fallbackData.loc.split(',');
+        const lat = parseFloat(latStr);
+        const lon = parseFloat(lonStr);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          return {
+            ip: fallbackData.ip,
+            city: fallbackData.city || 'Unknown City',
+            region: fallbackData.region || 'Unknown Region',
+            country: fallbackData.country || 'Unknown Country',
+            countryCode: fallbackData.country || '',
+            loc: fallbackData.loc,
+            org: fallbackData.org || 'Unknown ISP',
+            latitude: lat,
+            longitude: lon
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('ipinfo.io fallback failed', err);
+    }
+
+    return null;
+  };
+
+  const initializeLocationData = (data: any) => {
+    const hasValidCoords = (d: any) => {
+      return d &&
+        typeof d.latitude === 'number' && Number.isFinite(d.latitude) &&
+        typeof d.longitude === 'number' && Number.isFinite(d.longitude) &&
+        !(d.latitude === 0 && d.longitude === 0);
+    };
+
+    const hasCoords = hasValidCoords(data);
+    const clientLat = hasCoords ? data.latitude : 0;
+    const clientLon = hasCoords ? data.longitude : 0;
+
+    const enriched = withDistances(clientLat, clientLon, SERVER_LIST as any);
+    const closest = hasCoords
+      ? pickClosestN(enriched, 3)
+      : enriched.slice(0, 3);
+    setClosestServers(closest);
+    setSelectedServer(closest[0] || null);
+  };
+
   // 3. Detect client geolocation from server
   const detectClientLocation = async () => {
-    try {
-      setStatusMessage('Locating client IP and network…');
-      const response = await fetch('/api/ip-geo');
-      let data = await response.json();
+    let cachedInfo: string | null = null;
+    let cachedTime: string | null = null;
 
-      // Local development fallback
-      if (data.isLocal) {
-        try {
-          const localFallback = await fetch('https://ipapi.co/json/');
-          const fallbackData = await localFallback.json();
-          if (fallbackData && fallbackData.ip) {
-            data = {
-              isLocal: true,
-              ip: fallbackData.ip,
-              city: fallbackData.city,
-              region: fallbackData.region,
-              country: fallbackData.country_name,
-              countryCode: fallbackData.country,
-              loc: `${fallbackData.latitude},${fallbackData.longitude}`,
-              org: fallbackData.org,
-              latitude: parseFloat(fallbackData.latitude),
-              longitude: parseFloat(fallbackData.longitude)
-            };
-          }
-        } catch (_) {
-          // Keep default loopback properties from server if public API fails
+    try {
+      cachedInfo = localStorage.getItem('netspeed_client_info');
+      cachedTime = localStorage.getItem('netspeed_client_info_time');
+    } catch (_) {}
+
+    const cacheExpiryMs = 1000 * 60 * 60; // 1 hour cache duration
+
+    try {
+      // 1. If cache is fresh, use it immediately to avoid network calls and prevent distance shifts
+      if (cachedInfo && cachedTime) {
+        const age = Date.now() - parseInt(cachedTime, 10);
+        if (age < cacheExpiryMs) {
+          const parsed = JSON.parse(cachedInfo);
+          setClientInfo(parsed);
+          setStatusMessage(`Client IP detected (cached): ${parsed.ip}`);
+          initializeLocationData(parsed);
+          return;
+        }
+      }
+
+      setStatusMessage('Locating client IP and network…');
+
+      // Fetch client geolocation via server headers
+      const geoRes = await fetch('/api/ip-geo');
+      let data = await geoRes.json();
+
+      const hasValidCoords = (d: any) => {
+        return d &&
+          typeof d.latitude === 'number' && Number.isFinite(d.latitude) &&
+          typeof d.longitude === 'number' && Number.isFinite(d.longitude) &&
+          !(d.latitude === 0 && d.longitude === 0);
+      };
+
+      // Fallback if coordinates are missing/invalid, or if it is running on localhost
+      if (!hasValidCoords(data) || data.isLocal) {
+        const fallback = await fetchClientGeoFallback();
+        if (fallback) {
+          data = {
+            ...data,
+            ...fallback,
+            isLocal: data.isLocal
+          };
         }
       }
 
       setClientInfo(data);
       setStatusMessage(`Client IP detected: ${data.ip}`);
+      initializeLocationData(data);
 
-      // Update local edge server coordinates and name in servers list
-      const lat = data.latitude || 0;
-      const lon = data.longitude || 0;
-
-      let locality = 'Local Server';
-      if (data.city && data.country) {
-        if (data.city === 'Local Host' || data.country === 'Local') {
-          locality = 'Local Server';
-        } else {
-          locality = `${data.city}, ${data.country}`;
-        }
-      } else if (data.city) {
-        locality = data.city;
-      }
-
-      const updatedServers = (servers || GLOBAL_TEST_SERVERS).map(s => {
-        if (s.id === 'local-edge') {
-          return {
-            ...s,
-            name: locality,
-            lat,
-            lon
-          };
-        }
-        return s;
-      });
-      setServers(updatedServers);
-
-      // Perform distance calculations
-      calculateServerDistances(lat, lon, updatedServers);
-
+      // Save to localStorage cache
+      try {
+        localStorage.setItem('netspeed_client_info', JSON.stringify(data));
+        localStorage.setItem('netspeed_client_info_time', Date.now().toString());
+      } catch (_) {}
     } catch (err) {
       console.error('Failed to locate client:', err);
-      setStatusMessage('GeoIP detection failed. Using global defaults.');
-      calculateServerDistances(0, 0, servers || GLOBAL_TEST_SERVERS);
-      setClientInfo({ ip: '0.0.0.0', city: 'Unknown', country: 'Unknown' } as any);
-    }
-  };
 
-  // 4. Calculate distances and sort servers
-  const calculateServerDistances = (clientLat: number, clientLon: number, serverList: TestServer[]) => {
-    if (clientLat === 0 && clientLon === 0) {
-      // Local or untracked
-      setClosestServers(serverList);
-      setSelectedServer(serverList[0]);
-      return;
-    }
-
-    const withDistances = serverList.map(srv => {
-      // Closest local edge gets distance 0
-      if (srv.id === 'local-edge') {
-        return { ...srv, distance: 0 };
+      // Fallback to expired cache if available before failing
+      if (cachedInfo) {
+        try {
+          const parsed = JSON.parse(cachedInfo);
+          setClientInfo(parsed);
+          setStatusMessage(`Client IP detected (stale cache): ${parsed.ip}`);
+          initializeLocationData(parsed);
+          return;
+        } catch (_) {}
       }
-      const dist = haversineDistance(clientLat, clientLon, srv.lat, srv.lon);
-      return { ...srv, distance: Math.round(dist) };
-    });
 
-    // Sort: Local first, then by physical distance
-    const sorted = [...withDistances].sort((a, b) => {
-      if (a.id === 'local-edge') return -1;
-      if (b.id === 'local-edge') return 1;
-      return (a.distance || 0) - (b.distance || 0);
-    });
+      setStatusMessage('GeoIP detection failed. Using global defaults.');
 
-    setClosestServers(sorted);
-    setSelectedServer(sorted[0]);
+      const defaultData = { ip: '0.0.0.0', city: 'Unknown', region: 'Unknown', country: 'Unknown', org: 'Unknown', latitude: 0, longitude: 0, isLocal: false };
+      setClientInfo(defaultData as any);
+      initializeLocationData(defaultData);
+    }
   };
 
-  // 5. Automated 3-step Routing Cycle (IP Detection, Haversine, Pre-Ping)
-  const runRoutingCycle = async () => {
+  // 5. Routing: pick closest servers (if location available) or all servers (if location unavailable),
+  // probe in parallel, and lock best-by-latency (200 OK only)
+  const routeToBestServer = async (): Promise<TestServer> => {
     setPhase('routing');
     setProgressPercent(15);
-    setStatusMessage('Routing: Selecting closest network edge server…');
 
-    const results: { [key: string]: number } = {};
-    const serversToPing = closestServers.length > 0 ? closestServers : servers;
+    const origin = window.location.origin;
 
-    // Sequentially check closest servers until one succeeds
-    for (const srv of serversToPing) {
-      setStatusMessage(`Verifying connection to: ${srv.name}…`);
-      const origin = window.location.origin;
+    const hasCoords = clientInfo &&
+      typeof clientInfo.latitude === 'number' && Number.isFinite(clientInfo.latitude) &&
+      typeof clientInfo.longitude === 'number' && Number.isFinite(clientInfo.longitude) &&
+      !(clientInfo.latitude === 0 && clientInfo.longitude === 0);
 
-      let latSum = 0;
-      let successes = 0;
+    // If client coordinates are valid, probe 3 closest candidate servers.
+    // If client coordinates are unavailable, probe ALL servers to find the lowest latency.
+    const candidates = hasCoords
+      ? pickClosestN(withDistances(clientInfo.latitude, clientInfo.longitude, SERVER_LIST), 3)
+      : withDistances(0, 0, SERVER_LIST);
 
-      // Make 2 quick latency pings to verify route availability
-      for (let i = 0; i < 2; i++) {
-        const start = performance.now();
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200);
-        try {
-          const testUrl = srv.region
-            ? `${origin}/api/ping?region=${srv.region}&cb=${Date.now()}-${i}`
-            : `${origin}/api/ping?cb=${Date.now()}-${i}`;
-          const res = await fetch(testUrl, {
-            cache: 'no-store',
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (res.ok) {
-            latSum += (performance.now() - start);
-            successes++;
-          }
-        } catch (_) {
-          clearTimeout(timeoutId);
-        }
-      }
-
-      if (successes > 0) {
-        const avgLat = latSum / successes;
-        results[srv.id] = avgLat;
-        setRoutingResults(results);
-        setSelectedServer(srv);
-        setStatusMessage(`Connected to nearest edge: ${srv.name} (${Math.round(avgLat)}ms)`);
-        setProgressPercent(30);
-        await sleep(600);
-        return srv;
-      }
-
-      console.warn(`Connection failed for server ${srv.name}. Trying next closest server…`);
+    if (hasCoords) {
+      setClosestServers(candidates);
     }
 
-    // Ultimate fallback if all pings fail
-    const fallback = serversToPing[0] || servers[0];
-    setSelectedServer(fallback);
-    setStatusMessage(`Connected to default local edge server`);
+    const isAllProbe = !hasCoords;
+    setStatusMessage(
+      isAllProbe
+        ? 'Routing: selecting optimal server (all locations) via parallel latency probes…'
+        : 'Routing: selecting optimal server (3 closest) via parallel latency probes…'
+    );
+
+    const results: { [key: string]: number } = {};
+
+    // Measure host latency on the main thread first
+    let hostLatency = 0;
+    try {
+      const warmupUrl = `${origin}/api/ping?warmup=true&cb=${Date.now()}`;
+      const startWarmup = performance.now();
+      const res = await fetch(warmupUrl, { cache: 'no-store' });
+      await res.text();
+      hostLatency = performance.now() - startWarmup;
+    } catch (_) {
+      hostLatency = 20; // fallback
+    }
+
+    const isLocalHost = 
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1' || 
+      window.location.hostname === '::1' || 
+      window.location.hostname.startsWith('192.168.') || 
+      window.location.hostname.startsWith('10.') ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname);
+
+    const probe = async (srv: TestServer) => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 1200);
+
+      const start = performance.now();
+      try {
+        const lat = clientInfo?.latitude || 0;
+        const lon = clientInfo?.longitude || 0;
+        const testUrl = srv.region
+          ? `${origin}/api/ping?region=${srv.region}&serverId=${srv.id}&clientLat=${lat}&clientLon=${lon}&hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`
+          : `${origin}/api/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`;
+
+        const res = await fetch(testUrl, { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) return { srv, latency: undefined };
+
+        await res.text();
+        let latencyVal = performance.now() - start;
+        if (isLocalHost) {
+          latencyVal = Math.max(1.5, latencyVal - hostLatency);
+        }
+        return { srv, latency: latencyVal };
+      } catch (_) {
+        return { srv, latency: undefined };
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    };
+
+    const probes = await Promise.all(candidates.map(probe));
+
+    // Keep only 200 OK probes (latency != undefined)
+    let best: TestServer | null = null;
+    let bestLatency = Infinity;
+
+    for (const p of probes) {
+      if (typeof p.latency === 'number' && Number.isFinite(p.latency)) {
+        results[p.srv.id] = p.latency;
+        if (p.latency < bestLatency) {
+          bestLatency = p.latency;
+          best = p.srv;
+        }
+      }
+    }
+
+    const locked = best || candidates[0];
+    if (!locked) throw new Error('No candidate servers available for routing.');
+    setRoutingResults(results);
+    setSelectedServer(locked);
+    setStatusMessage(`Selected optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ''}`);
+
     setProgressPercent(30);
-    await sleep(600);
-    return fallback;
+    await sleep(300);
+    return locked;
   };
 
   // 6. Primary Speed Test Orchestrator
   const startSpeedTest = async () => {
     if (phase !== 'idle' && phase !== 'complete' && phase !== 'error') return;
+
+    const clientLat = clientInfo?.latitude || 0;
+    const clientLon = clientInfo?.longitude || 0;
 
     // Reset stats
     downloadRequestsRef.current = [];
@@ -525,8 +652,8 @@ export default function SpeedTest() {
     setProgressPercent(0);
     setCompletionTime('');
 
-    // Initial routing pre-ping
-    const anchorServer = await runRoutingCycle();
+    // Initial routing pre-ping (top-3 closest + parallel 200 OK latency probe)
+    const anchorServer = await routeToBestServer();
 
     // Launch worker thread
     initCharts();
@@ -583,11 +710,21 @@ export default function SpeedTest() {
           // Transition to Download
           setPhase('download');
           setStatusMessage('Measuring download throughput (concurrent streams)…');
+
+          const pings = data.latencies || [];
+          const calculatedAvgPing = pings.length > 0
+            ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+            : 20;
+
           workerRef.current?.postMessage({
             type: 'START_DOWNLOAD',
             baseUrl,
             region,
-            parallelStreams: 6
+            serverId: anchorServer.id,
+            clientLat,
+            clientLon,
+            basePing: calculatedAvgPing,
+            parallelStreams: 3
           });
           break;
         }
@@ -607,7 +744,7 @@ export default function SpeedTest() {
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart('download', downloadMbps);
-          setProgressPercent(50 + Math.round((data.elapsedTime / 8) * 25)); // 25% of progress bar
+          setProgressPercent(Math.min(74, 50 + Math.round((data.elapsedTime / 8) * 25))); // cap at 74%
 
           // Compute simple live stability percentage based on variance
           if (downloadSpeedHistory.current.length > 5) {
@@ -615,6 +752,20 @@ export default function SpeedTest() {
             const devAvg = devSum / downloadSpeedHistory.current.length;
             const stabilityVal = Math.max(20, 100 - (devAvg / downloadAvgMbps) * 100);
             setStability(Math.round(stabilityVal));
+          }
+
+          if (data.loadedLatencies) {
+            const stats = {
+              sent: data.loadedPingSent || 0,
+              lost: data.loadedPingLost || 0,
+              latencies: data.loadedLatencies || []
+            };
+            dlLoadedPingStatsRef.current = stats;
+            setDlLoadedPingStats(stats);
+          }
+          if (data.requests) {
+            downloadRequestsRef.current = data.requests;
+            setDownloadRequests(data.requests);
           }
           break;
 
@@ -626,6 +777,12 @@ export default function SpeedTest() {
           };
           dlLoadedPingStatsRef.current = stats;
           setDlLoadedPingStats(stats);
+
+          setDownloadStats({
+            current: 0,
+            avg: data.averageSpeed,
+            peak: data.peakSpeed
+          });
 
           setProgressPercent(75);
           // Transition to Upload
@@ -640,11 +797,20 @@ export default function SpeedTest() {
             setDownloadRequests(data.requests);
           }
 
+          const pings = unloadedPingStatsRef.current.latencies || [];
+          const calculatedAvgPing = pings.length > 0
+            ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+            : 20;
+
           workerRef.current?.postMessage({
             type: 'START_UPLOAD',
             baseUrl,
             region,
-            parallelStreams: 6
+            serverId: anchorServer.id,
+            clientLat,
+            clientLon,
+            basePing: calculatedAvgPing,
+            parallelStreams: 3
           });
           break;
         }
@@ -662,7 +828,21 @@ export default function SpeedTest() {
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart('upload', uploadMbps);
-          setProgressPercent(75 + Math.round((data.elapsedTime / 8) * 20)); // 20% of progress bar
+          setProgressPercent(Math.min(99, 75 + Math.round((data.elapsedTime / 8) * 20))); // cap at 99%
+
+          if (data.loadedLatencies) {
+            const stats = {
+              sent: data.loadedPingSent || 0,
+              lost: data.loadedPingLost || 0,
+              latencies: data.loadedLatencies || []
+            };
+            ulLoadedPingStatsRef.current = stats;
+            setUlLoadedPingStats(stats);
+          }
+          if (data.requests) {
+            uploadRequestsRef.current = data.requests;
+            setUploadRequests(data.requests);
+          }
           break;
 
         case 'UPLOAD_COMPLETE': {
@@ -673,6 +853,12 @@ export default function SpeedTest() {
           };
           ulLoadedPingStatsRef.current = stats;
           setUlLoadedPingStats(stats);
+
+          setUploadStats({
+            current: 0,
+            avg: data.averageSpeed,
+            peak: data.peakSpeed
+          });
 
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
@@ -703,7 +889,10 @@ export default function SpeedTest() {
     workerRef.current.postMessage({
       type: 'START_PING',
       baseUrl,
-      region
+      region,
+      serverId: anchorServer.id,
+      clientLat,
+      clientLon
     });
   };
 
@@ -732,10 +921,10 @@ export default function SpeedTest() {
   const cancelSpeedTest = () => {
     if (workerRef.current) {
       workerRef.current.postMessage({ type: 'CANCEL' });
-    } else {
-      setPhase('idle');
-      setStatusMessage('Test cancelled.');
+      return;
     }
+    setPhase('idle');
+    setStatusMessage('Test cancelled.');
   };
 
   const downloadTestResult = () => {
@@ -958,7 +1147,7 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {latencyStats.avg > 0 ? latencyStats.avg.toFixed(1) : '—'}
+                {unloadedPingStats.latencies.length > 0 ? latencyStats.avg.toFixed(1) : '—'}
               </span>
               <span className="text-xs text-mute font-mono">ms (unloaded)</span>
             </div>
@@ -966,11 +1155,11 @@ export default function SpeedTest() {
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
                 <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
-                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedLatency > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedPingStats.latencies.length > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
                 <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
-                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedLatency > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedPingStats.latencies.length > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
           </div>
@@ -987,7 +1176,7 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {latencyStats.jitter > 0 ? latencyStats.jitter.toFixed(1) : '—'}
+                {unloadedPingStats.latencies.length > 1 ? latencyStats.jitter.toFixed(1) : '—'}
               </span>
               <span className="text-xs text-mute font-mono">ms</span>
             </div>
@@ -995,11 +1184,11 @@ export default function SpeedTest() {
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
                 <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
-                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedJitter > 0 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedPingStats.latencies.length > 1 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
               <div className="flex items-center gap-1">
                 <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
-                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedJitter > 0 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedPingStats.latencies.length > 1 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
               </div>
             </div>
           </div>
