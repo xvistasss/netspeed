@@ -596,21 +596,36 @@ export default function SpeedTest() {
 
     const probes = await Promise.all(candidates.map(probe));
 
-    // Keep only 200 OK probes (latency != undefined)
-    let best: TestServer | null = null;
-    let bestLatency = Infinity;
-
+    // Populate results map for all successful probes
     for (const p of probes) {
       if (typeof p.latency === 'number' && Number.isFinite(p.latency)) {
         results[p.srv.id] = p.latency;
-        if (p.latency < bestLatency) {
-          bestLatency = p.latency;
-          best = p.srv;
-        }
       }
     }
 
-    const locked = best || candidates[0];
+    // Sort successful probes using the bucketing + distance prioritization algorithm
+    const successfulProbes = probes
+      .filter((p): p is { srv: TestServer; latency: number } => typeof p.latency === 'number' && Number.isFinite(p.latency))
+      .sort((a, b) => {
+        // Group latencies into 15ms buckets to treat minor jitter differences as equivalent
+        const bucketA = Math.floor(a.latency / 15);
+        const bucketB = Math.floor(b.latency / 15);
+        if (bucketA !== bucketB) {
+          return bucketA - bucketB; // Prioritize lower latency category
+        }
+        
+        // If in the same latency bucket, prioritize the geographically closest server
+        const distA = a.srv.distance ?? Infinity;
+        const distB = b.srv.distance ?? Infinity;
+        if (distA !== distB) {
+          return distA - distB;
+        }
+        
+        // Fallback to exact latency if distances are also identical
+        return a.latency - b.latency;
+      });
+
+    const locked = successfulProbes.length > 0 ? successfulProbes[0].srv : candidates[0];
     if (!locked) throw new Error('No candidate servers available for routing.');
     setRoutingResults(results);
     setSelectedServer(locked);
