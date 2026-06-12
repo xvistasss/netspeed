@@ -7,27 +7,44 @@ interface InfoTooltipProps {
 export default function InfoTooltip({ content }: InfoTooltipProps) {
   const [visible, setVisible] = useState(false);
   const [xOffset, setXOffset] = useState(0);
+  const [yPosition, setYPosition] = useState<'top' | 'bottom'>('top');
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
 
-  // Dynamic positioning calculation to prevent viewport overflow
+  // Dynamic positioning calculation to prevent viewport overflow (horizontal & vertical)
   useEffect(() => {
     if (!visible) {
       setXOffset(0);
+      setYPosition('top');
       return;
     }
 
     const adjustPosition = () => {
       const tooltip = tooltipRef.current;
-      if (!tooltip) return;
+      const container = containerRef.current;
+      if (!tooltip || !container) return;
 
-      // Reset transform temporarily to measure natural bounding rect
+      const containerRect = container.getBoundingClientRect();
+      const tooltipHeight = tooltip.offsetHeight || tooltip.getBoundingClientRect().height || 80;
+      const margin = 12; // safety margin from viewport edges
+
+      // 1. Vertical space check (flip below the button if not enough room above)
+      const spaceAbove = containerRect.top;
+      const spaceBelow = window.innerHeight - containerRect.bottom;
+      
+      let nextY: 'top' | 'bottom' = 'top';
+      if (spaceAbove - tooltipHeight - margin < 0 && spaceBelow > spaceAbove) {
+        nextY = 'bottom';
+      }
+      setYPosition(nextY);
+
+      // 2. Horizontal space check
+      // Temporarily reset transform to get natural bounding rect
       tooltip.style.transform = 'translate(-50%, 0)';
 
       const rect = tooltip.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const margin = 12; // safety margin from viewport edges
 
       let shift = 0;
       if (rect.left < margin) {
@@ -42,12 +59,10 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     const animId = requestAnimationFrame(adjustPosition);
 
     window.addEventListener('resize', adjustPosition);
-    window.addEventListener('scroll', adjustPosition, { passive: true });
-
+    
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', adjustPosition);
-      window.removeEventListener('scroll', adjustPosition);
     };
   }, [visible]);
 
@@ -67,6 +82,20 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
       document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, [visible]);
+
+  // Close the tooltip automatically on scroll (prevents position jumping on mobile)
+  useEffect(() => {
+    if (!visible) return;
+
+    const handleScroll = () => {
+      setVisible(false);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
     };
   }, [visible]);
 
@@ -94,13 +123,19 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
           style={{
             transform: `translate(calc(-50% + ${xOffset}px), 0)`,
           }}
-          className="absolute bottom-6 left-1/2 w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left"
+          className={`absolute left-1/2 w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left ${
+            yPosition === 'top' ? 'bottom-6' : 'top-6'
+          }`}
         >
           <div
             style={{
               left: `clamp(12px, calc(50% - ${xOffset}px), 244px)`,
             }}
-            className="absolute top-full -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-primary"
+            className={`absolute -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent ${
+              yPosition === 'top' 
+                ? 'top-full border-t-4 border-t-primary' 
+                : 'bottom-full border-b-4 border-b-primary'
+            }`}
           />
           {content}
         </div>
@@ -108,4 +143,5 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     </div>
   );
 }
+
 
