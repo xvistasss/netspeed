@@ -10,23 +10,35 @@ import Layout from "../layouts/Layout.astro";
     <div class="max-w-xl mx-auto flex flex-col gap-10">
       {/* Page Header */}
       <div class="flex flex-col gap-3 border-b border-hairline pb-6">
-        <span class="font-mono text-xs uppercase tracking-wider text-mute block">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+        >
           Get in Touch
         </span>
-        <h1 class="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
+        <h1
+          class="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans"
+        >
           Contact our team
         </h1>
         <p class="text-sm md:text-base text-body mt-1 leading-relaxed">
-          Have feedback, bugs to report, or inquiries about server integrations? Fill out the form below, and our network engineers will review your request.
+          Have feedback, bugs to report, or inquiries about server integrations?
+          Fill out the form below, and our network engineers will review your
+          request.
         </p>
       </div>
 
       {/* Main Container */}
       <div class="relative min-h-[350px]">
         {/* Contact Form */}
-        <form id="contact-form" class="flex flex-col gap-5 transition-opacity duration-300">
+        <form
+          id="contact-form"
+          class="flex flex-col gap-5 transition-opacity duration-300"
+        >
           <div class="flex flex-col gap-1.5">
-            <label for="name" class="text-xs font-mono text-mute uppercase tracking-wider select-none">
+            <label
+              for="name"
+              class="text-xs font-mono text-mute uppercase tracking-wider select-none"
+            >
               Your Name
             </label>
             <input
@@ -40,7 +52,10 @@ import Layout from "../layouts/Layout.astro";
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label for="email" class="text-xs font-mono text-mute uppercase tracking-wider select-none">
+            <label
+              for="email"
+              class="text-xs font-mono text-mute uppercase tracking-wider select-none"
+            >
               Email Address
             </label>
             <input
@@ -54,7 +69,10 @@ import Layout from "../layouts/Layout.astro";
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label for="subject" class="text-xs font-mono text-mute uppercase tracking-wider select-none">
+            <label
+              for="subject"
+              class="text-xs font-mono text-mute uppercase tracking-wider select-none"
+            >
               Subject
             </label>
             <select
@@ -64,15 +82,24 @@ import Layout from "../layouts/Layout.astro";
               class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-all focus:ring-1 focus:ring-link shadow-2xs cursor-pointer"
             >
               <option value="" disabled selected>Select an option</option>
-              <option value="issue">Report a Technical Outage / Out-of-bounds Result</option>
-              <option value="integration">Partner Server / Edge Integration Proposal</option>
-              <option value="feedback">General Interface Feedback & Design Suggestions</option>
+              <option value="issue"
+                >Report a Technical Outage / Out-of-bounds Result</option
+              >
+              <option value="integration"
+                >Partner Server / Edge Integration Proposal</option
+              >
+              <option value="feedback"
+                >General Interface Feedback & Design Suggestions</option
+              >
               <option value="other">Other Inquiry</option>
             </select>
           </div>
 
           <div class="flex flex-col gap-1.5">
-            <label for="message" class="text-xs font-mono text-mute uppercase tracking-wider select-none">
+            <label
+              for="message"
+              class="text-xs font-mono text-mute uppercase tracking-wider select-none"
+            >
               Detailed Message
             </label>
             <textarea
@@ -101,20 +128,28 @@ import Layout from "../layouts/Layout.astro";
           id="success-view"
           class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-canvas border border-hairline rounded-md shadow-xs opacity-0 scale-95 transition-all duration-300"
         >
-          <div class="w-12 h-12 bg-link-bg-soft rounded-full flex items-center justify-center text-link mb-4">
+          <div
+            class="w-12 h-12 bg-link-bg-soft rounded-full flex items-center justify-center text-link mb-4"
+          >
             <svg
               class="w-6 h-6 stroke-current fill-none"
               viewBox="0 0 24 24"
               stroke-width="2.5"
             >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M5 13l4 4L19 7"></path>
             </svg>
           </div>
-          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans mb-2">
+          <h2
+            class="text-xl font-semibold tracking-tight text-ink font-sans mb-2"
+          >
             Telemetry Message Dispatched
           </h2>
           <p class="text-xs md:text-sm text-body max-w-sm leading-relaxed mb-6">
-            Thank you for your report. Our network engineering team receives messages instantly and reviews connection anomalies daily.
+            Thank you for your report. Our network engineering team receives
+            messages instantly and reviews connection anomalies daily.
           </p>
           <button
             id="reset-button"
@@ -130,7 +165,9 @@ import Layout from "../layouts/Layout.astro";
   <script>
     const form = document.getElementById("contact-form") as HTMLFormElement;
     const successView = document.getElementById("success-view");
-    const submitBtn = document.getElementById("submit-button") as HTMLButtonElement;
+    const submitBtn = document.getElementById(
+      "submit-button",
+    ) as HTMLButtonElement;
     const resetBtn = document.getElementById("reset-button");
 
     if (form && successView && submitBtn && resetBtn) {
@@ -142,10 +179,16 @@ import Layout from "../layouts/Layout.astro";
         submitBtn.textContent = "Transmitting telemetry…";
         submitBtn.classList.add("opacity-80");
 
-        const name = (document.getElementById("name") as HTMLInputElement).value;
-        const email = (document.getElementById("email") as HTMLInputElement).value;
-        const subject = (document.getElementById("subject") as HTMLSelectElement).value;
-        const message = (document.getElementById("message") as HTMLTextAreaElement).value;
+        const name = (document.getElementById("name") as HTMLInputElement)
+          .value;
+        const email = (document.getElementById("email") as HTMLInputElement)
+          .value;
+        const subject = (
+          document.getElementById("subject") as HTMLSelectElement
+        ).value;
+        const message = (
+          document.getElementById("message") as HTMLTextAreaElement
+        ).value;
 
         try {
           const res = await fetch("/api/contact", {
@@ -162,21 +205,23 @@ import Layout from "../layouts/Layout.astro";
 
           // Hide form
           form.classList.add("opacity-0", "pointer-events-none");
-          
+
           setTimeout(() => {
             form.classList.add("hidden");
             successView.classList.remove("hidden");
-            
+
             // Force browser layout repaint
             successView.offsetHeight;
-            
+
             // Transition success screen in
             successView.classList.remove("opacity-0", "scale-95");
             successView.classList.add("opacity-100", "scale-100");
           }, 300);
         } catch (err) {
           console.error(err);
-          alert("Submission failed. Please check your internet connection and try again.");
+          alert(
+            "Submission failed. Please check your internet connection and try again.",
+          );
           submitBtn.disabled = false;
           submitBtn.textContent = "Send Message";
           submitBtn.classList.remove("opacity-80");
@@ -197,10 +242,10 @@ import Layout from "../layouts/Layout.astro";
         setTimeout(() => {
           successView.classList.add("hidden");
           form.classList.remove("hidden");
-          
+
           // Force layout repaint
           form.offsetHeight;
-          
+
           form.classList.remove("opacity-0", "pointer-events-none");
           form.classList.add("opacity-100");
         }, 300);

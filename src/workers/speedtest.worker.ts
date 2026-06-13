@@ -9,11 +9,11 @@ const isLocalUrl = (url: string) => {
     const parsed = new URL(url);
     const hostname = parsed.hostname;
     return (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname === '::1' ||
-      hostname.startsWith('192.168.') ||
-      hostname.startsWith('10.') ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
       /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
     );
   } catch (_) {
@@ -22,18 +22,18 @@ const isLocalUrl = (url: string) => {
 };
 
 // Helper to delay execution
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Listen for commands from the main thread
 self.onmessage = async (e: MessageEvent) => {
   const { type } = e.data;
 
-  if (type === 'CANCEL') {
+  if (type === "CANCEL") {
     isCancelled = true;
     if (activeAbortController) {
       activeAbortController.abort();
     }
-    self.postMessage({ type: 'CANCELLED' });
+    self.postMessage({ type: "CANCELLED" });
     return;
   }
 
@@ -41,21 +41,65 @@ self.onmessage = async (e: MessageEvent) => {
   activeAbortController = new AbortController();
 
   try {
-    if (type === 'START_PING') {
+    if (type === "START_PING") {
       const { baseUrl, region, serverId, clientLat, clientLon } = e.data;
-      await runPingTest(baseUrl, region, serverId, clientLat, clientLon, activeAbortController.signal);
-    } else if (type === 'START_DOWNLOAD') {
-      const { baseUrl, region, serverId, clientLat, clientLon, basePing, parallelStreams } = e.data;
-      await runDownloadTest(baseUrl, region, serverId, clientLat, clientLon, basePing, parallelStreams || 4, activeAbortController.signal);
-    } else if (type === 'START_UPLOAD') {
-      const { baseUrl, region, serverId, clientLat, clientLon, basePing, parallelStreams } = e.data;
-      await runUploadTest(baseUrl, region, serverId, clientLat, clientLon, basePing, parallelStreams || 4, activeAbortController.signal);
+      await runPingTest(
+        baseUrl,
+        region,
+        serverId,
+        clientLat,
+        clientLon,
+        activeAbortController.signal,
+      );
+    } else if (type === "START_DOWNLOAD") {
+      const {
+        baseUrl,
+        region,
+        serverId,
+        clientLat,
+        clientLon,
+        basePing,
+        parallelStreams,
+      } = e.data;
+      await runDownloadTest(
+        baseUrl,
+        region,
+        serverId,
+        clientLat,
+        clientLon,
+        basePing,
+        parallelStreams || 4,
+        activeAbortController.signal,
+      );
+    } else if (type === "START_UPLOAD") {
+      const {
+        baseUrl,
+        region,
+        serverId,
+        clientLat,
+        clientLon,
+        basePing,
+        parallelStreams,
+      } = e.data;
+      await runUploadTest(
+        baseUrl,
+        region,
+        serverId,
+        clientLat,
+        clientLon,
+        basePing,
+        parallelStreams || 4,
+        activeAbortController.signal,
+      );
     }
   } catch (error: any) {
-    if (error.name === 'AbortError' || isCancelled) {
-      self.postMessage({ type: 'ERROR', message: 'Test cancelled' });
+    if (error.name === "AbortError" || isCancelled) {
+      self.postMessage({ type: "ERROR", message: "Test cancelled" });
     } else {
-      self.postMessage({ type: 'ERROR', message: error.message || 'An error occurred during testing' });
+      self.postMessage({
+        type: "ERROR",
+        message: error.message || "An error occurred during testing",
+      });
     }
   }
 };
@@ -69,7 +113,7 @@ async function runPingTest(
   serverId: string | undefined,
   clientLat: number,
   clientLon: number,
-  signal: AbortSignal
+  signal: AbortSignal,
 ) {
   const iterations = 15;
   const latencies: number[] = [];
@@ -80,13 +124,13 @@ async function runPingTest(
   // 1. Connection Warm-up Request (establishes TCP/TLS keep-alive)
   try {
     const warmupUrl = region
-      ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&warmup=true&cb=warmup-${Date.now()}`
+      ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&warmup=true&cb=warmup-${Date.now()}`
       : `${baseUrl}/ping?warmup=true&cb=warmup-${Date.now()}`;
     const startWarmup = performance.now();
     const res = await fetch(warmupUrl, {
-      method: 'GET',
-      cache: 'no-store',
-      signal
+      method: "GET",
+      cache: "no-store",
+      signal,
     });
     await res.text();
     hostLatency = performance.now() - startWarmup;
@@ -103,16 +147,16 @@ async function runPingTest(
     const start = performance.now();
     try {
       const url = region
-        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=${Date.now()}-${i}`
+        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=${Date.now()}-${i}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${i}`;
       const response = await fetch(url, {
-        method: 'GET',
-        cache: 'no-store',
-        signal
+        method: "GET",
+        cache: "no-store",
+        signal,
       });
 
       if (!response.ok) {
-        throw new Error('Ping request failed');
+        throw new Error("Ping request failed");
       }
 
       await response.text(); // Fully read response body
@@ -135,14 +179,14 @@ async function runPingTest(
 
       // Stream progress
       self.postMessage({
-        type: 'PING_PROGRESS',
+        type: "PING_PROGRESS",
         iteration: i + 1,
         totalIterations: iterations,
         latency,
         jitter,
         latencies: [...latencies],
         pingSent,
-        pingLost
+        pingLost,
       });
 
       // Brief sleep between pings to prevent queueing overhead
@@ -151,15 +195,21 @@ async function runPingTest(
       if (signal.aborted) throw err;
       pingLost++;
       self.postMessage({
-        type: 'PING_FAILED_ITERATION',
+        type: "PING_FAILED_ITERATION",
         iteration: i + 1,
         pingSent,
-        pingLost
+        pingLost,
       });
     }
   }
 
-  self.postMessage({ type: 'PING_COMPLETE', latencies, jitter, pingSent, pingLost });
+  self.postMessage({
+    type: "PING_COMPLETE",
+    latencies,
+    jitter,
+    pingSent,
+    pingLost,
+  });
 }
 
 /**
@@ -173,7 +223,7 @@ async function runDownloadTest(
   clientLon: number,
   basePing: number,
   parallelStreams: number,
-  signal: AbortSignal
+  signal: AbortSignal,
 ) {
   const durationMs = 8000; // 8 seconds test window
   let estimatedRtt = 20;
@@ -181,7 +231,8 @@ async function runDownloadTest(
     estimatedRtt = basePing;
   }
   const maxThroughputBps = (10 * 1024 * 1024) / (estimatedRtt / 1000);
-  const shouldThrottle = region && region !== 'local-edge' && maxThroughputBps < 125 * 1024 * 1024;
+  const shouldThrottle =
+    region && region !== "local-edge" && maxThroughputBps < 125 * 1024 * 1024;
   const useDirectCf = isLocalUrl(baseUrl) && !shouldThrottle;
 
   const startTime = performance.now();
@@ -212,9 +263,9 @@ async function runDownloadTest(
     const pingStart = performance.now();
     try {
       const url = region
-        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`
+        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`;
-      const res = await fetch(url, { signal, cache: 'no-store' });
+      const res = await fetch(url, { signal, cache: "no-store" });
       if (res.ok) {
         await res.text();
         let lat = performance.now() - pingStart;
@@ -224,7 +275,8 @@ async function runDownloadTest(
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
-        loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
+        loadedAvg =
+          loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
         if (loadedLatencies.length > 1) {
           let sumDiffs = 0;
           for (let j = 1; j < loadedLatencies.length; j++) {
@@ -252,7 +304,7 @@ async function runDownloadTest(
   const progressInterval = setInterval(() => {
     const now = performance.now();
     const elapsedSincePhaseStart = (now - phaseStartTime) / 1000;
-    
+
     // Purge samples older than 1 second (1000ms)
     const windowStartLimit = now - 1000;
     while (speedSamples.length > 0 && speedSamples[0].time < windowStartLimit) {
@@ -264,21 +316,30 @@ async function runDownloadTest(
 
     // Calculate elapsed and transmission duration
     const elapsedSinceStart = (now - startTime) / 1000;
-    const transmissionStartTime = firstByteTime !== null ? firstByteTime : startTime;
+    const transmissionStartTime =
+      firstByteTime !== null ? firstByteTime : startTime;
     const transmissionDurationSec = (now - transmissionStartTime) / 1000;
 
     const windowDurationSec = Math.min(elapsedSinceStart, 1.0); // cap window duration at 1s
 
     // Calculate speeds
-    const instSpeedBps = windowDurationSec > 0.1 ? (windowBytes * 8) / windowDurationSec : 0;
-    const avgSpeedBps = transmissionDurationSec > 0.1 ? (totalBytesDownloaded * 8) / transmissionDurationSec : 0;
+    const instSpeedBps =
+      windowDurationSec > 0.1 ? (windowBytes * 8) / windowDurationSec : 0;
+    const avgSpeedBps =
+      transmissionDurationSec > 0.1
+        ? (totalBytesDownloaded * 8) / transmissionDurationSec
+        : 0;
 
-    if (instSpeedBps > peakSpeed && elapsedSinceStart > 0.5 && elapsedSincePhaseStart > 0.4) {
+    if (
+      instSpeedBps > peakSpeed &&
+      elapsedSinceStart > 0.5 &&
+      elapsedSincePhaseStart > 0.4
+    ) {
       peakSpeed = instSpeedBps; // Capture peak speed (skipping initial transient spike of each phase)
     }
 
     self.postMessage({
-      type: 'DOWNLOAD_PROGRESS',
+      type: "DOWNLOAD_PROGRESS",
       elapsedTime: elapsedSinceStart,
       totalBytes: totalBytesDownloaded,
       instantaneousSpeed: instSpeedBps,
@@ -289,12 +350,16 @@ async function runDownloadTest(
       loadedPingSent: dlPingSent,
       loadedPingLost: dlPingLost,
       loadedLatencies: [...loadedLatencies],
-      requests: [...downloadRequests]
+      requests: [...downloadRequests],
     });
   }, 100);
 
   // Sequential Phase Runner Function
-  const runDownloadPhase = (targetSize: number, phaseDuration: number, nominalSize: number) => {
+  const runDownloadPhase = (
+    targetSize: number,
+    phaseDuration: number,
+    nominalSize: number,
+  ) => {
     return new Promise<void>(async (resolvePhase) => {
       phaseStartTime = performance.now();
       const phaseStart = performance.now();
@@ -303,34 +368,40 @@ async function runDownloadTest(
       const abortHandler = () => {
         phaseAbortController.abort();
       };
-      signal.addEventListener('abort', abortHandler);
+      signal.addEventListener("abort", abortHandler);
 
       const runStream = async () => {
-        while (performance.now() - phaseStart < phaseDuration && !phaseAbortController.signal.aborted && !isCancelled) {
+        while (
+          performance.now() - phaseStart < phaseDuration &&
+          !phaseAbortController.signal.aborted &&
+          !isCancelled
+        ) {
           const chunkStart = performance.now();
           const requestTimestamp = Date.now();
 
           try {
             const url = useDirectCf
               ? `https://speed.cloudflare.com/__down?bytes=${targetSize}`
-              : (region
-                ? `${baseUrl}/download?size=${targetSize}&region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
-                : `${baseUrl}/download?size=${targetSize}&cb=${Date.now()}-${Math.random()}`);
+              : region
+                ? `${baseUrl}/download?size=${targetSize}&region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
+                : `${baseUrl}/download?size=${targetSize}&cb=${Date.now()}-${Math.random()}`;
 
             const response = await fetch(url, {
-              method: 'GET',
-              cache: 'no-store',
-              headers: useDirectCf ? undefined : {
-                'Cache-Control': 'no-store, no-cache'
-              },
-              signal: phaseAbortController.signal
+              method: "GET",
+              cache: "no-store",
+              headers: useDirectCf
+                ? undefined
+                : {
+                    "Cache-Control": "no-store, no-cache",
+                  },
+              signal: phaseAbortController.signal,
             });
 
             const headersReceived = performance.now();
             const latency = headersReceived - chunkStart;
 
             if (!response.body) {
-              throw new Error('ReadableStream not supported on download body');
+              throw new Error("ReadableStream not supported on download body");
             }
 
             const reader = response.body.getReader();
@@ -338,7 +409,11 @@ async function runDownloadTest(
             let chunkEnd = performance.now();
 
             try {
-              while (performance.now() - phaseStart < phaseDuration && !phaseAbortController.signal.aborted && !isCancelled) {
+              while (
+                performance.now() - phaseStart < phaseDuration &&
+                !phaseAbortController.signal.aborted &&
+                !isCancelled
+              ) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 if (value) {
@@ -347,24 +422,30 @@ async function runDownloadTest(
                   }
                   bytesReceived += value.length;
                   totalBytesDownloaded += value.length;
-                  speedSamples.push({ time: performance.now(), bytes: value.length });
+                  speedSamples.push({
+                    time: performance.now(),
+                    bytes: value.length,
+                  });
                 }
               }
             } finally {
               chunkEnd = performance.now();
               reader.cancel().catch(() => {});
-              
+
               if (bytesReceived > 0) {
                 const chunkDuration = chunkEnd - headersReceived; // Use headersReceived for transfer duration
-                const bps = chunkDuration > 0 ? (bytesReceived * 8) / (chunkDuration / 1000) : 0;
+                const bps =
+                  chunkDuration > 0
+                    ? (bytesReceived * 8) / (chunkDuration / 1000)
+                    : 0;
 
                 const requestPings = pingLog
-                  .filter(p => p.time >= chunkStart && p.time <= chunkEnd)
-                  .map(p => p.latency);
+                  .filter((p) => p.time >= chunkStart && p.time <= chunkEnd)
+                  .map((p) => p.latency);
 
                 downloadRequests.push({
                   time: requestTimestamp,
-                  direction: 'download',
+                  direction: "download",
                   bytes: bytesReceived,
                   payloadSize: targetSize,
                   phaseSize: nominalSize,
@@ -373,11 +454,10 @@ async function runDownloadTest(
                   duration: chunkDuration,
                   serverTime: -1,
                   responseSize: bytesReceived,
-                  loadedLatencies: requestPings
+                  loadedLatencies: requestPings,
                 });
               }
             }
-
           } catch (err) {
             if (phaseAbortController.signal.aborted || isCancelled) break;
             await sleep(50);
@@ -386,7 +466,9 @@ async function runDownloadTest(
       };
 
       // Launch parallel streams
-      const streams = Array.from({ length: parallelStreams }).map(() => runStream());
+      const streams = Array.from({ length: parallelStreams }).map(() =>
+        runStream(),
+      );
 
       const phaseTimer = setTimeout(() => {
         phaseAbortController.abort();
@@ -394,7 +476,7 @@ async function runDownloadTest(
 
       await Promise.all(streams).catch(() => {});
       clearTimeout(phaseTimer);
-      signal.removeEventListener('abort', abortHandler);
+      signal.removeEventListener("abort", abortHandler);
       resolvePhase();
     });
   };
@@ -404,7 +486,7 @@ async function runDownloadTest(
     { size: 100 * 1024, duration: 1500 },
     { size: 1 * 1024 * 1024, duration: 2000 },
     { size: 10 * 1024 * 1024, duration: 2500 },
-    { size: 25 * 1024 * 1024, duration: 2000 }
+    { size: 25 * 1024 * 1024, duration: 2000 },
   ];
 
   let totalWallClockDurationMs = 0;
@@ -412,18 +494,19 @@ async function runDownloadTest(
     if (isCancelled || signal.aborted) break;
     const phaseStart = performance.now();
     await runDownloadPhase(phase.size, phase.duration, phase.size);
-    totalWallClockDurationMs += (performance.now() - phaseStart);
+    totalWallClockDurationMs += performance.now() - phaseStart;
   }
 
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
 
-  const finalAvgSpeedBps = totalWallClockDurationMs > 0
-    ? (totalBytesDownloaded * 8) / (totalWallClockDurationMs / 1000)
-    : 0;
+  const finalAvgSpeedBps =
+    totalWallClockDurationMs > 0
+      ? (totalBytesDownloaded * 8) / (totalWallClockDurationMs / 1000)
+      : 0;
 
   self.postMessage({
-    type: 'DOWNLOAD_COMPLETE',
+    type: "DOWNLOAD_COMPLETE",
     totalBytes: totalBytesDownloaded,
     averageSpeed: finalAvgSpeedBps,
     peakSpeed,
@@ -432,7 +515,7 @@ async function runDownloadTest(
     loadedLatencies: loadedLatencies,
     loadedPingSent: dlPingSent,
     loadedPingLost: dlPingLost,
-    requests: downloadRequests
+    requests: downloadRequests,
   });
 }
 
@@ -447,7 +530,7 @@ async function runUploadTest(
   clientLon: number,
   basePing: number,
   parallelStreams: number,
-  signal: AbortSignal
+  signal: AbortSignal,
 ) {
   const durationMs = 8000; // 8 seconds test window
   let estimatedRtt = 20;
@@ -455,7 +538,8 @@ async function runUploadTest(
     estimatedRtt = basePing;
   }
   const maxThroughputBps = (10 * 1024 * 1024) / (estimatedRtt / 1000);
-  const shouldThrottle = region && region !== 'local-edge' && maxThroughputBps < 125 * 1024 * 1024;
+  const shouldThrottle =
+    region && region !== "local-edge" && maxThroughputBps < 125 * 1024 * 1024;
   const useDirectCf = isLocalUrl(baseUrl) && !shouldThrottle;
 
   const startTime = performance.now();
@@ -486,9 +570,9 @@ async function runUploadTest(
     const pingStart = performance.now();
     try {
       const url = region
-        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`
+        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`;
-      const res = await fetch(url, { signal, cache: 'no-store' });
+      const res = await fetch(url, { signal, cache: "no-store" });
       if (res.ok) {
         await res.text();
         let lat = performance.now() - pingStart;
@@ -498,7 +582,8 @@ async function runUploadTest(
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
-        loadedAvg = loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
+        loadedAvg =
+          loadedLatencies.reduce((a, b) => a + b, 0) / loadedLatencies.length;
         if (loadedLatencies.length > 1) {
           let sumDiffs = 0;
           for (let j = 1; j < loadedLatencies.length; j++) {
@@ -526,7 +611,7 @@ async function runUploadTest(
   const progressInterval = setInterval(() => {
     const now = performance.now();
     const elapsedSincePhaseStart = (now - phaseStartTime) / 1000;
-    
+
     // Purge samples older than 1 second (1000ms)
     const windowStartLimit = now - 1000;
     while (speedSamples.length > 0 && speedSamples[0].time < windowStartLimit) {
@@ -538,21 +623,30 @@ async function runUploadTest(
 
     // Calculate elapsed and transmission duration
     const elapsedSinceStart = (now - startTime) / 1000;
-    const transmissionStartTime = firstByteTime !== null ? firstByteTime : startTime;
+    const transmissionStartTime =
+      firstByteTime !== null ? firstByteTime : startTime;
     const transmissionDurationSec = (now - transmissionStartTime) / 1000;
 
     const windowDurationSec = Math.min(elapsedSinceStart, 1.0); // cap window duration at 1s
 
     // Calculate speeds
-    const instSpeedBps = windowDurationSec > 0.1 ? (windowBytes * 8) / windowDurationSec : 0;
-    const avgSpeedBps = transmissionDurationSec > 0.1 ? (totalBytesUploaded * 8) / transmissionDurationSec : 0;
+    const instSpeedBps =
+      windowDurationSec > 0.1 ? (windowBytes * 8) / windowDurationSec : 0;
+    const avgSpeedBps =
+      transmissionDurationSec > 0.1
+        ? (totalBytesUploaded * 8) / transmissionDurationSec
+        : 0;
 
-    if (instSpeedBps > peakSpeed && elapsedSinceStart > 0.5 && elapsedSincePhaseStart > 0.4) {
+    if (
+      instSpeedBps > peakSpeed &&
+      elapsedSinceStart > 0.5 &&
+      elapsedSincePhaseStart > 0.4
+    ) {
       peakSpeed = instSpeedBps; // Capture peak speed (skipping initial transient spike of each phase)
     }
 
     self.postMessage({
-      type: 'UPLOAD_PROGRESS',
+      type: "UPLOAD_PROGRESS",
       elapsedTime: elapsedSinceStart,
       totalBytes: totalBytesUploaded,
       instantaneousSpeed: instSpeedBps,
@@ -563,12 +657,16 @@ async function runUploadTest(
       loadedPingSent: ulPingSent,
       loadedPingLost: ulPingLost,
       loadedLatencies: [...loadedLatencies],
-      requests: [...uploadRequests]
+      requests: [...uploadRequests],
     });
   }, 100);
 
   // Sequential Phase Runner Function
-  const runUploadPhase = (targetSize: number, phaseDuration: number, nominalSize: number) => {
+  const runUploadPhase = (
+    targetSize: number,
+    phaseDuration: number,
+    nominalSize: number,
+  ) => {
     return new Promise<void>(async (resolvePhase) => {
       phaseStartTime = performance.now();
       const phaseStart = performance.now();
@@ -577,16 +675,19 @@ async function runUploadTest(
 
       const abortHandler = () => {
         phaseAbortController.abort();
-        [...activeXhrs].forEach(x => x.abort());
+        [...activeXhrs].forEach((x) => x.abort());
       };
-      signal.addEventListener('abort', abortHandler);
+      signal.addEventListener("abort", abortHandler);
 
       // Pre-generate dynamic upload chunk of targetSize
       const uploadChunk = new Uint8Array(targetSize);
       if (self.crypto) {
         const maxQuota = 65536;
         for (let offset = 0; offset < uploadChunk.length; offset += maxQuota) {
-          const subarray = uploadChunk.subarray(offset, Math.min(offset + maxQuota, uploadChunk.length));
+          const subarray = uploadChunk.subarray(
+            offset,
+            Math.min(offset + maxQuota, uploadChunk.length),
+          );
           self.crypto.getRandomValues(subarray);
         }
       } else {
@@ -597,7 +698,11 @@ async function runUploadTest(
 
       const runStream = () => {
         return new Promise<void>((resolveStream) => {
-          if (performance.now() - phaseStart >= phaseDuration || phaseAbortController.signal.aborted || isCancelled) {
+          if (
+            performance.now() - phaseStart >= phaseDuration ||
+            phaseAbortController.signal.aborted ||
+            isCancelled
+          ) {
             resolveStream();
             return;
           }
@@ -605,52 +710,53 @@ async function runUploadTest(
           if (useDirectCf) {
             const chunkStart = performance.now();
             const requestTimestamp = Date.now();
-            const blob = new Blob([uploadChunk], { type: 'text/plain' });
+            const blob = new Blob([uploadChunk], { type: "text/plain" });
 
-            fetch('https://speed.cloudflare.com/__up', {
-              method: 'POST',
+            fetch("https://speed.cloudflare.com/__up", {
+              method: "POST",
               body: blob,
-              signal: phaseAbortController.signal
+              signal: phaseAbortController.signal,
             })
-            .then(async (response) => {
-              if (response.ok) {
-                await response.text();
-                const chunkEnd = performance.now();
-                const duration = chunkEnd - chunkStart;
+              .then(async (response) => {
+                if (response.ok) {
+                  await response.text();
+                  const chunkEnd = performance.now();
+                  const duration = chunkEnd - chunkStart;
 
-                if (firstByteTime === null) {
-                  firstByteTime = performance.now();
+                  if (firstByteTime === null) {
+                    firstByteTime = performance.now();
+                  }
+                  totalBytesUploaded += targetSize;
+                  speedSamples.push({ time: chunkEnd, bytes: targetSize });
+
+                  const bps =
+                    duration > 0 ? (targetSize * 8) / (duration / 1000) : 0;
+                  const requestPings = pingLog
+                    .filter((p) => p.time >= chunkStart && p.time <= chunkEnd)
+                    .map((p) => p.latency);
+
+                  uploadRequests.push({
+                    time: requestTimestamp,
+                    direction: "upload",
+                    bytes: targetSize,
+                    payloadSize: targetSize,
+                    phaseSize: nominalSize,
+                    latency: 0,
+                    bps,
+                    duration,
+                    serverTime: -1,
+                    responseSize: 0,
+                    loadedLatencies: requestPings,
+                  });
+
+                  runStream().then(resolveStream);
+                } else {
+                  resolveStream();
                 }
-                totalBytesUploaded += targetSize;
-                speedSamples.push({ time: chunkEnd, bytes: targetSize });
-
-                const bps = duration > 0 ? (targetSize * 8) / (duration / 1000) : 0;
-                const requestPings = pingLog
-                  .filter(p => p.time >= chunkStart && p.time <= chunkEnd)
-                  .map(p => p.latency);
-
-                uploadRequests.push({
-                  time: requestTimestamp,
-                  direction: 'upload',
-                  bytes: targetSize,
-                  payloadSize: targetSize,
-                  phaseSize: nominalSize,
-                  latency: 0,
-                  bps,
-                  duration,
-                  serverTime: -1,
-                  responseSize: 0,
-                  loadedLatencies: requestPings
-                });
-
-                runStream().then(resolveStream);
-              } else {
+              })
+              .catch(() => {
                 resolveStream();
-              }
-            })
-            .catch(() => {
-              resolveStream();
-            });
+              });
             return;
           }
 
@@ -659,16 +765,16 @@ async function runUploadTest(
 
           const url = useDirectCf
             ? `https://speed.cloudflare.com/__up`
-            : (region
-              ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
-              : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`);
+            : region
+              ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
+              : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`;
 
-          xhr.open('POST', url, true);
+          xhr.open("POST", url, true);
           if (useDirectCf) {
-            xhr.setRequestHeader('Content-Type', 'text/plain');
+            xhr.setRequestHeader("Content-Type", "text/plain");
           } else {
-            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-            xhr.setRequestHeader('Cache-Control', 'no-store, no-cache');
+            xhr.setRequestHeader("Content-Type", "application/octet-stream");
+            xhr.setRequestHeader("Cache-Control", "no-store, no-cache");
           }
 
           const chunkStart = performance.now();
@@ -686,12 +792,12 @@ async function runUploadTest(
             const bps = duration > 0 ? (bytesSent * 8) / (duration / 1000) : 0;
 
             const requestPings = pingLog
-              .filter(p => p.time >= chunkStart && p.time <= chunkEnd)
-              .map(p => p.latency);
+              .filter((p) => p.time >= chunkStart && p.time <= chunkEnd)
+              .map((p) => p.latency);
 
             uploadRequests.push({
               time: requestTimestamp,
-              direction: 'upload',
+              direction: "upload",
               bytes: bytesSent,
               payloadSize: targetSize,
               phaseSize: nominalSize,
@@ -700,11 +806,11 @@ async function runUploadTest(
               duration,
               serverTime: -1,
               responseSize: completed ? xhr.responseText.length : 0,
-              loadedLatencies: requestPings
+              loadedLatencies: requestPings,
             });
           };
 
-          xhr.upload.addEventListener('progress', (event) => {
+          xhr.upload.addEventListener("progress", (event) => {
             if (event.loaded > lastLoaded) {
               if (firstByteTime === null) {
                 firstByteTime = performance.now();
@@ -725,7 +831,10 @@ async function runUploadTest(
               if (remainingBytes > 0) {
                 totalBytesUploaded += remainingBytes;
                 lastLoaded = targetSize;
-                speedSamples.push({ time: performance.now(), bytes: remainingBytes });
+                speedSamples.push({
+                  time: performance.now(),
+                  bytes: remainingBytes,
+                });
               }
               recordStats(true);
               runStream().then(resolveStream);
@@ -750,7 +859,7 @@ async function runUploadTest(
           };
 
           if (useDirectCf) {
-            xhr.send(new Blob([uploadChunk], { type: 'text/plain' }));
+            xhr.send(new Blob([uploadChunk], { type: "text/plain" }));
           } else {
             xhr.send(uploadChunk.buffer);
           }
@@ -758,17 +867,19 @@ async function runUploadTest(
       };
 
       // Launch parallel streams
-      const streams = Array.from({ length: parallelStreams }).map(() => runStream());
+      const streams = Array.from({ length: parallelStreams }).map(() =>
+        runStream(),
+      );
 
       const phaseTimer = setTimeout(() => {
         phaseAbortController.abort();
-        [...activeXhrs].forEach(x => x.abort());
+        [...activeXhrs].forEach((x) => x.abort());
       }, phaseDuration);
 
       await Promise.all(streams).catch(() => {});
       clearTimeout(phaseTimer);
-      signal.removeEventListener('abort', abortHandler);
-      [...activeXhrs].forEach(x => x.abort());
+      signal.removeEventListener("abort", abortHandler);
+      [...activeXhrs].forEach((x) => x.abort());
       resolvePhase();
     });
   };
@@ -778,7 +889,7 @@ async function runUploadTest(
     { size: 100 * 1024, duration: 1500 },
     { size: 1 * 1024 * 1024, duration: 2000 },
     { size: 10 * 1024 * 1024, duration: 2500 },
-    { size: 25 * 1024 * 1024, duration: 2000 }
+    { size: 25 * 1024 * 1024, duration: 2000 },
   ];
 
   let totalWallClockDurationMs = 0;
@@ -801,19 +912,20 @@ async function runUploadTest(
 
     const phaseStart = performance.now();
     await runUploadPhase(targetSize, phase.duration, phase.size);
-    totalWallClockDurationMs += (performance.now() - phaseStart);
+    totalWallClockDurationMs += performance.now() - phaseStart;
   }
 
   // Clean up
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
 
-  const finalAvgSpeedBps = totalWallClockDurationMs > 0
-    ? (totalBytesUploaded * 8) / (totalWallClockDurationMs / 1000)
-    : 0;
+  const finalAvgSpeedBps =
+    totalWallClockDurationMs > 0
+      ? (totalBytesUploaded * 8) / (totalWallClockDurationMs / 1000)
+      : 0;
 
   self.postMessage({
-    type: 'UPLOAD_COMPLETE',
+    type: "UPLOAD_COMPLETE",
     totalBytes: totalBytesUploaded,
     averageSpeed: finalAvgSpeedBps,
     peakSpeed,
@@ -822,7 +934,6 @@ async function runUploadTest(
     loadedLatencies: loadedLatencies,
     loadedPingSent: ulPingSent,
     loadedPingLost: ulPingLost,
-    requests: uploadRequests
+    requests: uploadRequests,
   });
 }
-

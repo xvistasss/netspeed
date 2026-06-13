@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from 'react';
+import { useState, useEffect, useRef, useId } from "react";
 
 interface InfoTooltipProps {
   content: string;
@@ -7,7 +7,7 @@ interface InfoTooltipProps {
 export default function InfoTooltip({ content }: InfoTooltipProps) {
   const [visible, setVisible] = useState(false);
   const [xOffset, setXOffset] = useState(0);
-  const [yPosition, setYPosition] = useState<'top' | 'bottom'>('top');
+  const [yPosition, setYPosition] = useState<"top" | "bottom">("top");
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
@@ -16,7 +16,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
   useEffect(() => {
     if (!visible) {
       setXOffset(0);
-      setYPosition('top');
+      setYPosition("top");
       return;
     }
 
@@ -26,22 +26,23 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       if (!tooltip || !container) return;
 
       const containerRect = container.getBoundingClientRect();
-      const tooltipHeight = tooltip.offsetHeight || tooltip.getBoundingClientRect().height || 80;
+      const tooltipHeight =
+        tooltip.offsetHeight || tooltip.getBoundingClientRect().height || 80;
       const margin = 12; // safety margin from viewport edges
 
       // 1. Vertical space check (flip below the button if not enough room above)
       const spaceAbove = containerRect.top;
       const spaceBelow = window.innerHeight - containerRect.bottom;
-      
-      let nextY: 'top' | 'bottom' = 'top';
+
+      let nextY: "top" | "bottom" = "top";
       if (spaceAbove - tooltipHeight - margin < 0 && spaceBelow > spaceAbove) {
-        nextY = 'bottom';
+        nextY = "bottom";
       }
       setYPosition(nextY);
 
       // 2. Horizontal space check
       // Temporarily reset transform to get natural bounding rect
-      tooltip.style.transform = 'translate(-50%, 0)';
+      tooltip.style.transform = "translate(-50%, 0)";
 
       const rect = tooltip.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
@@ -58,11 +59,11 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
 
     const animId = requestAnimationFrame(adjustPosition);
 
-    window.addEventListener('resize', adjustPosition);
-    
+    window.addEventListener("resize", adjustPosition);
+
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', adjustPosition);
+      window.removeEventListener("resize", adjustPosition);
     };
   }, [visible]);
 
@@ -71,17 +72,22 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     if (!visible) return;
 
     const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setVisible(false);
       }
     };
 
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('touchstart', handleOutsideClick, { passive: true });
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick, {
+      passive: true,
+    });
 
     return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('touchstart', handleOutsideClick);
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
     };
   }, [visible]);
 
@@ -93,14 +99,17 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       setVisible(false);
     };
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener("scroll", handleScroll);
     };
   }, [visible]);
 
   return (
-    <div ref={containerRef} className="relative inline-flex items-center ml-1 z-20 group">
+    <div
+      ref={containerRef}
+      className="relative inline-flex items-center ml-1 z-20 group"
+    >
       <button
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
@@ -124,7 +133,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
             transform: `translate(calc(-50% + ${xOffset}px), 0)`,
           }}
           className={`absolute left-1/2 w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left ${
-            yPosition === 'top' ? 'bottom-6' : 'top-6'
+            yPosition === "top" ? "bottom-6" : "top-6"
           }`}
         >
           <div
@@ -132,9 +141,9 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
               left: `clamp(12px, calc(50% - ${xOffset}px), 244px)`,
             }}
             className={`absolute -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent ${
-              yPosition === 'top' 
-                ? 'top-full border-t-4 border-t-primary' 
-                : 'bottom-full border-b-4 border-b-primary'
+              yPosition === "top"
+                ? "top-full border-t-4 border-t-primary"
+                : "bottom-full border-b-4 border-b-primary"
             }`}
           />
           {content}
@@ -143,5 +152,3 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     </div>
   );
 }
-
-

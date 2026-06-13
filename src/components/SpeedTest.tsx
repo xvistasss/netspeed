@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import {
   Activity,
   ArrowDown,
@@ -7,15 +7,15 @@ import {
   Wifi,
   AlertTriangle,
   Play,
-  Square
-} from 'lucide-react';
-import Chart from 'chart.js/auto';
+  Square,
+} from "lucide-react";
+import Chart from "chart.js/auto";
 
 // Import sub-components
-import InfoTooltip from './SpeedTest/InfoTooltip';
-import QualityScores from './SpeedTest/QualityScores';
-import DetailedMeasurements from './SpeedTest/DetailedMeasurements';
-import TechnicalLogs from './SpeedTest/TechnicalLogs';
+import InfoTooltip from "./SpeedTest/InfoTooltip";
+import QualityScores from "./SpeedTest/QualityScores";
+import DetailedMeasurements from "./SpeedTest/DetailedMeasurements";
+import TechnicalLogs from "./SpeedTest/TechnicalLogs";
 
 // Import utilities, types and configuration
 import type {
@@ -24,30 +24,50 @@ import type {
   LatencyStats,
   SpeedStats,
   ClientInfo,
-  DetailPingStats
-} from '../utils/speedTestUtils';
-import { sleep, formatSpeed } from '../utils/speedTestUtils';
-import { SERVER_LIST, withDistances, pickClosestN } from '../utils/serverListUtils';
+  DetailPingStats,
+} from "../utils/speedTestUtils";
+import { sleep, formatSpeed } from "../utils/speedTestUtils";
+import {
+  SERVER_LIST,
+  withDistances,
+  pickClosestN,
+} from "../utils/serverListUtils";
 
 export default function SpeedTest() {
-  const [phase, setPhase] = useState<TestPhase>('idle');
-  const [statusMessage, setStatusMessage] = useState('System ready.');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [activeTab, setActiveTab] = useState<'latency' | 'packetLoss' | 'download' | 'upload'>('latency');
+  const [phase, setPhase] = useState<TestPhase>("idle");
+  const [statusMessage, setStatusMessage] = useState("System ready.");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [activeTab, setActiveTab] = useState<
+    "latency" | "packetLoss" | "download" | "upload"
+  >("latency");
 
   // Geolocation & Server State
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [closestServers, setClosestServers] = useState<TestServer[]>([]);
   const [selectedServer, setSelectedServer] = useState<TestServer | null>(null);
-  const [routingResults, setRoutingResults] = useState<{ [key: string]: number }>({});
+  const [routingResults, setRoutingResults] = useState<{
+    [key: string]: number;
+  }>({});
 
   // Test Metrics
   const [latencyStats, setLatencyStats] = useState<LatencyStats>({
-    current: 0, avg: 0, jitter: 0, min: Infinity, max: 0, latencies: []
+    current: 0,
+    avg: 0,
+    jitter: 0,
+    min: Infinity,
+    max: 0,
+    latencies: [],
   });
-  const [downloadStats, setDownloadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
-  const [uploadStats, setUploadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
-  const [stability, setStability] = useState<number>(100);
+  const [downloadStats, setDownloadStats] = useState<SpeedStats>({
+    current: 0,
+    avg: 0,
+    peak: 0,
+  });
+  const [uploadStats, setUploadStats] = useState<SpeedStats>({
+    current: 0,
+    avg: 0,
+    peak: 0,
+  });
   const [packetLoss, setPacketLoss] = useState<number>(0);
 
   // Loaded latency and jitter stats (split download vs upload phase pings)
@@ -57,14 +77,26 @@ export default function SpeedTest() {
   const [ulLoadedJitter, setUlLoadedJitter] = useState<number>(0);
 
   // Detailed Cloudflare-style stats states
-  const [unloadedPingStats, setUnloadedPingStats] = useState<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
-  const [dlLoadedPingStats, setDlLoadedPingStats] = useState<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
-  const [ulLoadedPingStats, setUlLoadedPingStats] = useState<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
+  const [unloadedPingStats, setUnloadedPingStats] = useState<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
+  const [dlLoadedPingStats, setDlLoadedPingStats] = useState<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
+  const [ulLoadedPingStats, setUlLoadedPingStats] = useState<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
   const [downloadRequests, setDownloadRequests] = useState<any[]>([]);
   const [uploadRequests, setUploadRequests] = useState<any[]>([]);
 
   // Completion Time
-  const [completionTime, setCompletionTime] = useState<string>('');
+  const [completionTime, setCompletionTime] = useState<string>("");
 
   // Progress tracker variables
   const [progressPercent, setProgressPercent] = useState(0);
@@ -81,9 +113,21 @@ export default function SpeedTest() {
   const uploadSpeedHistory = useRef<number[]>([]);
 
   // Detailed stats references to avoid stale closure variables in Web Worker messages
-  const unloadedPingStatsRef = useRef<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
-  const dlLoadedPingStatsRef = useRef<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
-  const ulLoadedPingStatsRef = useRef<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
+  const unloadedPingStatsRef = useRef<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
+  const dlLoadedPingStatsRef = useRef<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
+  const ulLoadedPingStatsRef = useRef<DetailPingStats>({
+    sent: 0,
+    lost: 0,
+    latencies: [],
+  });
 
   // Request logs for Cloudflare CSV export
   const downloadRequestsRef = useRef<any[]>([]);
@@ -95,35 +139,43 @@ export default function SpeedTest() {
     detectClientLocation();
 
     // Initial theme set based on document.documentElement class
-    const isDark = document.documentElement.classList.contains('dark');
-    setTheme(isDark ? 'dark' : 'light');
+    const isDark = document.documentElement.classList.contains("dark");
+    setTheme(isDark ? "dark" : "light");
 
     const handleThemeChange = (e: Event) => {
       const customEvent = e as CustomEvent;
       setTheme(customEvent.detail.theme);
     };
 
-    window.addEventListener('theme-changed', handleThemeChange);
+    window.addEventListener("theme-changed", handleThemeChange);
 
     return () => {
       if (workerRef.current) {
         workerRef.current.terminate();
       }
       destroyCharts();
-      window.removeEventListener('theme-changed', handleThemeChange);
+      window.removeEventListener("theme-changed", handleThemeChange);
     };
   }, []);
 
   // Handle automatic speed test execution via URL parameter
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get('autorun') === 'true' && !autorunTriggered.current && clientInfo !== null) {
+    if (
+      searchParams.get("autorun") === "true" &&
+      !autorunTriggered.current &&
+      clientInfo !== null
+    ) {
       autorunTriggered.current = true;
 
       // Clean query parameter from URL so page reload doesn't auto-run again
       const url = new URL(window.location.href);
-      url.searchParams.delete('autorun');
-      window.history.replaceState({}, document.title, url.pathname + url.search);
+      url.searchParams.delete("autorun");
+      window.history.replaceState(
+        {},
+        document.title,
+        url.pathname + url.search,
+      );
 
       startSpeedTest();
     }
@@ -131,32 +183,40 @@ export default function SpeedTest() {
 
   // Sync Chart.js scale colors with light/dark theme switch
   useEffect(() => {
-    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
-    const textColor = theme === 'dark' ? '#a1a1a1' : '#888888';
+    const gridColor = theme === "dark" ? "#222222" : "#ebebeb";
+    const textColor = theme === "dark" ? "#a1a1a1" : "#888888";
 
     if (downloadChartInstance.current) {
       // @ts-ignore
       downloadChartInstance.current.options.scales.y.grid.color = gridColor;
       // @ts-ignore
       downloadChartInstance.current.options.scales.y.ticks.color = textColor;
-      downloadChartInstance.current.update('none');
+      downloadChartInstance.current.update("none");
     }
     if (uploadChartInstance.current) {
       // @ts-ignore
       uploadChartInstance.current.options.scales.y.grid.color = gridColor;
       // @ts-ignore
       uploadChartInstance.current.options.scales.y.ticks.color = textColor;
-      uploadChartInstance.current.update('none');
+      uploadChartInstance.current.update("none");
     }
   }, [theme]);
 
   // Dispatch selectedServer details to Astro header
   useEffect(() => {
     if (!selectedServer) return;
-    const distStr = selectedServer.distance && selectedServer.distance > 0 ? `${selectedServer.distance} km` : '';
+    const distStr =
+      selectedServer.distance && selectedServer.distance > 0
+        ? `${selectedServer.distance} km`
+        : "";
     const latencyVal = routingResults[selectedServer.id];
-    const event = new CustomEvent('server-selected', {
-      detail: { id: selectedServer.id, name: selectedServer.name, distance: distStr, latency: latencyVal }
+    const event = new CustomEvent("server-selected", {
+      detail: {
+        id: selectedServer.id,
+        name: selectedServer.name,
+        distance: distStr,
+        latency: latencyVal,
+      },
     });
     window.dispatchEvent(event);
   }, [selectedServer, routingResults]);
@@ -164,14 +224,17 @@ export default function SpeedTest() {
   // Dispatch dynamic servers list to Astro header
   useEffect(() => {
     if (closestServers.length > 0) {
-      const event = new CustomEvent('servers-discovered', {
+      const event = new CustomEvent("servers-discovered", {
         detail: {
-          servers: closestServers.map(s => ({
+          servers: closestServers.map((s) => ({
             id: s.id,
             name: s.name,
-            distance: s.distance !== undefined && s.distance > 0 ? `${s.distance} km` : ''
-          }))
-        }
+            distance:
+              s.distance !== undefined && s.distance > 0
+                ? `${s.distance} km`
+                : "",
+          })),
+        },
       });
       window.dispatchEvent(event);
     }
@@ -198,145 +261,145 @@ export default function SpeedTest() {
     downloadSpeedHistory.current = [];
     uploadSpeedHistory.current = [];
 
-    const gridColor = theme === 'dark' ? '#222222' : '#ebebeb';
-    const textColor = theme === 'dark' ? '#a1a1a1' : '#888888';
+    const gridColor = theme === "dark" ? "#222222" : "#ebebeb";
+    const textColor = theme === "dark" ? "#a1a1a1" : "#888888";
 
     // Download Chart Initializer
     if (downloadChartRef.current) {
       downloadChartInstance.current = new Chart(downloadChartRef.current, {
-        type: 'line',
+        type: "line",
         data: {
           labels: [],
           datasets: [
             {
-              label: 'Download Speed',
+              label: "Download Speed",
               data: [],
-              borderColor: '#eb6f20', // Orange style
-              backgroundColor: 'rgba(235, 111, 32, 0.08)',
+              borderColor: "#eb6f20", // Orange style
+              backgroundColor: "rgba(235, 111, 32, 0.08)",
               borderWidth: 2,
               pointRadius: 0,
               tension: 0.3,
               fill: true,
             },
             {
-              label: '90th Percentile',
+              label: "90th Percentile",
               data: [],
-              borderColor: theme === 'dark' ? '#444444' : '#b5b5b5',
+              borderColor: theme === "dark" ? "#444444" : "#b5b5b5",
               borderWidth: 1.5,
               borderDash: [4, 4],
               pointRadius: 0,
               fill: false,
-            }
-          ]
+            },
+          ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { enabled: true }
+            tooltip: { enabled: true },
           },
           scales: {
             x: {
               grid: { display: false },
-              ticks: { display: false }
+              ticks: { display: false },
             },
             y: {
               beginAtZero: true,
               grid: { color: gridColor },
               ticks: {
                 color: textColor,
-                font: { family: 'JetBrains Mono', size: 10 },
-                callback: (val) => `${val} M`
-              }
-            }
-          }
-        }
+                font: { family: "JetBrains Mono", size: 10 },
+                callback: (val) => `${val} M`,
+              },
+            },
+          },
+        },
       });
     }
 
     // Upload Chart Initializer
     if (uploadChartRef.current) {
       uploadChartInstance.current = new Chart(uploadChartRef.current, {
-        type: 'line',
+        type: "line",
         data: {
           labels: [],
           datasets: [
             {
-              label: 'Upload Speed',
+              label: "Upload Speed",
               data: [],
-              borderColor: '#8b5cf6', // Purple style
-              backgroundColor: 'rgba(139, 92, 246, 0.08)',
+              borderColor: "#8b5cf6", // Purple style
+              backgroundColor: "rgba(139, 92, 246, 0.08)",
               borderWidth: 2,
               pointRadius: 0,
               tension: 0.3,
               fill: true,
             },
             {
-              label: '90th Percentile',
+              label: "90th Percentile",
               data: [],
-              borderColor: theme === 'dark' ? '#444444' : '#b5b5b5',
+              borderColor: theme === "dark" ? "#444444" : "#b5b5b5",
               borderWidth: 1.5,
               borderDash: [4, 4],
               pointRadius: 0,
               fill: false,
-            }
-          ]
+            },
+          ],
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
             legend: { display: false },
-            tooltip: { enabled: true }
+            tooltip: { enabled: true },
           },
           scales: {
             x: {
               grid: { display: false },
-              ticks: { display: false }
+              ticks: { display: false },
             },
             y: {
               beginAtZero: true,
               grid: { color: gridColor },
               ticks: {
                 color: textColor,
-                font: { family: 'JetBrains Mono', size: 10 },
-                callback: (val) => `${val} M`
-              }
-            }
-          }
-        }
+                font: { family: "JetBrains Mono", size: 10 },
+                callback: (val) => `${val} M`,
+              },
+            },
+          },
+        },
       });
     }
   };
 
-  const updateThroughputChart = (type: 'download' | 'upload', mbps: number) => {
-    if (type === 'download') {
+  const updateThroughputChart = (type: "download" | "upload", mbps: number) => {
+    if (type === "download") {
       const chart = downloadChartInstance.current;
       if (!chart) return;
 
       downloadSpeedHistory.current.push(mbps);
-      chart.data.labels = downloadSpeedHistory.current.map(() => '');
+      chart.data.labels = downloadSpeedHistory.current.map(() => "");
       chart.data.datasets[0].data = downloadSpeedHistory.current;
 
       const sorted = [...downloadSpeedHistory.current].sort((a, b) => a - b);
       const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
       chart.data.datasets[1].data = downloadSpeedHistory.current.map(() => p90);
 
-      chart.update('none');
+      chart.update("none");
     } else {
       const chart = uploadChartInstance.current;
       if (!chart) return;
 
       uploadSpeedHistory.current.push(mbps);
-      chart.data.labels = uploadSpeedHistory.current.map(() => '');
+      chart.data.labels = uploadSpeedHistory.current.map(() => "");
       chart.data.datasets[0].data = uploadSpeedHistory.current;
 
       const sorted = [...uploadSpeedHistory.current].sort((a, b) => a - b);
       const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
       chart.data.datasets[1].data = uploadSpeedHistory.current.map(() => p90);
 
-      chart.update('none');
+      chart.update("none");
     }
   };
 
@@ -344,70 +407,78 @@ export default function SpeedTest() {
   const fetchClientGeoFallback = async (): Promise<any> => {
     // 1. Try ipapi.co
     try {
-      const res = await fetch('https://ipapi.co/json/');
+      const res = await fetch("https://ipapi.co/json/");
       const fallbackData = await res.json();
-      if (fallbackData && fallbackData.ip && typeof fallbackData.latitude === 'number') {
+      if (
+        fallbackData &&
+        fallbackData.ip &&
+        typeof fallbackData.latitude === "number"
+      ) {
         return {
           ip: fallbackData.ip,
-          city: fallbackData.city || 'Unknown City',
-          region: fallbackData.region || 'Unknown Region',
-          country: fallbackData.country_name || 'Unknown Country',
-          countryCode: fallbackData.country || '',
+          city: fallbackData.city || "Unknown City",
+          region: fallbackData.region || "Unknown Region",
+          country: fallbackData.country_name || "Unknown Country",
+          countryCode: fallbackData.country || "",
           loc: `${fallbackData.latitude},${fallbackData.longitude}`,
-          org: fallbackData.org || 'Unknown ISP',
+          org: fallbackData.org || "Unknown ISP",
           latitude: parseFloat(fallbackData.latitude),
-          longitude: parseFloat(fallbackData.longitude)
+          longitude: parseFloat(fallbackData.longitude),
         };
       }
     } catch (err) {
-      console.warn('ipapi.co fallback failed, trying freeipapi.com...', err);
+      console.warn("ipapi.co fallback failed, trying freeipapi.com...", err);
     }
 
     // 2. Try freeipapi.com (Supports HTTPS, no API key, high limit)
     try {
-      const res = await fetch('https://freeipapi.com/api/json');
+      const res = await fetch("https://freeipapi.com/api/json");
       const fallbackData = await res.json();
-      if (fallbackData && fallbackData.ipAddress && typeof fallbackData.latitude === 'number') {
+      if (
+        fallbackData &&
+        fallbackData.ipAddress &&
+        typeof fallbackData.latitude === "number"
+      ) {
         return {
           ip: fallbackData.ipAddress,
-          city: fallbackData.cityName || 'Unknown City',
-          region: fallbackData.regionName || 'Unknown Region',
-          country: fallbackData.countryName || 'Unknown Country',
-          countryCode: fallbackData.countryCode || '',
+          city: fallbackData.cityName || "Unknown City",
+          region: fallbackData.regionName || "Unknown Region",
+          country: fallbackData.countryName || "Unknown Country",
+          countryCode: fallbackData.countryCode || "",
           loc: `${fallbackData.latitude},${fallbackData.longitude}`,
-          org: 'Unknown ISP',
+          org: "Unknown ISP",
           latitude: parseFloat(fallbackData.latitude),
-          longitude: parseFloat(fallbackData.longitude)
+          longitude: parseFloat(fallbackData.longitude),
         };
       }
     } catch (err) {
-      console.warn('freeipapi.com fallback failed, trying ipinfo.io...', err);
+      console.warn("freeipapi.com fallback failed, trying ipinfo.io...", err);
     }
 
     // 3. Try ipinfo.io
     try {
-      const res = await fetch('https://ipinfo.io/json');
+      const res = await fetch("https://ipinfo.io/json");
       const fallbackData = await res.json();
       if (fallbackData && fallbackData.ip && fallbackData.loc) {
-        const [latStr, lonStr] = fallbackData.loc.split(',');
+        const [latStr, lonStr] = fallbackData.loc.split(",");
         const lat = parseFloat(latStr);
         const lon = parseFloat(lonStr);
         if (Number.isFinite(lat) && Number.isFinite(lon)) {
           return {
             ip: fallbackData.ip,
-            city: fallbackData.city || 'Unknown City',
-            region: fallbackData.region || 'Unknown Region',
-            country: fallbackData.country || 'Unknown Country',
-            countryCode: fallbackData.country || '',
+            city: fallbackData.city || "Unknown City",
+            region: fallbackData.region || "Unknown Region",
+            country: fallbackData.country || "Unknown Country",
+            countryCode: fallbackData.country || "",
             loc: fallbackData.loc,
-            org: fallbackData.org || 'Unknown ISP',
+            org: fallbackData.org || "Unknown ISP",
             latitude: lat,
-            longitude: lon
+            longitude: lon,
           };
         }
       }
     } catch (err) {
-      console.warn('ipinfo.io fallback failed', err);
+      console.warn("ipinfo.io fallback failed", err);
     }
 
     return null;
@@ -415,10 +486,14 @@ export default function SpeedTest() {
 
   const initializeLocationData = (data: any) => {
     const hasValidCoords = (d: any) => {
-      return d &&
-        typeof d.latitude === 'number' && Number.isFinite(d.latitude) &&
-        typeof d.longitude === 'number' && Number.isFinite(d.longitude) &&
-        !(d.latitude === 0 && d.longitude === 0);
+      return (
+        d &&
+        typeof d.latitude === "number" &&
+        Number.isFinite(d.latitude) &&
+        typeof d.longitude === "number" &&
+        Number.isFinite(d.longitude) &&
+        !(d.latitude === 0 && d.longitude === 0)
+      );
     };
 
     const hasCoords = hasValidCoords(data);
@@ -439,8 +514,8 @@ export default function SpeedTest() {
     let cachedTime: string | null = null;
 
     try {
-      cachedInfo = localStorage.getItem('netspeed_client_info');
-      cachedTime = localStorage.getItem('netspeed_client_info_time');
+      cachedInfo = localStorage.getItem("netspeed_client_info");
+      cachedTime = localStorage.getItem("netspeed_client_info_time");
     } catch (_) {}
 
     const cacheExpiryMs = 1000 * 60 * 60; // 1 hour cache duration
@@ -458,17 +533,21 @@ export default function SpeedTest() {
         }
       }
 
-      setStatusMessage('Locating client IP and network…');
+      setStatusMessage("Locating client IP and network…");
 
       // Fetch client geolocation via server headers
-      const geoRes = await fetch('/api/ip-geo');
+      const geoRes = await fetch("/api/ip-geo");
       let data = await geoRes.json();
 
       const hasValidCoords = (d: any) => {
-        return d &&
-          typeof d.latitude === 'number' && Number.isFinite(d.latitude) &&
-          typeof d.longitude === 'number' && Number.isFinite(d.longitude) &&
-          !(d.latitude === 0 && d.longitude === 0);
+        return (
+          d &&
+          typeof d.latitude === "number" &&
+          Number.isFinite(d.latitude) &&
+          typeof d.longitude === "number" &&
+          Number.isFinite(d.longitude) &&
+          !(d.latitude === 0 && d.longitude === 0)
+        );
       };
 
       // Fallback if coordinates are missing/invalid, or if it is running on localhost
@@ -478,7 +557,7 @@ export default function SpeedTest() {
           data = {
             ...data,
             ...fallback,
-            isLocal: data.isLocal
+            isLocal: data.isLocal,
           };
         }
       }
@@ -489,11 +568,14 @@ export default function SpeedTest() {
 
       // Save to localStorage cache
       try {
-        localStorage.setItem('netspeed_client_info', JSON.stringify(data));
-        localStorage.setItem('netspeed_client_info_time', Date.now().toString());
+        localStorage.setItem("netspeed_client_info", JSON.stringify(data));
+        localStorage.setItem(
+          "netspeed_client_info_time",
+          Date.now().toString(),
+        );
       } catch (_) {}
     } catch (err) {
-      console.error('Failed to locate client:', err);
+      console.error("Failed to locate client:", err);
 
       // Fallback to expired cache if available before failing
       if (cachedInfo) {
@@ -506,9 +588,18 @@ export default function SpeedTest() {
         } catch (_) {}
       }
 
-      setStatusMessage('GeoIP detection failed. Using global defaults.');
+      setStatusMessage("GeoIP detection failed. Using global defaults.");
 
-      const defaultData = { ip: '0.0.0.0', city: 'Unknown', region: 'Unknown', country: 'Unknown', org: 'Unknown', latitude: 0, longitude: 0, isLocal: false };
+      const defaultData = {
+        ip: "0.0.0.0",
+        city: "Unknown",
+        region: "Unknown",
+        country: "Unknown",
+        org: "Unknown",
+        latitude: 0,
+        longitude: 0,
+        isLocal: false,
+      };
       setClientInfo(defaultData as any);
       initializeLocationData(defaultData);
     }
@@ -517,20 +608,26 @@ export default function SpeedTest() {
   // 5. Routing: pick closest servers (if location available) or all servers (if location unavailable),
   // probe in parallel, and lock best-by-latency (200 OK only)
   const routeToBestServer = async (): Promise<TestServer> => {
-    setPhase('routing');
+    setPhase("routing");
     setProgressPercent(15);
 
     const origin = window.location.origin;
 
-    const hasCoords = clientInfo &&
-      typeof clientInfo.latitude === 'number' && Number.isFinite(clientInfo.latitude) &&
-      typeof clientInfo.longitude === 'number' && Number.isFinite(clientInfo.longitude) &&
+    const hasCoords =
+      clientInfo &&
+      typeof clientInfo.latitude === "number" &&
+      Number.isFinite(clientInfo.latitude) &&
+      typeof clientInfo.longitude === "number" &&
+      Number.isFinite(clientInfo.longitude) &&
       !(clientInfo.latitude === 0 && clientInfo.longitude === 0);
 
     // If client coordinates are valid, probe 3 closest candidate servers.
     // If client coordinates are unavailable, probe ALL servers to find the lowest latency.
     const candidates = hasCoords
-      ? pickClosestN(withDistances(clientInfo.latitude, clientInfo.longitude, SERVER_LIST), 3)
+      ? pickClosestN(
+          withDistances(clientInfo.latitude, clientInfo.longitude, SERVER_LIST),
+          3,
+        )
       : withDistances(0, 0, SERVER_LIST);
 
     if (hasCoords) {
@@ -540,8 +637,8 @@ export default function SpeedTest() {
     const isAllProbe = !hasCoords;
     setStatusMessage(
       isAllProbe
-        ? 'Routing: selecting optimal server (all locations) via parallel latency probes…'
-        : 'Routing: selecting optimal server (3 closest) via parallel latency probes…'
+        ? "Routing: selecting optimal server (all locations) via parallel latency probes…"
+        : "Routing: selecting optimal server (3 closest) via parallel latency probes…",
     );
 
     const results: { [key: string]: number } = {};
@@ -551,19 +648,19 @@ export default function SpeedTest() {
     try {
       const warmupUrl = `${origin}/api/ping?warmup=true&cb=${Date.now()}`;
       const startWarmup = performance.now();
-      const res = await fetch(warmupUrl, { cache: 'no-store' });
+      const res = await fetch(warmupUrl, { cache: "no-store" });
       await res.text();
       hostLatency = performance.now() - startWarmup;
     } catch (_) {
       hostLatency = 20; // fallback
     }
 
-    const isLocalHost = 
-      window.location.hostname === 'localhost' || 
-      window.location.hostname === '127.0.0.1' || 
-      window.location.hostname === '::1' || 
-      window.location.hostname.startsWith('192.168.') || 
-      window.location.hostname.startsWith('10.') ||
+    const isLocalHost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "::1" ||
+      window.location.hostname.startsWith("192.168.") ||
+      window.location.hostname.startsWith("10.") ||
       /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname);
 
     const probe = async (srv: TestServer) => {
@@ -578,7 +675,10 @@ export default function SpeedTest() {
           ? `${origin}/api/ping?region=${srv.region}&serverId=${srv.id}&clientLat=${lat}&clientLon=${lon}&hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`
           : `${origin}/api/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`;
 
-        const res = await fetch(testUrl, { cache: 'no-store', signal: controller.signal });
+        const res = await fetch(testUrl, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
         if (!res.ok) return { srv, latency: undefined };
 
         await res.text();
@@ -598,14 +698,17 @@ export default function SpeedTest() {
 
     // Populate results map for all successful probes
     for (const p of probes) {
-      if (typeof p.latency === 'number' && Number.isFinite(p.latency)) {
+      if (typeof p.latency === "number" && Number.isFinite(p.latency)) {
         results[p.srv.id] = p.latency;
       }
     }
 
     // Sort successful probes using the bucketing + distance prioritization algorithm
     const successfulProbes = probes
-      .filter((p): p is { srv: TestServer; latency: number } => typeof p.latency === 'number' && Number.isFinite(p.latency))
+      .filter(
+        (p): p is { srv: TestServer; latency: number } =>
+          typeof p.latency === "number" && Number.isFinite(p.latency),
+      )
       .sort((a, b) => {
         // Group latencies into 15ms buckets to treat minor jitter differences as equivalent
         const bucketA = Math.floor(a.latency / 15);
@@ -613,23 +716,26 @@ export default function SpeedTest() {
         if (bucketA !== bucketB) {
           return bucketA - bucketB; // Prioritize lower latency category
         }
-        
+
         // If in the same latency bucket, prioritize the geographically closest server
         const distA = a.srv.distance ?? Infinity;
         const distB = b.srv.distance ?? Infinity;
         if (distA !== distB) {
           return distA - distB;
         }
-        
+
         // Fallback to exact latency if distances are also identical
         return a.latency - b.latency;
       });
 
-    const locked = successfulProbes.length > 0 ? successfulProbes[0].srv : candidates[0];
-    if (!locked) throw new Error('No candidate servers available for routing.');
+    const locked =
+      successfulProbes.length > 0 ? successfulProbes[0].srv : candidates[0];
+    if (!locked) throw new Error("No candidate servers available for routing.");
     setRoutingResults(results);
     setSelectedServer(locked);
-    setStatusMessage(`Selected optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ''}`);
+    setStatusMessage(
+      `Selected optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ""}`,
+    );
 
     setProgressPercent(30);
     await sleep(300);
@@ -638,7 +744,7 @@ export default function SpeedTest() {
 
   // 6. Primary Speed Test Orchestrator
   const startSpeedTest = async () => {
-    if (phase !== 'idle' && phase !== 'complete' && phase !== 'error') return;
+    if (phase !== "idle" && phase !== "complete" && phase !== "error") return;
 
     const clientLat = clientInfo?.latitude || 0;
     const clientLon = clientInfo?.longitude || 0;
@@ -655,24 +761,30 @@ export default function SpeedTest() {
     setDownloadRequests([]);
     setUploadRequests([]);
 
-    setLatencyStats({ current: 0, avg: 0, jitter: 0, min: Infinity, max: 0, latencies: [] });
+    setLatencyStats({
+      current: 0,
+      avg: 0,
+      jitter: 0,
+      min: Infinity,
+      max: 0,
+      latencies: [],
+    });
     setDownloadStats({ current: 0, avg: 0, peak: 0 });
     setUploadStats({ current: 0, avg: 0, peak: 0 });
     setDlLoadedLatency(0);
     setDlLoadedJitter(0);
     setUlLoadedLatency(0);
     setUlLoadedJitter(0);
-    setStability(100);
     setPacketLoss(0);
     setProgressPercent(0);
-    setCompletionTime('');
+    setCompletionTime("");
 
     // Initial routing pre-ping (top-3 closest + parallel 200 OK latency probe)
     const anchorServer = await routeToBestServer();
 
     // Launch worker thread
     initCharts();
-    setPhase('ping');
+    setPhase("ping");
     setStatusMessage(`Pinging locked server: ${anchorServer.name}`);
     setProgressPercent(40);
 
@@ -682,8 +794,8 @@ export default function SpeedTest() {
 
     // Instantiate worker from local path
     workerRef.current = new Worker(
-      new URL('../workers/speedtest.worker.ts', import.meta.url),
-      { type: 'module' }
+      new URL("../workers/speedtest.worker.ts", import.meta.url),
+      { type: "module" },
     );
 
     workerRef.current.onmessage = (e: MessageEvent) => {
@@ -691,89 +803,89 @@ export default function SpeedTest() {
 
       switch (type) {
         // Ping Progress Messages
-        case 'PING_PROGRESS': {
+        case "PING_PROGRESS": {
           const stats = {
             sent: data.pingSent || data.iteration,
             lost: data.pingLost || 0,
-            latencies: data.latencies || []
+            latencies: data.latencies || [],
           };
           unloadedPingStatsRef.current = stats;
           setUnloadedPingStats(stats);
 
           setLatencyStats({
             current: data.latency,
-            avg: data.latencies.reduce((a: number, b: number) => a + b, 0) / data.latencies.length,
+            avg:
+              data.latencies.reduce((a: number, b: number) => a + b, 0) /
+              data.latencies.length,
             jitter: data.jitter,
             min: Math.min(...data.latencies),
             max: Math.max(...data.latencies),
-            latencies: data.latencies
+            latencies: data.latencies,
           });
-          setProgressPercent(40 + Math.round((data.iteration / data.totalIterations) * 10));
+          setProgressPercent(
+            40 + Math.round((data.iteration / data.totalIterations) * 10),
+          );
           break;
         }
 
-        case 'PING_COMPLETE': {
+        case "PING_COMPLETE": {
           const stats = {
             sent: data.pingSent || data.latencies.length,
             lost: data.pingLost || 0,
-            latencies: data.latencies || []
+            latencies: data.latencies || [],
           };
           unloadedPingStatsRef.current = stats;
           setUnloadedPingStats(stats);
 
           setProgressPercent(50);
           // Transition to Download
-          setPhase('download');
-          setStatusMessage('Measuring download throughput (concurrent streams)…');
+          setPhase("download");
+          setStatusMessage(
+            "Measuring download throughput (concurrent streams)…",
+          );
 
           const pings = data.latencies || [];
-          const calculatedAvgPing = pings.length > 0
-            ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
-            : 20;
+          const calculatedAvgPing =
+            pings.length > 0
+              ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+              : 20;
 
           workerRef.current?.postMessage({
-            type: 'START_DOWNLOAD',
+            type: "START_DOWNLOAD",
             baseUrl,
             region,
             serverId: anchorServer.id,
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 3
+            parallelStreams: 3,
           });
           break;
         }
 
         // Download Progress Messages
-        case 'DOWNLOAD_PROGRESS':
+        case "DOWNLOAD_PROGRESS":
           const downloadMbps = data.instantaneousSpeed / 1000000;
-          const downloadAvgMbps = data.averageSpeed / 1000000;
 
           setDownloadStats({
             current: data.instantaneousSpeed,
             avg: data.averageSpeed,
-            peak: data.peakSpeed
+            peak: data.peakSpeed,
           });
 
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
-          updateThroughputChart('download', downloadMbps);
-          setProgressPercent(Math.min(74, 50 + Math.round((data.elapsedTime / 8) * 25))); // cap at 74%
-
-          // Compute simple live stability percentage based on variance
-          if (downloadSpeedHistory.current.length > 5) {
-            const devSum = downloadSpeedHistory.current.reduce((sum, speed) => sum + Math.abs(speed - downloadAvgMbps), 0);
-            const devAvg = devSum / downloadSpeedHistory.current.length;
-            const stabilityVal = Math.max(20, 100 - (devAvg / downloadAvgMbps) * 100);
-            setStability(Math.round(stabilityVal));
-          }
+          updateThroughputChart("download", downloadMbps);
+          setProgressPercent(
+            Math.min(74, 50 + Math.round((data.elapsedTime / 8) * 25)),
+          ); // cap at 74%
 
           if (data.loadedLatencies) {
             const stats = {
               sent: data.loadedPingSent || 0,
               lost: data.loadedPingLost || 0,
-              latencies: data.loadedLatencies || []
+              latencies: data.loadedLatencies || [],
             };
             dlLoadedPingStatsRef.current = stats;
             setDlLoadedPingStats(stats);
@@ -784,11 +896,11 @@ export default function SpeedTest() {
           }
           break;
 
-        case 'DOWNLOAD_COMPLETE': {
+        case "DOWNLOAD_COMPLETE": {
           const stats = {
             sent: data.loadedPingSent || 0,
             lost: data.loadedPingLost || 0,
-            latencies: data.loadedLatencies || []
+            latencies: data.loadedLatencies || [],
           };
           dlLoadedPingStatsRef.current = stats;
           setDlLoadedPingStats(stats);
@@ -796,13 +908,13 @@ export default function SpeedTest() {
           setDownloadStats({
             current: 0,
             avg: data.averageSpeed,
-            peak: data.peakSpeed
+            peak: data.peakSpeed,
           });
 
           setProgressPercent(75);
           // Transition to Upload
-          setPhase('upload');
-          setStatusMessage('Measuring upload throughput (concurrent streams)…');
+          setPhase("upload");
+          setStatusMessage("Measuring upload throughput (concurrent streams)…");
 
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
@@ -813,43 +925,46 @@ export default function SpeedTest() {
           }
 
           const pings = unloadedPingStatsRef.current.latencies || [];
-          const calculatedAvgPing = pings.length > 0
-            ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
-            : 20;
+          const calculatedAvgPing =
+            pings.length > 0
+              ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+              : 20;
 
           workerRef.current?.postMessage({
-            type: 'START_UPLOAD',
+            type: "START_UPLOAD",
             baseUrl,
             region,
             serverId: anchorServer.id,
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 3
+            parallelStreams: 3,
           });
           break;
         }
 
         // Upload Progress Messages
-        case 'UPLOAD_PROGRESS':
+        case "UPLOAD_PROGRESS":
           const uploadMbps = data.instantaneousSpeed / 1000000;
           setUploadStats({
             current: data.instantaneousSpeed,
             avg: data.averageSpeed,
-            peak: data.peakSpeed
+            peak: data.peakSpeed,
           });
 
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
-          updateThroughputChart('upload', uploadMbps);
-          setProgressPercent(Math.min(99, 75 + Math.round((data.elapsedTime / 8) * 20))); // cap at 99%
+          updateThroughputChart("upload", uploadMbps);
+          setProgressPercent(
+            Math.min(99, 75 + Math.round((data.elapsedTime / 8) * 20)),
+          ); // cap at 99%
 
           if (data.loadedLatencies) {
             const stats = {
               sent: data.loadedPingSent || 0,
               lost: data.loadedPingLost || 0,
-              latencies: data.loadedLatencies || []
+              latencies: data.loadedLatencies || [],
             };
             ulLoadedPingStatsRef.current = stats;
             setUlLoadedPingStats(stats);
@@ -860,11 +975,11 @@ export default function SpeedTest() {
           }
           break;
 
-        case 'UPLOAD_COMPLETE': {
+        case "UPLOAD_COMPLETE": {
           const stats = {
             sent: data.loadedPingSent || 0,
             lost: data.loadedPingLost || 0,
-            latencies: data.loadedLatencies || []
+            latencies: data.loadedLatencies || [],
           };
           ulLoadedPingStatsRef.current = stats;
           setUlLoadedPingStats(stats);
@@ -872,7 +987,7 @@ export default function SpeedTest() {
           setUploadStats({
             current: 0,
             avg: data.averageSpeed,
-            peak: data.peakSpeed
+            peak: data.peakSpeed,
           });
 
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
@@ -888,13 +1003,13 @@ export default function SpeedTest() {
           break;
         }
 
-        case 'CANCELLED':
-          setPhase('idle');
-          setStatusMessage('Speed test stopped by user.');
+        case "CANCELLED":
+          setPhase("idle");
+          setStatusMessage("Speed test stopped by user.");
           break;
 
-        case 'ERROR':
-          setPhase('error');
+        case "ERROR":
+          setPhase("error");
           setStatusMessage(`Test failure: ${data.message}`);
           break;
       }
@@ -902,29 +1017,44 @@ export default function SpeedTest() {
 
     // Trigger Ping test inside Worker
     workerRef.current.postMessage({
-      type: 'START_PING',
+      type: "START_PING",
       baseUrl,
       region,
       serverId: anchorServer.id,
       clientLat,
-      clientLon
+      clientLon,
     });
   };
 
   // 7. Mock packet loss framework logic
   const runPacketLossCheck = () => {
-    setPhase('complete');
+    setPhase("complete");
     setProgressPercent(100);
-    setStatusMessage('Speed test complete.');
-    setCompletionTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    setStatusMessage("Speed test complete.");
+    setCompletionTime(
+      new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+    );
 
-    const totalSent = unloadedPingStatsRef.current.sent + dlLoadedPingStatsRef.current.sent + ulLoadedPingStatsRef.current.sent;
-    const totalLost = unloadedPingStatsRef.current.lost + dlLoadedPingStatsRef.current.lost + ulLoadedPingStatsRef.current.lost;
+    const totalSent =
+      unloadedPingStatsRef.current.sent +
+      dlLoadedPingStatsRef.current.sent +
+      ulLoadedPingStatsRef.current.sent;
+    const totalLost =
+      unloadedPingStatsRef.current.lost +
+      dlLoadedPingStatsRef.current.lost +
+      ulLoadedPingStatsRef.current.lost;
 
     // Calculated packet loss based on actual pings; fallback if zero packets were sent
-    const lossPercentage = totalSent > 0
-      ? parseFloat(((totalLost / totalSent) * 100).toFixed(1))
-      : (Math.random() < 0.2 ? parseFloat((Math.random() * 0.4).toFixed(1)) : 0.0);
+    const lossPercentage =
+      totalSent > 0
+        ? parseFloat(((totalLost / totalSent) * 100).toFixed(1))
+        : Math.random() < 0.2
+          ? parseFloat((Math.random() * 0.4).toFixed(1))
+          : 0.0;
     setPacketLoss(lossPercentage);
 
     if (workerRef.current) {
@@ -935,42 +1065,55 @@ export default function SpeedTest() {
 
   const cancelSpeedTest = () => {
     if (workerRef.current) {
-      workerRef.current.postMessage({ type: 'CANCEL' });
+      workerRef.current.postMessage({ type: "CANCEL" });
       return;
     }
-    setPhase('idle');
-    setStatusMessage('Test cancelled.');
+    setPhase("idle");
+    setStatusMessage("Test cancelled.");
   };
 
   const downloadTestResult = () => {
     const allRequests = [
       ...downloadRequestsRef.current,
-      ...uploadRequestsRef.current
+      ...uploadRequestsRef.current,
     ].sort((a, b) => a.time - b.time);
 
-    const headers = ['time', 'direction', 'bytes', 'latency', 'bps', 'duration', 'serverTime', 'responseSize', 'loadedLatencies'];
-    const csvRows = [headers.join(',')];
+    const headers = [
+      "time",
+      "direction",
+      "bytes",
+      "latency",
+      "bps",
+      "duration",
+      "serverTime",
+      "responseSize",
+      "loadedLatencies",
+    ];
+    const csvRows = [headers.join(",")];
 
     for (const req of allRequests) {
-      const pingsStr = req.loadedLatencies && req.loadedLatencies.length > 0
-        ? req.loadedLatencies.join(' ')
-        : '';
-      csvRows.push([
-        req.time,
-        req.direction,
-        req.bytes,
-        req.latency,
-        req.bps,
-        req.duration,
-        req.serverTime,
-        req.responseSize,
-        pingsStr
-      ].join(','));
+      const pingsStr =
+        req.loadedLatencies && req.loadedLatencies.length > 0
+          ? req.loadedLatencies.join(" ")
+          : "";
+      csvRows.push(
+        [
+          req.time,
+          req.direction,
+          req.bytes,
+          req.latency,
+          req.bps,
+          req.duration,
+          req.serverTime,
+          req.responseSize,
+          pingsStr,
+        ].join(","),
+      );
     }
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = `speed-results-${Math.floor(Date.now() / 1000)}.csv`;
     a.click();
@@ -988,27 +1131,58 @@ export default function SpeedTest() {
           Network Speed Test
         </h1>
         <p className="text-sm md:text-base text-body max-w-2xl mt-1">
-          A professional-grade, latency-critical speed test engine measuring packet jitters, concurrent downloads, and uploads at the edge.
+          A professional-grade, latency-critical speed test engine measuring
+          packet jitters, concurrent downloads, and uploads at the edge.
         </p>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 mb-4">
-          <a href="/about" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">About Us</a>
-          <span className="text-hairline-strong text-[10px] select-none">•</span>
-          <a href="/contact" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Contact Us</a>
-          <span className="text-hairline-strong text-[10px] select-none">•</span>
-          <a href="/privacy" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Privacy Policy</a>
-          <span className="text-hairline-strong text-[10px] select-none">•</span>
-          <a href="/terms" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Terms & Conditions</a>
+          <a
+            href="/about"
+            className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors"
+          >
+            About Us
+          </a>
+          <span className="text-hairline-strong text-[10px] select-none">
+            •
+          </span>
+          <a
+            href="/contact"
+            className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors"
+          >
+            Contact Us
+          </a>
+          <span className="text-hairline-strong text-[10px] select-none">
+            •
+          </span>
+          <a
+            href="/privacy"
+            className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors"
+          >
+            Privacy Policy
+          </a>
+          <span className="text-hairline-strong text-[10px] select-none">
+            •
+          </span>
+          <a
+            href="/terms"
+            className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors"
+          >
+            Terms & Conditions
+          </a>
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-stretch">
-          {phase === 'idle' || phase === 'complete' || phase === 'error' ? (
+          {phase === "idle" || phase === "complete" || phase === "error" ? (
             <button
               onClick={startSpeedTest}
               type="button"
               className="w-full h-[60px] sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Play className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Start Speed Test
+              <Play
+                className="w-4 h-4 fill-on-primary text-on-primary"
+                aria-hidden="true"
+              />{" "}
+              Start Speed Test
             </button>
           ) : (
             <button
@@ -1016,7 +1190,11 @@ export default function SpeedTest() {
               type="button"
               className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Square className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Stop Test
+              <Square
+                className="w-4 h-4 fill-on-primary text-on-primary"
+                aria-hidden="true"
+              />{" "}
+              Stop Test
             </button>
           )}
 
@@ -1027,7 +1205,11 @@ export default function SpeedTest() {
               title="Download results"
               className="w-full h-[60px] sm:w-auto bg-error-soft text-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
             >
-              <Download className="w-4 h-4 fill-primary text-primary" aria-hidden="true" /> Download Results
+              <Download
+                className="w-4 h-4 fill-primary text-primary"
+                aria-hidden="true"
+              />{" "}
+              Download Results
             </button>
           ) : null}
         </div>
@@ -1042,8 +1224,11 @@ export default function SpeedTest() {
       </div>
 
       {/* Progress Bar & Status Text */}
-      {phase !== 'idle' && phase !== 'complete' && phase !== 'error' ? (
-        <div className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs" aria-live="polite">
+      {phase !== "idle" && phase !== "complete" && phase !== "error" ? (
+        <div
+          className="w-full flex flex-col gap-2 bg-canvas border border-hairline p-4 rounded-lg shadow-xs"
+          aria-live="polite"
+        >
           <div className="flex justify-between items-center text-xs font-mono text-mute">
             <span>PROGRESS</span>
             <span className="tabular-nums">{progressPercent}%</span>
@@ -1053,20 +1238,29 @@ export default function SpeedTest() {
               className="h-full rounded-full transition-[width,background-color] duration-300"
               style={{
                 width: `${progressPercent}%`,
-                backgroundColor: phase === 'download' ? '#eb6f20' : phase === 'upload' ? '#8b5cf6' : 'var(--color-primary)'
+                backgroundColor:
+                  phase === "download"
+                    ? "#eb6f20"
+                    : phase === "upload"
+                      ? "#8b5cf6"
+                      : "var(--color-primary)",
               }}
             />
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-2 h-2 rounded-full bg-success animate-ping" aria-hidden="true" />
-            <span className="text-wrap text-xs text-body font-mono truncate">{statusMessage}</span>
+            <span
+              className="w-2 h-2 rounded-full bg-success animate-ping"
+              aria-hidden="true"
+            />
+            <span className="text-wrap text-xs text-body font-mono truncate">
+              {statusMessage}
+            </span>
           </div>
         </div>
       ) : null}
 
       {/* 3. Main Dashboard Grid */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-
         {/* Column 1: Download */}
         <div className="md:col-span-4 flex flex-col gap-4 bg-canvas border border-hairline p-6 rounded-lg shadow-xs justify-between">
           <div>
@@ -1077,21 +1271,27 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-2 mb-4">
               <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === 'download'
+                {phase === "download"
                   ? formatSpeed(downloadStats.current).value
-                  : (downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).value : '0.0')}
+                  : downloadStats.avg > 0
+                    ? formatSpeed(downloadStats.avg).value
+                    : "0.0"}
               </span>
               <span className="text-xl text-mute font-mono">
-                {phase === 'download'
+                {phase === "download"
                   ? formatSpeed(downloadStats.current).unit
-                  : (downloadStats.avg > 0 ? formatSpeed(downloadStats.avg).unit : 'Mbps')}
+                  : downloadStats.avg > 0
+                    ? formatSpeed(downloadStats.avg).unit
+                    : "Mbps"}
               </span>
             </div>
 
             {/* Orange Area Chart */}
             <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
               <canvas ref={downloadChartRef} />
-              {(phase === 'idle' || phase === 'routing' || phase === 'ping') && (
+              {(phase === "idle" ||
+                phase === "routing" ||
+                phase === "ping") && (
                 <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
                   Chart starts drawing during download test.
                 </div>
@@ -1102,7 +1302,9 @@ export default function SpeedTest() {
           <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
             <span>Peak Speed:</span>
             <span className="font-semibold text-ink tabular-nums">
-              {downloadStats.peak > 0 ? `${formatSpeed(downloadStats.peak).value} ${formatSpeed(downloadStats.peak).unit}` : '—'}
+              {downloadStats.peak > 0
+                ? `${formatSpeed(downloadStats.peak).value} ${formatSpeed(downloadStats.peak).unit}`
+                : "—"}
             </span>
           </div>
         </div>
@@ -1117,21 +1319,28 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-2 mb-4">
               <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === 'upload'
+                {phase === "upload"
                   ? formatSpeed(uploadStats.current).value
-                  : (uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).value : '0.0')}
+                  : uploadStats.avg > 0
+                    ? formatSpeed(uploadStats.avg).value
+                    : "0.0"}
               </span>
               <span className="text-xl text-mute font-mono">
-                {phase === 'upload'
+                {phase === "upload"
                   ? formatSpeed(uploadStats.current).unit
-                  : (uploadStats.avg > 0 ? formatSpeed(uploadStats.avg).unit : 'Mbps')}
+                  : uploadStats.avg > 0
+                    ? formatSpeed(uploadStats.avg).unit
+                    : "Mbps"}
               </span>
             </div>
 
             {/* Purple Area Chart */}
             <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
               <canvas ref={uploadChartRef} />
-              {(phase === 'idle' || phase === 'routing' || phase === 'ping' || phase === 'download') && (
+              {(phase === "idle" ||
+                phase === "routing" ||
+                phase === "ping" ||
+                phase === "download") && (
                 <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
                   Chart starts drawing during upload test.
                 </div>
@@ -1142,14 +1351,15 @@ export default function SpeedTest() {
           <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
             <span>Peak Speed:</span>
             <span className="font-semibold text-ink tabular-nums">
-              {uploadStats.peak > 0 ? `${formatSpeed(uploadStats.peak).value} ${formatSpeed(uploadStats.peak).unit}` : '—'}
+              {uploadStats.peak > 0
+                ? `${formatSpeed(uploadStats.peak).value} ${formatSpeed(uploadStats.peak).unit}`
+                : "—"}
             </span>
           </div>
         </div>
 
         {/* Column 3: Latency, Jitter, Packet Loss Stack */}
         <div className="md:col-span-4 flex flex-col gap-4">
-
           {/* Latency card */}
           <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-col gap-2">
             <div className="flex justify-between items-center">
@@ -1162,19 +1372,41 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {unloadedPingStats.latencies.length > 0 ? latencyStats.avg.toFixed(1) : '—'}
+                {unloadedPingStats.latencies.length > 0
+                  ? latencyStats.avg.toFixed(1)
+                  : "—"}
               </span>
               <span className="text-xs text-mute font-mono">ms (unloaded)</span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
-                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedPingStats.latencies.length > 0 ? `${dlLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowDown
+                  className="w-3.5 h-3.5 text-[#eb6f20]"
+                  aria-hidden="true"
+                />
+                <span>
+                  Down:{" "}
+                  <span className="font-semibold text-ink font-mono tabular-nums">
+                    {dlLoadedPingStats.latencies.length > 0
+                      ? `${dlLoadedLatency.toFixed(0)} ms`
+                      : "—"}
+                  </span>
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
-                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedPingStats.latencies.length > 0 ? `${ulLoadedLatency.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowUp
+                  className="w-3.5 h-3.5 text-[#8b5cf6]"
+                  aria-hidden="true"
+                />
+                <span>
+                  Up:{" "}
+                  <span className="font-semibold text-ink font-mono tabular-nums">
+                    {ulLoadedPingStats.latencies.length > 0
+                      ? `${ulLoadedLatency.toFixed(0)} ms`
+                      : "—"}
+                  </span>
+                </span>
               </div>
             </div>
           </div>
@@ -1191,19 +1423,41 @@ export default function SpeedTest() {
 
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {unloadedPingStats.latencies.length > 1 ? latencyStats.jitter.toFixed(1) : '—'}
+                {unloadedPingStats.latencies.length > 1
+                  ? latencyStats.jitter.toFixed(1)
+                  : "—"}
               </span>
               <span className="text-xs text-mute font-mono">ms</span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
               <div className="flex items-center gap-1">
-                <ArrowDown className="w-3.5 h-3.5 text-[#eb6f20]" aria-hidden="true" />
-                <span>Down: <span className="font-semibold text-ink font-mono tabular-nums">{dlLoadedPingStats.latencies.length > 1 ? `${dlLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowDown
+                  className="w-3.5 h-3.5 text-[#eb6f20]"
+                  aria-hidden="true"
+                />
+                <span>
+                  Down:{" "}
+                  <span className="font-semibold text-ink font-mono tabular-nums">
+                    {dlLoadedPingStats.latencies.length > 1
+                      ? `${dlLoadedJitter.toFixed(0)} ms`
+                      : "—"}
+                  </span>
+                </span>
               </div>
               <div className="flex items-center gap-1">
-                <ArrowUp className="w-3.5 h-3.5 text-[#8b5cf6]" aria-hidden="true" />
-                <span>Up: <span className="font-semibold text-ink font-mono tabular-nums">{ulLoadedPingStats.latencies.length > 1 ? `${ulLoadedJitter.toFixed(0)} ms` : '—'}</span></span>
+                <ArrowUp
+                  className="w-3.5 h-3.5 text-[#8b5cf6]"
+                  aria-hidden="true"
+                />
+                <span>
+                  Up:{" "}
+                  <span className="font-semibold text-ink font-mono tabular-nums">
+                    {ulLoadedPingStats.latencies.length > 1
+                      ? `${ulLoadedJitter.toFixed(0)} ms`
+                      : "—"}
+                  </span>
+                </span>
               </div>
             </div>
           </div>
@@ -1216,24 +1470,32 @@ export default function SpeedTest() {
                   <span>PACKET LOSS</span>
                   <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. It results in choppy voice calls, freezing videos, and gaming lag. Ideally, packet loss should be 0.0%." />
                 </div>
-                <AlertTriangle className="w-4 h-4 text-mute" aria-hidden="true" />
+                <AlertTriangle
+                  className="w-4 h-4 text-mute"
+                  aria-hidden="true"
+                />
               </div>
 
               <div className="flex items-baseline gap-1">
                 <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                  {phase === 'complete' ? `${packetLoss}%` : phase === 'idle' ? '—' : '0.0%'}
+                  {phase === "complete"
+                    ? `${packetLoss}%`
+                    : phase === "idle"
+                      ? "—"
+                      : "0.0%"}
                 </span>
               </div>
             </div>
 
             <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex justify-between items-center">
               <span>Measured Packet Loss</span>
-              <span className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}>
+              <span
+                className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}
+              >
                 {packetLoss > 0 ? "Suboptimal" : "Excellent"}
               </span>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -1263,7 +1525,6 @@ export default function SpeedTest() {
         selectedServer={selectedServer}
         routingResults={routingResults}
       />
-
     </div>
   );
 }

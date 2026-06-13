@@ -31,7 +31,8 @@
     "wrangler": "^4.99.0"
   },
   "devDependencies": {
-    "@types/nodemailer": "^8.0.0"
+    "@types/nodemailer": "^8.0.0",
+    "prettier-plugin-astro": "^0.14.1"
   },
   "overrides": {
     "vite": "^7"

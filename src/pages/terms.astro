@@ -10,10 +10,14 @@ import Layout from "../layouts/Layout.astro";
     <div class="max-w-3xl mx-auto flex flex-col gap-10">
       {/* Header */}
       <div class="flex flex-col gap-3 border-b border-hairline pb-6">
-        <span class="font-mono text-xs uppercase tracking-wider text-mute block">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+        >
           Platform Regulations
         </span>
-        <h1 class="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
+        <h1
+          class="text-3xl md:text-5xl font-semibold tracking-tight text-ink font-sans"
+        >
           Terms & Conditions.
         </h1>
         <p class="text-xs font-mono text-mute mt-1">
@@ -22,13 +26,18 @@ import Layout from "../layouts/Layout.astro";
       </div>
 
       {/* Terms Content */}
-      <div class="flex flex-col gap-8 text-sm md:text-base text-body leading-relaxed">
+      <div
+        class="flex flex-col gap-8 text-sm md:text-base text-body leading-relaxed"
+      >
         <section class="flex flex-col gap-3">
           <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
             1. Terms acceptance.
           </h2>
           <p>
-            By accessing NetSpeed, you agree to comply with these platform rules, routing conditions, and legal policies. If you do not accept these constraints, you are restricted from utilizing the diagnostic telemetry tool.
+            By accessing NetSpeed, you agree to comply with these platform
+            rules, routing conditions, and legal policies. If you do not accept
+            these constraints, you are restricted from utilizing the diagnostic
+            telemetry tool.
           </p>
         </section>
 
@@ -37,13 +46,22 @@ import Layout from "../layouts/Layout.astro";
             2. Permitted application and constraints.
           </h2>
           <p>
-            NetSpeed provides speed, latency, jitter, and diagnostic checks. You are permitted to execute tests to verify personal or corporate network capabilities.
+            NetSpeed provides speed, latency, jitter, and diagnostic checks. You
+            are permitted to execute tests to verify personal or corporate
+            network capabilities.
           </p>
-          <p class="text-xs md:text-sm text-body bg-canvas-soft-2 p-4 rounded-md border border-hairline font-mono uppercase tracking-wide">
-            WARNING: Automated scraping of the API endpoints, scheduled packet flooding, DDoS simulation tests, or using this platform inside command-line load testing cron schedules is strictly prohibited without explicit engineering licensing.
+          <p
+            class="text-xs md:text-sm text-body bg-canvas-soft-2 p-4 rounded-md border border-hairline font-mono uppercase tracking-wide"
+          >
+            WARNING: Automated scraping of the API endpoints, scheduled packet
+            flooding, DDoS simulation tests, or using this platform inside
+            command-line load testing cron schedules is strictly prohibited
+            without explicit engineering licensing.
           </p>
           <p>
-            If our monitoring detects anomalies resembling routing scripts or socket flood cycles from a singular IP address, the endpoint will be rate-limited or permanently blocked from communication handshakes.
+            If our monitoring detects anomalies resembling routing scripts or
+            socket flood cycles from a singular IP address, the endpoint will be
+            rate-limited or permanently blocked from communication handshakes.
           </p>
         </section>
 
@@ -52,10 +70,16 @@ import Layout from "../layouts/Layout.astro";
             3. Disclaimer of telemetry warranty.
           </h2>
           <p>
-            Network measurements are volatile. Results can fluctuate depending on local router queueing, device memory status, wireless signal interference, or regional routing traffic spikes.
+            Network measurements are volatile. Results can fluctuate depending
+            on local router queueing, device memory status, wireless signal
+            interference, or regional routing traffic spikes.
           </p>
           <p>
-            All benchmarks and scores are provided on an <strong>"as-is"</strong> and <strong>"as-available"</strong> basis without explicit performance warranties. NetSpeed does not guarantee that the server locations are online continuously, or that telemetry results constitute binding evidence in ISP contract disputes.
+            All benchmarks and scores are provided on an <strong>"as-is"</strong
+            > and <strong>"as-available"</strong> basis without explicit performance
+            warranties. NetSpeed does not guarantee that the server locations are
+            online continuously, or that telemetry results constitute binding evidence
+            in ISP contract disputes.
           </p>
         </section>
 
@@ -64,7 +88,10 @@ import Layout from "../layouts/Layout.astro";
             4. Liability limits.
           </h2>
           <p>
-            To the maximum extent permitted under regional laws, NetSpeed is not liable for data loss, network outages, router degradation, billing overages, or business interruptions caused by executing concurrent payload speed tests.
+            To the maximum extent permitted under regional laws, NetSpeed is not
+            liable for data loss, network outages, router degradation, billing
+            overages, or business interruptions caused by executing concurrent
+            payload speed tests.
           </p>
         </section>
 
@@ -73,7 +100,12 @@ import Layout from "../layouts/Layout.astro";
             5. Governing updates.
           </h2>
           <p>
-            These terms are governed and updated in compliance with core network regulations. If you have questions regarding data routing parameters or custom deployment options, contact us through our <a href="/contact" class="text-link hover:underline">Contact page</a>.
+            These terms are governed and updated in compliance with core network
+            regulations. If you have questions regarding data routing parameters
+            or custom deployment options, contact us through our <a
+              href="/contact"
+              class="text-link hover:underline">Contact page</a
+            >.
           </p>
         </section>
       </div>

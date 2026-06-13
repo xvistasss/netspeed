@@ -1,6 +1,5 @@
-import React from 'react';
-import InfoTooltip from './InfoTooltip';
-import type { TestPhase } from '../../utils/speedTestUtils';
+import InfoTooltip from "./InfoTooltip";
+import type { TestPhase } from "../../utils/speedTestUtils";
 
 interface QualityScoresProps {
   phase: TestPhase;
@@ -15,7 +14,7 @@ export default function QualityScores({
   downloadAvg,
   uploadAvg,
   latencyAvg,
-  latencyJitter
+  latencyJitter,
 }: QualityScoresProps) {
   const getQualityScores = () => {
     const dlMbps = downloadAvg / 1000000;
@@ -24,69 +23,71 @@ export default function QualityScores({
     const jit = latencyJitter;
 
     // Initial defaults before metrics are available
-    if (phase === 'idle' || phase === 'routing') {
+    if (phase === "idle" || phase === "routing") {
       return {
-        streaming: { rating: '—', color: 'text-mute' },
-        gaming: { rating: '—', color: 'text-mute' },
-        chatting: { rating: '—', color: 'text-mute' }
+        streaming: { rating: "—", color: "text-mute" },
+        gaming: { rating: "—", color: "text-mute" },
+        chatting: { rating: "—", color: "text-mute" },
       };
     }
 
-    let streamingRating = 'Good';
-    let streamingColor = 'text-link';
+    let streamingRating = "Good";
+    let streamingColor = "text-link";
     if (dlMbps >= 25) {
-      streamingRating = 'Great';
-      streamingColor = 'text-link';
+      streamingRating = "Great";
+      streamingColor = "text-link";
     } else if (dlMbps >= 5) {
-      streamingRating = 'Good';
-      streamingColor = 'text-link';
+      streamingRating = "Good";
+      streamingColor = "text-link";
     } else if (dlMbps > 0) {
-      streamingRating = 'Bad';
-      streamingColor = 'text-error';
+      streamingRating = "Bad";
+      streamingColor = "text-error";
     } else {
-      streamingRating = 'Evaluating…';
-      streamingColor = 'text-mute';
+      streamingRating = "Evaluating…";
+      streamingColor = "text-mute";
     }
 
-    let gamingRating = 'Good';
-    let gamingColor = 'text-link';
+    let gamingRating = "Good";
+    let gamingColor = "text-link";
     if (lat > 0) {
       if (lat <= 30 && jit <= 10) {
-        gamingRating = 'Great';
-        gamingColor = 'text-link';
+        gamingRating = "Great";
+        gamingColor = "text-link";
       } else if (lat <= 80 && jit <= 30) {
-        gamingRating = 'Good';
-        gamingColor = 'text-link';
+        gamingRating = "Good";
+        gamingColor = "text-link";
       } else {
-        gamingRating = 'Bad';
-        gamingColor = 'text-error';
+        gamingRating = "Bad";
+        gamingColor = "text-error";
       }
     } else {
-      gamingRating = 'Evaluating…';
-      gamingColor = 'text-mute';
+      gamingRating = "Evaluating…";
+      gamingColor = "text-mute";
     }
 
-    let chattingRating = 'Good';
-    let chattingColor = 'text-link';
+    let chattingRating = "Good";
+    let chattingColor = "text-link";
     if (dlMbps > 0 || ulMbps > 0 || lat > 0) {
-      const meetsSpeed = (dlMbps === 0 || dlMbps >= 4) && (ulMbps === 0 || ulMbps >= 1.5);
+      const meetsSpeed =
+        (dlMbps === 0 || dlMbps >= 4) && (ulMbps === 0 || ulMbps >= 1.5);
       const meetsLatency = lat === 0 || lat <= 120;
       if (meetsSpeed && meetsLatency) {
-        chattingRating = (dlMbps >= 10 && ulMbps >= 3 && lat <= 50) ? 'Great' : 'Good';
-        chattingColor = chattingRating === 'Great' ? 'text-link' : 'text-link';
+        chattingRating =
+          dlMbps >= 10 && ulMbps >= 3 && lat <= 50 ? "Great" : "Good";
+        chattingColor = chattingRating === "Great" ? "text-link" : "text-link";
       } else {
-        chattingRating = 'Bad';
-        chattingColor = 'text-error';
+        chattingRating = "Bad";
+        chattingColor = "text-error";
       }
     } else {
-      chattingRating = 'Evaluating…';
-      chattingColor = 'text-mute';
+      chattingRating = "Evaluating…";
+      chattingColor = "text-mute";
     }
 
     return {
       streaming: { rating: streamingRating, color: streamingColor },
       gaming: { rating: gamingRating, color: gamingColor },
-      chatting: { rating: chattingRating, color: chattingColor }
+      chatting: { rating: chattingRating, color: chattingColor },
     };
   };
 
@@ -101,22 +102,34 @@ export default function QualityScores({
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center divide-y sm:divide-y-0 sm:divide-x divide-hairline">
         <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-          <span className="text-xs font-mono text-mute uppercase tracking-wider">Video Streaming</span>
-          <span className={`text-lg font-bold transition-colors duration-150 ${scores.streaming.color}`}>
+          <span className="text-xs font-mono text-mute uppercase tracking-wider">
+            Video Streaming
+          </span>
+          <span
+            className={`text-lg font-bold transition-colors duration-150 ${scores.streaming.color}`}
+          >
             {scores.streaming.rating}
           </span>
         </div>
 
         <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-          <span className="text-xs font-mono text-mute uppercase tracking-wider">Online Gaming</span>
-          <span className={`text-lg font-bold transition-colors duration-150 ${scores.gaming.color}`}>
+          <span className="text-xs font-mono text-mute uppercase tracking-wider">
+            Online Gaming
+          </span>
+          <span
+            className={`text-lg font-bold transition-colors duration-150 ${scores.gaming.color}`}
+          >
             {scores.gaming.rating}
           </span>
         </div>
 
         <div className="pt-4 sm:pt-0 sm:px-4 flex flex-col justify-center gap-1">
-          <span className="text-xs font-mono text-mute uppercase tracking-wider">Video Chatting</span>
-          <span className={`text-lg font-bold transition-colors duration-150 ${scores.chatting.color}`}>
+          <span className="text-xs font-mono text-mute uppercase tracking-wider">
+            Video Chatting
+          </span>
+          <span
+            className={`text-lg font-bold transition-colors duration-150 ${scores.chatting.color}`}
+          >
             {scores.chatting.rating}
           </span>
         </div>

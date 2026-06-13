@@ -60,7 +60,7 @@
   --color-error-soft: var(--color-error-soft);
   --color-warning: var(--color-warning);
   --color-warning-soft: var(--color-warning-soft);
-  
+
   --color-gradient-dev-start: #007cf0;
   --color-gradient-dev-end: #00dfd8;
   --color-gradient-preview-start: #7928ca;
@@ -69,7 +69,8 @@
   --color-gradient-ship-end: #f9cb28;
 
   --font-sans: Geist, Inter, system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-mono:
+    "Geist Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 @layer base {
@@ -84,7 +85,9 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
   }
 }
 
@@ -114,12 +117,13 @@
   bottom: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle at 30% 20%, #007cf02a 0%, transparent 40%),
-              radial-gradient(circle at 70% 30%, #7928ca1a 0%, transparent 35%),
-              radial-gradient(circle at 40% 70%, #00dfd81a 0%, transparent 40%),
-              radial-gradient(circle at 80% 60%, #ff00801a 0%, transparent 30%),
-              radial-gradient(circle at 50% 50%, #ff4d4d10 0%, transparent 45%),
-              radial-gradient(circle at 10% 90%, #f9cb2815 0%, transparent 30%);
+  background:
+    radial-gradient(circle at 30% 20%, #007cf02a 0%, transparent 40%),
+    radial-gradient(circle at 70% 30%, #7928ca1a 0%, transparent 35%),
+    radial-gradient(circle at 40% 70%, #00dfd81a 0%, transparent 40%),
+    radial-gradient(circle at 80% 60%, #ff00801a 0%, transparent 30%),
+    radial-gradient(circle at 50% 50%, #ff4d4d10 0%, transparent 45%),
+    radial-gradient(circle at 10% 90%, #f9cb2815 0%, transparent 30%);
   filter: blur(80px);
   animation: mesh-rotate 40s linear infinite;
   transform-origin: center center;
@@ -139,14 +143,16 @@
   background-color: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 8px; /* rounded.md */
-  box-shadow: 0px 1px 1px #00000005, 
-              0px 2px 2px #0000000a;
+  box-shadow:
+    0px 1px 1px #00000005,
+    0px 2px 2px #0000000a;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .vercel-card:hover {
-  box-shadow: 0px 2px 2px #0000000a, 
-              0px 8px 8px -8px #0000000a;
+  box-shadow:
+    0px 2px 2px #0000000a,
+    0px 8px 8px -8px #0000000a;
   border-color: var(--color-hairline-strong);
 }
 
@@ -154,8 +160,9 @@
   background-color: var(--color-canvas);
   border: 1px solid var(--color-hairline);
   border-radius: 12px; /* rounded.lg */
-  box-shadow: 0px 2px 2px #0000000a, 
-              0px 8px 16px -4px #0000000a;
+  box-shadow:
+    0px 2px 2px #0000000a,
+    0px 8px 16px -4px #0000000a;
 }
 
 /* Custom Scrollbar for Monospace fields */
@@ -180,6 +187,6 @@
 }
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }

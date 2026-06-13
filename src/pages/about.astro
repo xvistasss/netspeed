@@ -10,14 +10,24 @@ import Layout from "../layouts/Layout.astro";
     <div class="max-w-4xl mx-auto flex flex-col gap-12">
       {/* Hero Header Block */}
       <div class="flex flex-col gap-4 border-b border-hairline pb-8">
-        <span class="font-mono text-xs uppercase tracking-wider text-mute block">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+        >
           Our Mission
         </span>
-        <h1 class="text-4xl md:text-6xl font-semibold tracking-tighter text-ink font-sans leading-none">
+        <h1
+          class="text-4xl md:text-6xl font-semibold tracking-tighter text-ink font-sans leading-none"
+        >
           Engineered for pure network transparency.
         </h1>
-        <p class="text-base md:text-lg text-body max-w-3xl leading-relaxed mt-2">
-          NetSpeed was founded with a singular objective: to provide developers, network administrators, and everyday users with an accurate, ads-free, and edge-native telemetry platform. By deploying concurrent streams and measuring real-time latency variance, we expose the true limitations of your internet routing.
+        <p
+          class="text-base md:text-lg text-body max-w-3xl leading-relaxed mt-2"
+        >
+          NetSpeed was founded with a singular objective: to provide developers,
+          network administrators, and everyday users with an accurate, ads-free,
+          and edge-native telemetry platform. By deploying concurrent streams
+          and measuring real-time latency variance, we expose the true
+          limitations of your internet routing.
         </p>
       </div>
 
@@ -25,56 +35,81 @@ import Layout from "../layouts/Layout.astro";
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
         <div class="vercel-card p-6 flex flex-col gap-3 justify-between">
           <div>
-            <span class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1">
+            <span
+              class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1"
+            >
               Methodology 01
             </span>
             <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Zero payload caching
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              Traditional speed test applications fetch static files that can easily be cached by local internet service providers (ISPs) or content delivery networks (CDNs). NetSpeed generates random, completely uncompressible binary data blocks dynamically at the request window, forcing your ISP to handle raw, unoptimized data transit.
+              Traditional speed test applications fetch static files that can
+              easily be cached by local internet service providers (ISPs) or
+              content delivery networks (CDNs). NetSpeed generates random,
+              completely uncompressible binary data blocks dynamically at the
+              request window, forcing your ISP to handle raw, unoptimized data
+              transit.
             </p>
           </div>
         </div>
 
         <div class="vercel-card p-6 flex flex-col gap-3 justify-between">
           <div>
-            <span class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1">
+            <span
+              class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1"
+            >
               Methodology 02
             </span>
             <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Concurrent socket piping
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              Using local Javascript Web Workers, we initiate up to six concurrent download and upload sockets. This parallel pipe design stresses your connection capacity, allowing us to accurately measure the peak saturation performance and load-balanced capabilities of your interface.
+              Using local Javascript Web Workers, we initiate up to six
+              concurrent download and upload sockets. This parallel pipe design
+              stresses your connection capacity, allowing us to accurately
+              measure the peak saturation performance and load-balanced
+              capabilities of your interface.
             </p>
           </div>
         </div>
 
         <div class="vercel-card p-6 flex flex-col gap-3 justify-between">
           <div>
-            <span class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1">
+            <span
+              class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1"
+            >
               Methodology 03
             </span>
             <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Bufferbloat loaded latency
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              A high download speed is useless if your ping spikes to several hundred milliseconds when downloading files. We run loaded latency tests during both download and upload stages to quantify bufferbloat stability and let you know if your router's queueing algorithm is failing.
+              A high download speed is useless if your ping spikes to several
+              hundred milliseconds when downloading files. We run loaded latency
+              tests during both download and upload stages to quantify
+              bufferbloat stability and let you know if your router's queueing
+              algorithm is failing.
             </p>
           </div>
         </div>
 
         <div class="vercel-card p-6 flex flex-col gap-3 justify-between">
           <div>
-            <span class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1">
+            <span
+              class="font-mono text-[10px] uppercase tracking-wider text-mute block mb-1"
+            >
               Methodology 04
             </span>
             <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               True edge telemetry
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              We communicate with servers positioned directly at major routing exchanges. By performing a pre-test routing handshake, we select the closest node using high-precision geographical distance telemetry, ensuring your latency is not skewed by unnecessary cross-country hops.
+              We communicate with servers positioned directly at major routing
+              exchanges. By performing a pre-test routing handshake, we select
+              the closest node using high-precision geographical distance
+              telemetry, ensuring your latency is not skewed by unnecessary
+              cross-country hops.
             </p>
           </div>
         </div>
@@ -82,13 +117,18 @@ import Layout from "../layouts/Layout.astro";
 
       {/* Corporate stats or details banner */}
       <section class="border-t border-hairline pt-12">
-        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-canvas-soft-2 p-8 rounded-lg border border-hairline">
+        <div
+          class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-canvas-soft-2 p-8 rounded-lg border border-hairline"
+        >
           <div class="flex flex-col gap-2 max-w-xl">
             <h3 class="text-lg font-semibold tracking-tight text-ink">
               Looking for our diagnostic details?
             </h3>
             <p class="text-xs text-body leading-relaxed">
-              We compile detailed network packets, routing distances, and raw connection logs for every benchmark run. You can export these reports directly from the home screen dashboard in standard format.
+              We compile detailed network packets, routing distances, and raw
+              connection logs for every benchmark run. You can export these
+              reports directly from the home screen dashboard in standard
+              format.
             </p>
           </div>
           <a

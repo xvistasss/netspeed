@@ -106,7 +106,11 @@ const mainEntity = faqJsonLd.mainEntity;
 ---
 
 <!-- JSON-LD Structured Schema for FAQ Page SEO -->
-<script type="application/ld+json" set:html={JSON.stringify(faqJsonLd)} />
+<script
+  type="application/ld+json"
+  is:inline
+  set:html={JSON.stringify(faqJsonLd)}
+/>
 
 <section
   id="faq-section"
@@ -141,7 +145,7 @@ const mainEntity = faqJsonLd.mainEntity;
         class="flex flex-col border-t border-hairline divide-y divide-hairline"
       >
         {
-          mainEntity.map((item, index) => (
+          mainEntity.map((item) => (
             <details class="group py-4 select-none">
               <summary class="flex justify-between items-center cursor-pointer list-none text-sm md:text-base font-semibold text-ink hover:text-link transition-colors duration-150 py-1">
                 <span>{item.name}</span>
