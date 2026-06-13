@@ -4,7 +4,8 @@ import { haversineDistance } from '../../utils/speedTestUtils';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const GET: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = async (context) => {
+  const { request, url } = context;
   const region = url.searchParams.get('region');
   const serverId = url.searchParams.get('serverId');
   const clientLatParam = url.searchParams.get('clientLat');
@@ -28,10 +29,10 @@ export const GET: APIRoute = async ({ request, url }) => {
   const cf = (request as any).cf;
   const clientLat = clientLatParam 
     ? parseFloat(clientLatParam) 
-    : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude || '0');
+    : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || String(cf?.latitude || '0'));
   const clientLon = clientLonParam 
     ? parseFloat(clientLonParam) 
-    : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude || '0');
+    : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || String(cf?.longitude || '0'));
 
   // Find target server coordinates
   let serverLat = 0;

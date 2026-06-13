@@ -124,9 +124,9 @@ export const SERVER_LIST: ServerList = [
  * - other servers get rounded haversine distance
  */
 export function withDistances(clientLat: number, clientLon: number, servers: ServerList): TestServer[] {
-    const hasValidClientCoords = 
-        Number.isFinite(clientLat) && 
-        Number.isFinite(clientLon) && 
+    const hasValidClientCoords =
+        Number.isFinite(clientLat) &&
+        Number.isFinite(clientLon) &&
         !(clientLat === 0 && clientLon === 0);
 
     return servers.map((srv) => {

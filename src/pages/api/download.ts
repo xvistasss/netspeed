@@ -65,7 +65,8 @@ function createThrottledStream(sourceStream: ReadableStream<Uint8Array>, maxBps:
   });
 }
 
-export const GET: APIRoute = async ({ request, url }) => {
+export const GET: APIRoute = async (context) => {
+  const { request, url } = context;
   const sizeParam = url.searchParams.get('size');
   const region = url.searchParams.get('region');
   const serverId = url.searchParams.get('serverId');
@@ -95,10 +96,10 @@ export const GET: APIRoute = async ({ request, url }) => {
     const cf = (request as any).cf;
     const clientLat = clientLatParam 
       ? parseFloat(clientLatParam) 
-      : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude || '0');
+      : parseFloat(headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || String(cf?.latitude || '0'));
     const clientLon = clientLonParam 
       ? parseFloat(clientLonParam) 
-      : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude || '0');
+      : parseFloat(headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || String(cf?.longitude || '0'));
     const basePing = basePingParam ? parseFloat(basePingParam) : 0;
 
     let serverLat = 0;

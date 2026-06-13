@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 
-export const GET: APIRoute = async ({ request }) => {
+export const GET: APIRoute = async (context) => {
+  const { request } = context;
   const headers = request.headers;
   
   // 1. IP Detection
@@ -40,27 +41,39 @@ export const GET: APIRoute = async ({ request }) => {
     });
   }
 
-  // 2. Geolocation parsing from Edge headers (Vercel / Cloudflare) or request.cf object
+  // 2. Geolocation parsing from Edge context or Vercel/Cloudflare headers
   const cf = (request as any).cf;
-  const latitude = headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude;
-  const longitude = headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude;
+  const rawLat = headers.get('x-vercel-ip-latitude') || headers.get('cf-latitude') || cf?.latitude;
+  const rawLon = headers.get('x-vercel-ip-longitude') || headers.get('cf-longitude') || cf?.longitude;
+  const latitude = rawLat ? parseFloat(String(rawLat)) : undefined;
+  const longitude = rawLon ? parseFloat(String(rawLon)) : undefined;
+
   const city = headers.get('x-vercel-ip-city') || headers.get('cf-ipcity') || cf?.city || 'Unknown City';
-  const country = headers.get('x-vercel-ip-country') || headers.get('cf-ipcountry') || cf?.country || 'Unknown Country';
+  const countryCode = headers.get('x-vercel-ip-country') || headers.get('cf-ipcountry') || cf?.country || 'Unknown';
   const region = headers.get('x-vercel-ip-country-region') || headers.get('cf-region') || cf?.region || 'Unknown Region';
   const asn = headers.get('cf-asn') || cf?.asn?.toString() || '';
   const org = headers.get('cf-as-organization') || cf?.asOrganization || 'Edge Network Provider';
+
+  // Resolve country name using Intl.DisplayNames if a valid 2-letter country code is found
+  let countryName = countryCode;
+  if (countryCode && countryCode !== 'Unknown' && countryCode.length === 2) {
+    try {
+      const regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+      countryName = regionNames.of(countryCode.toUpperCase()) || countryCode;
+    } catch (_) {}
+  }
 
   return new Response(JSON.stringify({
     isLocal: false,
     ip: clientIp,
     city,
     region,
-    country,
-    countryCode: country,
+    country: countryName,
+    countryCode: countryCode,
     loc: latitude && longitude ? `${latitude},${longitude}` : undefined,
     org: asn ? `AS${asn} ${org}` : org,
-    latitude: latitude ? parseFloat(latitude) : undefined,
-    longitude: longitude ? parseFloat(longitude) : undefined
+    latitude,
+    longitude
   }), {
     status: 200,
     headers: {
