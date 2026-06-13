@@ -1,4 +1,5 @@
 ---
+import { version } from "../../package.json";
 interface Props {
   showServerStatus?: boolean;
 }
@@ -35,7 +36,7 @@ const { showServerStatus = false } = Astro.props;
         <span
           class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
         >
-          v1.0.0-edge
+          v{version}
         </span>
       </nav>
     </div>
@@ -44,9 +45,7 @@ const { showServerStatus = false } = Astro.props;
     <div class="flex items-center gap-1.5 md:gap-3 shrink-0">
       {
         showServerStatus && (
-          <div
-            class="flex items-center gap-1.5 text-xs font-mono text-mute select-none min-w-0 max-w-[100px] sm:max-w-[180px] md:max-w-[260px] lg:max-w-[400px]"
-          >
+          <div class="flex items-center gap-1.5 text-xs font-mono text-mute select-none min-w-0 max-w-[100px] sm:max-w-[180px] md:max-w-[260px] lg:max-w-[400px]">
             <span class="server-status-dot w-1.5 h-1.5 rounded-full bg-mute animate-pulse shrink-0" />
             <span
               id="header-server-text"
