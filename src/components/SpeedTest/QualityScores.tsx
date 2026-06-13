@@ -23,7 +23,7 @@ export default function QualityScores({
     const lat = latencyAvg;
     const jit = latencyJitter;
 
-    // 1. Initial/idle states
+    // Initial defaults before metrics are available
     if (phase === 'idle' || phase === 'routing') {
       return {
         streaming: { rating: '—', color: 'text-mute' },
@@ -32,25 +32,24 @@ export default function QualityScores({
       };
     }
 
-    // 2. Video Streaming (needs download speed)
-    let streamingRating = 'Evaluating…';
-    let streamingColor = 'text-mute';
-    if (phase === 'download' || phase === 'upload' || phase === 'complete') {
-      if (dlMbps >= 25) {
-        streamingRating = 'Great';
-        streamingColor = 'text-link';
-      } else if (dlMbps >= 5) {
-        streamingRating = 'Good';
-        streamingColor = 'text-link';
-      } else if (dlMbps > 0) {
-        streamingRating = 'Bad';
-        streamingColor = 'text-error';
-      }
+    let streamingRating = 'Good';
+    let streamingColor = 'text-link';
+    if (dlMbps >= 25) {
+      streamingRating = 'Great';
+      streamingColor = 'text-link';
+    } else if (dlMbps >= 5) {
+      streamingRating = 'Good';
+      streamingColor = 'text-link';
+    } else if (dlMbps > 0) {
+      streamingRating = 'Bad';
+      streamingColor = 'text-error';
+    } else {
+      streamingRating = 'Evaluating…';
+      streamingColor = 'text-mute';
     }
 
-    // 3. Online Gaming (needs latency)
-    let gamingRating = 'Evaluating…';
-    let gamingColor = 'text-mute';
+    let gamingRating = 'Good';
+    let gamingColor = 'text-link';
     if (lat > 0) {
       if (lat <= 30 && jit <= 10) {
         gamingRating = 'Great';
@@ -62,21 +61,26 @@ export default function QualityScores({
         gamingRating = 'Bad';
         gamingColor = 'text-error';
       }
+    } else {
+      gamingRating = 'Evaluating…';
+      gamingColor = 'text-mute';
     }
 
-    // 4. Video Chatting (needs latency, download, and upload speeds)
-    let chattingRating = 'Evaluating…';
-    let chattingColor = 'text-mute';
-    if (phase === 'upload' || phase === 'complete') {
-      const meetsSpeed = dlMbps >= 4 && ulMbps >= 1.5;
-      const meetsLatency = lat <= 120;
+    let chattingRating = 'Good';
+    let chattingColor = 'text-link';
+    if (dlMbps > 0 || ulMbps > 0 || lat > 0) {
+      const meetsSpeed = (dlMbps === 0 || dlMbps >= 4) && (ulMbps === 0 || ulMbps >= 1.5);
+      const meetsLatency = lat === 0 || lat <= 120;
       if (meetsSpeed && meetsLatency) {
         chattingRating = (dlMbps >= 10 && ulMbps >= 3 && lat <= 50) ? 'Great' : 'Good';
-        chattingColor = 'text-link';
+        chattingColor = chattingRating === 'Great' ? 'text-link' : 'text-link';
       } else {
         chattingRating = 'Bad';
         chattingColor = 'text-error';
       }
+    } else {
+      chattingRating = 'Evaluating…';
+      chattingColor = 'text-mute';
     }
 
     return {

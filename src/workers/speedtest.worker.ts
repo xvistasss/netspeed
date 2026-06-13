@@ -4,21 +4,6 @@ let activeAbortController: AbortController | null = null;
 let isCancelled = false;
 let hostLatency = 0;
 
-// Pre-generate a static random buffer (e.g., 8MB) to eliminate CPU payload generation overhead during the upload test
-const UPLOAD_BUFFER_SIZE = 8 * 1024 * 1024; // 8MB
-const preGeneratedUploadBuffer = new Uint8Array(UPLOAD_BUFFER_SIZE);
-if (typeof self !== 'undefined' && self.crypto) {
-  const maxQuota = 65536;
-  for (let offset = 0; offset < UPLOAD_BUFFER_SIZE; offset += maxQuota) {
-    const subarray = preGeneratedUploadBuffer.subarray(offset, Math.min(offset + maxQuota, UPLOAD_BUFFER_SIZE));
-    self.crypto.getRandomValues(subarray);
-  }
-} else {
-  for (let i = 0; i < UPLOAD_BUFFER_SIZE; i++) {
-    preGeneratedUploadBuffer[i] = Math.floor(Math.random() * 256);
-  }
-}
-
 const isLocalUrl = (url: string) => {
   try {
     const parsed = new URL(url);
@@ -38,27 +23,6 @@ const isLocalUrl = (url: string) => {
 
 // Helper to delay execution
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const fetchWithTimeout = async (url: string, options: RequestInit, timeoutMs: number): Promise<Response> => {
-  const controller = new AbortController();
-  const signal = options.signal;
-  
-  const onAbort = () => controller.abort();
-  if (signal) {
-    signal.addEventListener('abort', onAbort);
-  }
-  
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    return response;
-  } finally {
-    clearTimeout(timeoutId);
-    if (signal) {
-      signal.removeEventListener('abort', onAbort);
-    }
-  }
-};
 
 // Listen for commands from the main thread
 self.onmessage = async (e: MessageEvent) => {
@@ -141,11 +105,11 @@ async function runPingTest(
       const url = region
         ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=${Date.now()}-${i}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${i}`;
-      const response = await fetchWithTimeout(url, {
+      const response = await fetch(url, {
         method: 'GET',
         cache: 'no-store',
         signal
-      }, 1500);
+      });
 
       if (!response.ok) {
         throw new Error('Ping request failed');
@@ -154,7 +118,10 @@ async function runPingTest(
       await response.text(); // Fully read response body
 
       const end = performance.now();
-      const latency = end - start;
+      let latency = end - start;
+      if (isLocalUrl(baseUrl)) {
+        latency = Math.max(1.5, latency - hostLatency);
+      }
       latencies.push(latency);
 
       // Calculate Jitter (average absolute difference between consecutive tests)
@@ -247,10 +214,13 @@ async function runDownloadTest(
       const url = region
         ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`;
-      const res = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 1500);
+      const res = await fetch(url, { signal, cache: 'no-store' });
       if (res.ok) {
         await res.text();
-        const lat = performance.now() - pingStart;
+        let lat = performance.now() - pingStart;
+        if (isLocalUrl(baseUrl)) {
+          lat = Math.max(1.5, lat - hostLatency);
+        }
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
@@ -448,12 +418,8 @@ async function runDownloadTest(
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
 
-  const finalTime = performance.now();
-  const transmissionStartTime = firstByteTime !== null ? firstByteTime : startTime;
-  const totalTransmissionDurationMs = finalTime - transmissionStartTime;
-
-  const finalAvgSpeedBps = totalTransmissionDurationMs > 0
-    ? (totalBytesDownloaded * 8) / (totalTransmissionDurationMs / 1000)
+  const finalAvgSpeedBps = totalWallClockDurationMs > 0
+    ? (totalBytesDownloaded * 8) / (totalWallClockDurationMs / 1000)
     : 0;
 
   self.postMessage({
@@ -522,10 +488,13 @@ async function runUploadTest(
       const url = region
         ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ''}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`;
-      const res = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 1500);
+      const res = await fetch(url, { signal, cache: 'no-store' });
       if (res.ok) {
         await res.text();
-        const lat = performance.now() - pingStart;
+        let lat = performance.now() - pingStart;
+        if (isLocalUrl(baseUrl)) {
+          lat = Math.max(1.5, lat - hostLatency);
+        }
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
@@ -612,17 +581,17 @@ async function runUploadTest(
       };
       signal.addEventListener('abort', abortHandler);
 
-      // Slice from the pre-generated static high-entropy buffer to avoid CPU overhead
-      let uploadChunk: any;
-      if (targetSize <= UPLOAD_BUFFER_SIZE) {
-        const offset = Math.floor(Math.random() * (UPLOAD_BUFFER_SIZE - targetSize));
-        uploadChunk = preGeneratedUploadBuffer.subarray(offset, offset + targetSize);
+      // Pre-generate dynamic upload chunk of targetSize
+      const uploadChunk = new Uint8Array(targetSize);
+      if (self.crypto) {
+        const maxQuota = 65536;
+        for (let offset = 0; offset < uploadChunk.length; offset += maxQuota) {
+          const subarray = uploadChunk.subarray(offset, Math.min(offset + maxQuota, uploadChunk.length));
+          self.crypto.getRandomValues(subarray);
+        }
       } else {
-        // Fallback if targetSize is larger than UPLOAD_BUFFER_SIZE
-        uploadChunk = new Uint8Array(targetSize);
-        for (let offset = 0; offset < targetSize; offset += UPLOAD_BUFFER_SIZE) {
-          const copyLen = Math.min(UPLOAD_BUFFER_SIZE, targetSize - offset);
-          uploadChunk.set(preGeneratedUploadBuffer.subarray(0, copyLen), offset);
+        for (let i = 0; i < targetSize; i++) {
+          uploadChunk[i] = Math.floor(Math.random() * 256);
         }
       }
 
@@ -839,12 +808,8 @@ async function runUploadTest(
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
 
-  const finalTime = performance.now();
-  const transmissionStartTime = firstByteTime !== null ? firstByteTime : startTime;
-  const totalTransmissionDurationMs = finalTime - transmissionStartTime;
-
-  const finalAvgSpeedBps = totalTransmissionDurationMs > 0
-    ? (totalBytesUploaded * 8) / (totalTransmissionDurationMs / 1000)
+  const finalAvgSpeedBps = totalWallClockDurationMs > 0
+    ? (totalBytesUploaded * 8) / (totalWallClockDurationMs / 1000)
     : 0;
 
   self.postMessage({
