@@ -96,11 +96,7 @@ export const GET: APIRoute = async ({ request, url }) => {
   // Calculate final sleep delay.
   let additionalDelay = 0;
   if (!isWarmup) {
-    if (isLocal) {
-      additionalDelay = Math.max(0, targetLatency - proxyPingDuration);
-    } else {
-      additionalDelay = Math.max(0, targetLatency - hostLatency);
-    }
+    additionalDelay = Math.max(0, targetLatency - hostLatency);
   }
 
   if (additionalDelay > 0) {

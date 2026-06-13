@@ -781,14 +781,42 @@ async function runUploadTest(
           const requestTimestamp = Date.now();
           let lastLoaded = 0;
           let recorded = false;
+          let chunkBytesReported = 0;
+          let pacingInterval: any = null;
+
+          const simulatedDuration = shouldThrottle
+            ? (targetSize / maxThroughputBps) * 1000
+            : 0;
+
+          // Start client-side progress pacing loop if throttling is active
+          if (shouldThrottle) {
+            pacingInterval = setInterval(() => {
+              const elapsed = performance.now() - chunkStart;
+              const targetSimulatedBytes = Math.min(
+                targetSize,
+                Math.round((elapsed / simulatedDuration) * targetSize)
+              );
+              const delta = targetSimulatedBytes - chunkBytesReported;
+              if (delta > 0) {
+                if (firstByteTime === null) {
+                  firstByteTime = performance.now();
+                }
+                totalBytesUploaded += delta;
+                chunkBytesReported = targetSimulatedBytes;
+                speedSamples.push({ time: performance.now(), bytes: delta });
+              }
+            }, 50);
+          }
 
           const recordStats = (completed: boolean) => {
             if (recorded) return;
             recorded = true;
 
             const chunkEnd = performance.now();
-            const duration = chunkEnd - chunkStart;
-            const bytesSent = lastLoaded;
+            const duration = shouldThrottle
+              ? Math.max(simulatedDuration, chunkEnd - chunkStart)
+              : chunkEnd - chunkStart;
+            const bytesSent = targetSize;
             const bps = duration > 0 ? (bytesSent * 8) / (duration / 1000) : 0;
 
             const requestPings = pingLog
@@ -810,33 +838,48 @@ async function runUploadTest(
             });
           };
 
-          xhr.upload.addEventListener("progress", (event) => {
-            if (event.loaded > lastLoaded) {
-              if (firstByteTime === null) {
-                firstByteTime = performance.now();
+          if (!shouldThrottle) {
+            xhr.upload.addEventListener("progress", (event) => {
+              if (event.loaded > lastLoaded) {
+                if (firstByteTime === null) {
+                  firstByteTime = performance.now();
+                }
+                const delta = event.loaded - lastLoaded;
+                totalBytesUploaded += delta;
+                lastLoaded = event.loaded;
+                speedSamples.push({ time: performance.now(), bytes: delta });
               }
-              const delta = event.loaded - lastLoaded;
-              totalBytesUploaded += delta;
-              lastLoaded = event.loaded;
-              speedSamples.push({ time: performance.now(), bytes: delta });
-            }
-          });
+            });
+          }
 
-          xhr.onload = () => {
+          xhr.onload = async () => {
+            if (pacingInterval) clearInterval(pacingInterval);
             const idx = activeXhrs.indexOf(xhr);
             if (idx > -1) activeXhrs.splice(idx, 1);
 
             if (xhr.status === 200) {
-              const remainingBytes = targetSize - lastLoaded;
+              const remainingBytes = targetSize - chunkBytesReported;
               if (remainingBytes > 0) {
+                if (firstByteTime === null) {
+                  firstByteTime = performance.now();
+                }
                 totalBytesUploaded += remainingBytes;
-                lastLoaded = targetSize;
                 speedSamples.push({
                   time: performance.now(),
                   bytes: remainingBytes,
                 });
               }
               recordStats(true);
+
+              // Complete simulated latency/throughput delay
+              if (shouldThrottle) {
+                const actualDuration = performance.now() - chunkStart;
+                const delayMs = simulatedDuration - actualDuration;
+                if (delayMs > 0) {
+                  await sleep(delayMs);
+                }
+              }
+
               runStream().then(resolveStream);
             } else {
               recordStats(false);
@@ -845,6 +888,7 @@ async function runUploadTest(
           };
 
           xhr.onerror = () => {
+            if (pacingInterval) clearInterval(pacingInterval);
             const idx = activeXhrs.indexOf(xhr);
             if (idx > -1) activeXhrs.splice(idx, 1);
             recordStats(false);
@@ -852,6 +896,7 @@ async function runUploadTest(
           };
 
           xhr.onabort = () => {
+            if (pacingInterval) clearInterval(pacingInterval);
             const idx = activeXhrs.indexOf(xhr);
             if (idx > -1) activeXhrs.splice(idx, 1);
             recordStats(false);

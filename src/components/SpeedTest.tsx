@@ -403,84 +403,17 @@ export default function SpeedTest() {
     }
   };
 
-  // Helper to fetch geo fallback from external services in a chain
-  const fetchClientGeoFallback = async (): Promise<any> => {
-    // 1. Try ipapi.co
+  // Helper to fetch public IP in local development / fallback situations
+  const getPublicIp = async (): Promise<string | null> => {
     try {
-      const res = await fetch("https://ipapi.co/json/");
-      const fallbackData = await res.json();
-      if (
-        fallbackData &&
-        fallbackData.ip &&
-        typeof fallbackData.latitude === "number"
-      ) {
-        return {
-          ip: fallbackData.ip,
-          city: fallbackData.city || "Unknown City",
-          region: fallbackData.region || "Unknown Region",
-          country: fallbackData.country_name || "Unknown Country",
-          countryCode: fallbackData.country || "",
-          loc: `${fallbackData.latitude},${fallbackData.longitude}`,
-          org: fallbackData.org || "Unknown ISP",
-          latitude: parseFloat(fallbackData.latitude),
-          longitude: parseFloat(fallbackData.longitude),
-        };
+      const res = await fetch("https://api.ipify.org?format=json");
+      if (res.ok) {
+        const data = await res.json();
+        return data.ip || null;
       }
     } catch (err) {
-      console.warn("ipapi.co fallback failed, trying freeipapi.com...", err);
+      console.warn("Failed to retrieve public IP via ipify:", err);
     }
-
-    // 2. Try freeipapi.com (Supports HTTPS, no API key, high limit)
-    try {
-      const res = await fetch("https://freeipapi.com/api/json");
-      const fallbackData = await res.json();
-      if (
-        fallbackData &&
-        fallbackData.ipAddress &&
-        typeof fallbackData.latitude === "number"
-      ) {
-        return {
-          ip: fallbackData.ipAddress,
-          city: fallbackData.cityName || "Unknown City",
-          region: fallbackData.regionName || "Unknown Region",
-          country: fallbackData.countryName || "Unknown Country",
-          countryCode: fallbackData.countryCode || "",
-          loc: `${fallbackData.latitude},${fallbackData.longitude}`,
-          org: "Unknown ISP",
-          latitude: parseFloat(fallbackData.latitude),
-          longitude: parseFloat(fallbackData.longitude),
-        };
-      }
-    } catch (err) {
-      console.warn("freeipapi.com fallback failed, trying ipinfo.io...", err);
-    }
-
-    // 3. Try ipinfo.io
-    try {
-      const res = await fetch("https://ipinfo.io/json");
-      const fallbackData = await res.json();
-      if (fallbackData && fallbackData.ip && fallbackData.loc) {
-        const [latStr, lonStr] = fallbackData.loc.split(",");
-        const lat = parseFloat(latStr);
-        const lon = parseFloat(lonStr);
-        if (Number.isFinite(lat) && Number.isFinite(lon)) {
-          return {
-            ip: fallbackData.ip,
-            city: fallbackData.city || "Unknown City",
-            region: fallbackData.region || "Unknown Region",
-            country: fallbackData.country || "Unknown Country",
-            countryCode: fallbackData.country || "",
-            loc: fallbackData.loc,
-            org: fallbackData.org || "Unknown ISP",
-            latitude: lat,
-            longitude: lon,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("ipinfo.io fallback failed", err);
-    }
-
     return null;
   };
 
@@ -501,9 +434,19 @@ export default function SpeedTest() {
     const clientLon = hasCoords ? data.longitude : 0;
 
     const enriched = withDistances(clientLat, clientLon, SERVER_LIST as any);
-    const closest = hasCoords
-      ? pickClosestN(enriched, 3)
-      : enriched.slice(0, 3);
+    
+    let closest: TestServer[];
+    if (hasCoords) {
+      closest = pickClosestN(enriched, 3);
+    } else {
+      // Find globally neutral default servers to avoid regional bias
+      const defaultIds = ["new-york", "frankfurt", "singapore"];
+      closest = enriched.filter((s) => defaultIds.includes(s.id));
+      if (closest.length === 0) {
+        closest = enriched.slice(0, 3);
+      }
+    }
+    
     setClosestServers(closest);
     setSelectedServer(closest[0] || null);
   };
@@ -539,26 +482,23 @@ export default function SpeedTest() {
       const geoRes = await fetch("/api/ip-geo");
       let data = await geoRes.json();
 
-      const hasValidCoords = (d: any) => {
-        return (
-          d &&
-          typeof d.latitude === "number" &&
-          Number.isFinite(d.latitude) &&
-          typeof d.longitude === "number" &&
-          Number.isFinite(d.longitude) &&
-          !(d.latitude === 0 && d.longitude === 0)
-        );
-      };
-
-      // Fallback if coordinates are missing/invalid, or if it is running on localhost
-      if (!hasValidCoords(data) || data.isLocal) {
-        const fallback = await fetchClientGeoFallback();
-        if (fallback) {
-          data = {
-            ...data,
-            ...fallback,
-            isLocal: data.isLocal,
-          };
+      // If running on localhost, fallback to client-side public IP resolution
+      // and query our API using that IP to perform server-side geolocation lookup.
+      if (data.isLocal) {
+        const publicIp = await getPublicIp();
+        if (publicIp) {
+          try {
+            const resolvedRes = await fetch(`/api/ip-geo?ip=${publicIp}`);
+            if (resolvedRes.ok) {
+              const resolvedData = await resolvedRes.json();
+              data = {
+                ...resolvedData,
+                isLocal: true, // preserve local development mode flag
+              };
+            }
+          } catch (err) {
+            console.error("Local client public IP lookup failed:", err);
+          }
         }
       }
 
@@ -621,12 +561,12 @@ export default function SpeedTest() {
       Number.isFinite(clientInfo.longitude) &&
       !(clientInfo.latitude === 0 && clientInfo.longitude === 0);
 
-    // If client coordinates are valid, probe 3 closest candidate servers.
+    // If client coordinates are valid, probe 5 closest candidate servers.
     // If client coordinates are unavailable, probe ALL servers to find the lowest latency.
     const candidates = hasCoords
       ? pickClosestN(
           withDistances(clientInfo.latitude, clientInfo.longitude, SERVER_LIST),
-          3,
+          5,
         )
       : withDistances(0, 0, SERVER_LIST);
 
@@ -638,7 +578,7 @@ export default function SpeedTest() {
     setStatusMessage(
       isAllProbe
         ? "Routing: selecting optimal server (all locations) via parallel latency probes…"
-        : "Routing: selecting optimal server (3 closest) via parallel latency probes…",
+        : "Routing: selecting optimal server (5 closest) via parallel latency probes…",
     );
 
     const results: { [key: string]: number } = {};
