@@ -1071,7 +1071,7 @@ export default function SpeedTest() {
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 3,
+            parallelStreams: 1,
           });
           break;
         }
@@ -1174,7 +1174,7 @@ export default function SpeedTest() {
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 3,
+            parallelStreams: 1,
             downloadSpeed: downloadStatsRef.current.avg,
           });
           break;

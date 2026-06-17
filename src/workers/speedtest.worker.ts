@@ -56,7 +56,7 @@ self.onmessage = async (e: MessageEvent) => {
         clientLat,
         clientLon,
         basePing,
-        parallelStreams || 4,
+        parallelStreams || 1,
         activeAbortController.signal,
       );
     } else if (type === "START_UPLOAD") {
@@ -77,7 +77,7 @@ self.onmessage = async (e: MessageEvent) => {
         clientLat,
         clientLon,
         basePing,
-        parallelStreams || 4,
+        parallelStreams || 1,
         downloadSpeed || 0,
         activeAbortController.signal,
       );
@@ -436,9 +436,17 @@ async function runDownloadTest(
             });
           }
         }
-      } catch (err) {
+        } catch (err) {
         if (signal.aborted || isCancelled) break;
         await sleep(50);
+      }
+
+      // Brief pause between chunks to avoid triggering Cloudflare rate limits
+      if (!signal.aborted && !isCancelled) {
+        const elapsedMs = performance.now() - startTime;
+        if (elapsedMs < durationMs) {
+          await sleep(30);
+        }
       }
     }
   };
@@ -777,7 +785,8 @@ async function runUploadTest(
               }
 
               recordStats(true);
-              runStream().then(resolveStream);
+              // Brief pause between uploads to avoid triggering Cloudflare rate limits
+              new Promise<void>((r) => setTimeout(r, 30)).then(() => runStream().then(resolveStream));
             } else {
               recordStats(false);
               resolveStream();

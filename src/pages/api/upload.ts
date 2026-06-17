@@ -2,11 +2,14 @@ import type { APIRoute } from "astro";
 
 const CF_SPEED_TEST_ENDPOINT = "https://speed.cloudflare.com/__up";
 
+const MAX_RETRIES = 2;
+const BASE_RETRY_DELAY_MS = 150;
+
 const corsHeaders = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store, no-cache, no-transform, must-revalidate, max-age=0",
-  "Pragma": "no-cache",
-  "Expires": "0",
+  Pragma: "no-cache",
+  Expires: "0",
   "Content-Encoding": "identity",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -14,10 +17,24 @@ const corsHeaders = {
   "Timing-Allow-Origin": "*",
 };
 
+function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds)) return Math.min(seconds * 1000, 3000);
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Upload speed test endpoint.
  * Proxies to Cloudflare's speed test server for real throughput measurement.
- * The region param is used for latency simulation in the ping endpoint, not here.
+ *
+ * Follows the official @cloudflare/speedtest protocol:
+ * - POST https://speed.cloudflare.com/__up
+ * - Requires Referer and Origin headers for Cloudflare to accept the request
  */
 export const POST: APIRoute = async ({ request, url }) => {
   try {
@@ -50,36 +67,68 @@ export const POST: APIRoute = async ({ request, url }) => {
       );
     }
 
-    // Proxy to Cloudflare for real network throughput measurement
-    const cfResponse = await fetch(CF_SPEED_TEST_ENDPOINT, {
-      method: "POST",
-      body: uploadBody,
-      // @ts-ignore — duplex is required by Node/Undici for stream bodies
-      duplex: "half",
-      headers: {
-        "Cache-Control": "no-store, no-cache",
-        "Content-Type": "application/octet-stream",
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
-    });
+    // Proxy to Cloudflare with retry for transient 429 rate limiting
+    let lastError: any;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const cfResponse = await fetch(CF_SPEED_TEST_ENDPOINT, {
+          method: "POST",
+          body: uploadBody,
+          // @ts-ignore — duplex is required by Node/Undici for stream bodies
+          duplex: "half",
+          headers: {
+            Referer: "https://speed.cloudflare.com/",
+            Origin: "https://speed.cloudflare.com",
+            "Cache-Control": "no-store, no-cache",
+            "Content-Type": "application/octet-stream",
+          },
+        });
 
-    if (!cfResponse.ok) {
-      throw new Error(`Cloudflare responded with status ${cfResponse.status}`);
+        if (cfResponse.status === 429) {
+          const retryAfter = parseRetryAfter(
+            cfResponse.headers.get("Retry-After"),
+          );
+          const delay =
+            retryAfter ?? BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+          if (attempt < MAX_RETRIES) {
+            await sleep(delay);
+            continue;
+          }
+          throw new Error(
+            `Cloudflare responded with status 429 after ${MAX_RETRIES} retries`,
+          );
+        }
+
+        if (!cfResponse.ok) {
+          throw new Error(
+            `Cloudflare responded with status ${cfResponse.status}`,
+          );
+        }
+
+        // Read response to ensure completion
+        await cfResponse.text();
+
+        const bytesReceived = parseInt(
+          request.headers.get("content-length") || "0",
+          10,
+        );
+
+        return new Response(
+          JSON.stringify({ success: true, bytesReceived }),
+          { status: 200, headers: corsHeaders },
+        );
+      } catch (err: any) {
+        lastError = err;
+        if (err.message?.includes("429") && attempt < MAX_RETRIES) {
+          const delay = BASE_RETRY_DELAY_MS * Math.pow(2, attempt);
+          await sleep(delay);
+          continue;
+        }
+        throw err;
+      }
     }
 
-    // Read response to ensure completion
-    await cfResponse.text();
-
-    const bytesReceived = parseInt(
-      request.headers.get("content-length") || "0",
-      10,
-    );
-
-    return new Response(
-      JSON.stringify({ success: true, bytesReceived }),
-      { status: 200, headers: corsHeaders },
-    );
+    throw lastError;
   } catch (err: any) {
     console.error("Upload proxy error:", err?.message || err);
     return new Response(
