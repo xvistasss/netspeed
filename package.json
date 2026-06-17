@@ -10,7 +10,8 @@
     "build": "astro build",
     "preview": "astro preview --host",
     "astro": "astro",
-    "generate-types": "wrangler types"
+    "generate-types": "wrangler types",
+    "speedtest": "node scripts/speedtest-cli.js"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",

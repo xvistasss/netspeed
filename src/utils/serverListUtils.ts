@@ -3,21 +3,30 @@ import { haversineDistance } from "./speedTestUtils";
 
 export type ServerList = Array<Omit<TestServer, "distance">>;
 
+// Measurement nodes: geographic locations for latency estimation.
+// All API calls route to the same origin — latency is simulated via estimateRtt().
 export const SERVER_LIST: ServerList = [
+  // Local edge (special case: distance=0, used when client is on localhost)
+  // {
+  //   id: "local-edge",
+  //   name: "Local Edge",
+  //   lat: 0,
+  //   lon: 0,
+  //   region: "local-edge",
+  // },
+  // Asia Pacific
   {
-    id: "india-tezpur",
-    name: "Tezpur, India",
-    lat: 26.6528,
-    lon: 92.7926,
-    url: "http://speedtest.frontlineinternetservices.com:8080/speedtest/upload.php",
+    id: "india-mumbai",
+    name: "Mumbai, India",
+    lat: 19.076,
+    lon: 72.8777,
     region: "ap-south",
   },
   {
-    id: "india-agartala",
-    name: "Agartala, India",
-    lat: 23.8315,
-    lon: 91.2868,
-    url: "http://st.unistarbroadband.com:8080/speedtest/upload.php",
+    id: "india-bangalore",
+    name: "Bangalore, India",
+    lat: 12.9716,
+    lon: 77.5946,
     region: "ap-south",
   },
   {
@@ -25,7 +34,6 @@ export const SERVER_LIST: ServerList = [
     name: "Singapore",
     lat: 1.3521,
     lon: 103.8198,
-    url: "",
     region: "ap-southeast",
   },
   {
@@ -33,7 +41,13 @@ export const SERVER_LIST: ServerList = [
     name: "Tokyo, Japan",
     lat: 35.6762,
     lon: 139.6503,
-    url: "",
+    region: "ap-northeast",
+  },
+  {
+    id: "seoul",
+    name: "Seoul, South Korea",
+    lat: 37.5665,
+    lon: 126.978,
     region: "ap-northeast",
   },
   {
@@ -41,15 +55,14 @@ export const SERVER_LIST: ServerList = [
     name: "Sydney, Australia",
     lat: -33.8688,
     lon: 151.2093,
-    url: "",
     region: "ap-southeast",
   },
+  // Europe
   {
     id: "frankfurt",
     name: "Frankfurt, Germany",
     lat: 50.1109,
     lon: 8.6821,
-    url: "",
     region: "eu-central",
   },
   {
@@ -57,7 +70,6 @@ export const SERVER_LIST: ServerList = [
     name: "London, United Kingdom",
     lat: 51.5072,
     lon: -0.1276,
-    url: "",
     region: "eu-west",
   },
   {
@@ -65,31 +77,21 @@ export const SERVER_LIST: ServerList = [
     name: "Paris, France",
     lat: 48.8566,
     lon: 2.3522,
-    url: "",
     region: "eu-west",
   },
+  // Americas
   {
     id: "new-york",
     name: "New York, United States",
     lat: 40.7128,
     lon: -74.006,
-    url: "",
     region: "us-east",
-  },
-  {
-    id: "chicago",
-    name: "Chicago, United States",
-    lat: 41.8781,
-    lon: -87.6298,
-    url: "",
-    region: "us-central",
   },
   {
     id: "los-angeles",
     name: "Los Angeles, United States",
     lat: 34.0522,
     lon: -118.2437,
-    url: "",
     region: "us-west",
   },
   {
@@ -97,7 +99,6 @@ export const SERVER_LIST: ServerList = [
     name: "Toronto, Canada",
     lat: 43.6532,
     lon: -79.3832,
-    url: "",
     region: "ca-central",
   },
   {
@@ -105,16 +106,22 @@ export const SERVER_LIST: ServerList = [
     name: "São Paulo, Brazil",
     lat: -23.5505,
     lon: -46.6333,
-    url: "",
     region: "sa-east",
   },
+  // Middle East & Africa
   {
     id: "johannesburg",
     name: "Johannesburg, South Africa",
     lat: -26.2041,
     lon: 28.0473,
-    url: "",
     region: "af-south",
+  },
+  {
+    id: "dubai",
+    name: "Dubai, United Arab Emirates",
+    lat: 25.2048,
+    lon: 55.2708,
+    region: "me-central",
   },
 ];
 

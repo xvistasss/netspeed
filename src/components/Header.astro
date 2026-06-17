@@ -51,7 +51,7 @@ const { showServerStatus = false } = Astro.props;
               id="header-server-text"
               class="truncate bg-transparent text-mute border-none text-xs font-mono hidden sm:inline"
             >
-              Auto: Detecting…
+              Server: Auto Detect
             </span>
           </div>
         )
@@ -100,18 +100,8 @@ const { showServerStatus = false } = Astro.props;
   const statusDots = document.querySelectorAll(".server-status-dot");
 
   window.addEventListener("servers-discovered", (e: any) => {
-    const { servers } = e.detail;
     if (!serverText) return;
-
-    const first =
-      Array.isArray(servers) && servers.length > 0 ? servers[0] : null;
-    if (!first) {
-      serverText.textContent = "Server: Auto Detecting…";
-      return;
-    }
-
-    const distStr = first.distance ? ` (${first.distance})` : "";
-    serverText.textContent = `Server (Auto): ${first.name}${distStr}`;
+    serverText.textContent = "Server: Start Speed Test";
   });
 
   window.addEventListener("server-selected", (e: any) => {

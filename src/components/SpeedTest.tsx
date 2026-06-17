@@ -26,7 +26,14 @@ import type {
   ClientInfo,
   DetailPingStats,
 } from "../utils/speedTestUtils";
-import { sleep, formatSpeed } from "../utils/speedTestUtils";
+import {
+  sleep,
+  formatSpeed,
+  isLocalHost,
+  calculateMean,
+  calculateJitter,
+  calculateMin,
+} from "../utils/speedTestUtils";
 import {
   SERVER_LIST,
   withDistances,
@@ -69,6 +76,71 @@ export default function SpeedTest() {
     peak: 0,
   });
   const [packetLoss, setPacketLoss] = useState<number>(0);
+
+  // Terminal simulation state
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([
+    "Welcome to Net-Speed CLI v0.1.1",
+    "System ready. Click 'Start Speed Test' or type 'run' in terminal.",
+  ]);
+  const [activeProgressLine, setActiveProgressLine] = useState<string | null>(null);
+  const [cliInput, setCliInput] = useState("");
+  const terminalBodyRef = useRef<HTMLDivElement | null>(null);
+
+  // Refs to track live values avoiding stale closures in Web Worker callbacks
+  const downloadStatsRef = useRef<SpeedStats>({ current: 0, avg: 0, peak: 0 });
+  const uploadStatsRef = useRef<SpeedStats>({ current: 0, avg: 0, peak: 0 });
+  const latencyStatsRef = useRef<LatencyStats>({
+    current: 0,
+    avg: 0,
+    jitter: 0,
+    min: Infinity,
+    max: 0,
+    latencies: [],
+  });
+  const selectedServerRef = useRef<TestServer | null>(null);
+
+  useEffect(() => {
+    if (terminalBodyRef.current) {
+      terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;
+    }
+  }, [terminalLogs, activeProgressLine]);
+
+  const handleCliSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cmd = cliInput.trim().toLowerCase();
+    if (!cmd) return;
+
+    setTerminalLogs((prev) => [...prev, `$ ${cliInput}`]);
+    setCliInput("");
+
+    if (cmd === "clear") {
+      setTerminalLogs([]);
+      setActiveProgressLine(null);
+    } else if (cmd === "help") {
+      setTerminalLogs((prev) => [
+        ...prev,
+        "Available commands:",
+        "  run, speedtest  - Start the network speed test",
+        "  list, servers   - List all available speed test edge servers",
+        "  clear           - Clear the terminal screen",
+        "  help            - Show this help message",
+      ]);
+    } else if (cmd === "list" || cmd === "servers") {
+      setTerminalLogs((prev) => [
+        ...prev,
+        "Configured Edge Servers:",
+        ...SERVER_LIST.map((s) => `  - ${s.id}: ${s.name} (${s.region})`),
+      ]);
+    } else if (cmd === "run" || cmd === "speedtest") {
+      if (phase !== "idle" && phase !== "complete" && phase !== "error") {
+        setTerminalLogs((prev) => [...prev, "Error: A speed test is already running."]);
+      } else {
+        startSpeedTest();
+      }
+    } else {
+      setTerminalLogs((prev) => [...prev, `Unknown command: ${cmd}. Type 'help' for options.`]);
+    }
+  };
 
   // Loaded latency and jitter stats (split download vs upload phase pings)
   const [dlLoadedLatency, setDlLoadedLatency] = useState<number>(0);
@@ -403,19 +475,6 @@ export default function SpeedTest() {
     }
   };
 
-  // Helper to fetch public IP in local development / fallback situations
-  const getPublicIp = async (): Promise<string | null> => {
-    try {
-      const res = await fetch("https://api.ipify.org?format=json");
-      if (res.ok) {
-        const data = await res.json();
-        return data.ip || null;
-      }
-    } catch (err) {
-      console.warn("Failed to retrieve public IP via ipify:", err);
-    }
-    return null;
-  };
 
   const initializeLocationData = (data: any) => {
     const hasValidCoords = (d: any) => {
@@ -433,10 +492,21 @@ export default function SpeedTest() {
     const clientLat = hasCoords ? data.latitude : 0;
     const clientLon = hasCoords ? data.longitude : 0;
 
-    const enriched = withDistances(clientLat, clientLon, SERVER_LIST as any);
-    
+    let serversToUse = [...SERVER_LIST];
+
+    const enriched = withDistances(clientLat, clientLon, serversToUse as any);
+
     let closest: TestServer[];
-    if (hasCoords) {
+    if (data && data.isLocal) {
+      // Always include local-edge as the primary option if connection is local
+      closest = enriched.filter((s) => s.id === "local-edge");
+      if (hasCoords) {
+        closest = [...closest, ...pickClosestN(enriched.filter((s) => s.id !== "local-edge"), 2)];
+      } else {
+        const defaultIds = ["new-york", "frankfurt", "singapore"];
+        closest = [...closest, ...enriched.filter((s) => defaultIds.includes(s.id))];
+      }
+    } else if (hasCoords) {
       closest = pickClosestN(enriched, 3);
     } else {
       // Find globally neutral default servers to avoid regional bias
@@ -446,90 +516,141 @@ export default function SpeedTest() {
         closest = enriched.slice(0, 3);
       }
     }
-    
+
     setClosestServers(closest);
-    setSelectedServer(closest[0] || null);
+    setSelectedServer(null);
   };
 
-  // 3. Detect client geolocation from server
+  const getPreciseCoords = (): Promise<{ latitude: number; longitude: number } | null> => {
+    return new Promise((resolve) => {
+      if (!("geolocation" in navigator)) {
+        resolve(null);
+        return;
+      }
+
+      // Try highly accurate precise location (GPS-level) first with a 6-second timeout and 5-minute cache.
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log(`High-accuracy Geolocation received from device: Lat ${position.coords.latitude}, Lon ${position.coords.longitude}`);
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          if (error.code === error.PERMISSION_DENIED) {
+            console.warn("Geolocation permission denied by user.");
+            resolve(null);
+            return;
+          }
+
+          console.warn(`High-accuracy Geolocation failed (Code: ${error.code}, Message: ${error.message}). Trying low-accuracy fallback...`);
+
+          // Try low-accuracy fallback (Wi-Fi/cell) with a 4-second timeout and allowing cached positions of any age
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              console.log(`Low-accuracy Geolocation received from device: Lat ${pos.coords.latitude}, Lon ${pos.coords.longitude}`);
+              resolve({
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+              });
+            },
+            (err) => {
+              console.warn(`Low-accuracy Geolocation also failed (Code: ${err.code}, Message: ${err.message}).`);
+              resolve(null);
+            },
+            {
+              enableHighAccuracy: false,
+              timeout: 4000,
+              maximumAge: Infinity,
+            }
+          );
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 6000,
+          maximumAge: 300000,
+        }
+      );
+    });
+  };
+
+  // 3. Detect client geolocation from server & browser Geolocation API
   const detectClientLocation = async () => {
-    let cachedInfo: string | null = null;
-    let cachedTime: string | null = null;
-
     try {
-      cachedInfo = localStorage.getItem("netspeed_client_info");
-      cachedTime = localStorage.getItem("netspeed_client_info_time");
-    } catch (_) {}
-
-    const cacheExpiryMs = 1000 * 60 * 60; // 1 hour cache duration
-
-    try {
-      // 1. If cache is fresh, use it immediately to avoid network calls and prevent distance shifts
-      if (cachedInfo && cachedTime) {
-        const age = Date.now() - parseInt(cachedTime, 10);
-        if (age < cacheExpiryMs) {
-          const parsed = JSON.parse(cachedInfo);
-          setClientInfo(parsed);
-          setStatusMessage(`Client IP detected (cached): ${parsed.ip}`);
-          initializeLocationData(parsed);
-          return;
+      // Check if geolocation permission is already granted
+      let preGrantedCoords: { latitude: number; longitude: number } | null = null;
+      if ("geolocation" in navigator && navigator.permissions) {
+        try {
+          const perm = await navigator.permissions.query({ name: "geolocation" });
+          if (perm.state === "granted") {
+            preGrantedCoords = await getPreciseCoords();
+          }
+        } catch (e) {
+          console.warn("Permissions API query failed:", e);
         }
       }
 
-      setStatusMessage("Locating client IP and network…");
+      // 1. Fetch IP-based geolocation immediately, passing precise coords if pre-granted
+      setStatusMessage("Detecting location…");
+      let url = "/api/ip-geo";
+      if (preGrantedCoords) {
+        let city = "";
+        let region = "";
+        let countryCode = "";
+        try {
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${preGrantedCoords.latitude}&longitude=${preGrantedCoords.longitude}&localityLanguage=en`
+          );
+          if (res.ok) {
+            const bdcData = await res.json();
+            city = bdcData.city || bdcData.locality || "";
+            region = bdcData.principalSubdivision || "";
+            countryCode = bdcData.countryCode || "";
+          }
+        } catch (e) {
+          console.warn("Client-side reverse geocoding failed on load:", e);
+        }
 
-      // Fetch client geolocation via server headers
-      const geoRes = await fetch("/api/ip-geo");
+        url = `/api/ip-geo?clientLat=${preGrantedCoords.latitude}&clientLon=${preGrantedCoords.longitude}`;
+        if (city) url += `&city=${encodeURIComponent(city)}`;
+        if (region) url += `&region=${encodeURIComponent(region)}`;
+        if (countryCode) url += `&countryCode=${encodeURIComponent(countryCode)}`;
+      }
+      const geoRes = await fetch(url);
       let data = await geoRes.json();
 
-      // If running on localhost, fallback to client-side public IP resolution
-      // and query our API using that IP to perform server-side geolocation lookup.
-      if (data.isLocal) {
-        const publicIp = await getPublicIp();
-        if (publicIp) {
-          try {
-            const resolvedRes = await fetch(`/api/ip-geo?ip=${publicIp}`);
-            if (resolvedRes.ok) {
-              const resolvedData = await resolvedRes.json();
-              data = {
-                ...resolvedData,
-                isLocal: true, // preserve local development mode flag
-              };
+      // If loopback IP detected (localhost development), fetch client's public IP to resolve location
+      if (data.isLocal && !preGrantedCoords) {
+        try {
+          const ipRes = await fetch("https://api.ipify.org?format=json");
+          if (ipRes.ok) {
+            const ipData = await ipRes.json();
+            if (ipData && ipData.ip) {
+              const upgradeRes = await fetch(`/api/ip-geo?ip=${ipData.ip}`);
+              if (upgradeRes.ok) {
+                data = await upgradeRes.json();
+              }
             }
-          } catch (err) {
-            console.error("Local client public IP lookup failed:", err);
           }
+        } catch (e) {
+          console.warn("Client-side public IP lookup failed, using loopback default:", e);
         }
       }
 
-      setClientInfo(data);
-      setStatusMessage(`Client IP detected: ${data.ip}`);
-      initializeLocationData(data);
-
-      // Save to localStorage cache
-      try {
-        localStorage.setItem("netspeed_client_info", JSON.stringify(data));
-        localStorage.setItem(
-          "netspeed_client_info_time",
-          Date.now().toString(),
-        );
-      } catch (_) {}
+      // Initialize UI with the geocoded data
+      const initialData = {
+        ...data,
+        isPrecise: !!preGrantedCoords,
+      };
+      setClientInfo(initialData);
+      initializeLocationData(initialData);
+      setStatusMessage(
+        preGrantedCoords
+          ? `Precise location loaded: ${initialData.city}, ${initialData.country}`
+          : `Client IP detected: ${initialData.ip}`
+      );
     } catch (err) {
-      console.error("Failed to locate client:", err);
-
-      // Fallback to expired cache if available before failing
-      if (cachedInfo) {
-        try {
-          const parsed = JSON.parse(cachedInfo);
-          setClientInfo(parsed);
-          setStatusMessage(`Client IP detected (stale cache): ${parsed.ip}`);
-          initializeLocationData(parsed);
-          return;
-        } catch (_) {}
-      }
-
-      setStatusMessage("GeoIP detection failed. Using global defaults.");
-
       const defaultData = {
         ip: "0.0.0.0",
         city: "Unknown",
@@ -539,7 +660,10 @@ export default function SpeedTest() {
         latitude: 0,
         longitude: 0,
         isLocal: false,
+        isPrecise: false,
       };
+      console.error("Failed to locate client:", err);
+      setStatusMessage("GeoIP detection failed. Using global defaults.");
       setClientInfo(defaultData as any);
       initializeLocationData(defaultData);
     }
@@ -547,28 +671,31 @@ export default function SpeedTest() {
 
   // 5. Routing: pick closest servers (if location available) or all servers (if location unavailable),
   // probe in parallel, and lock best-by-latency (200 OK only)
-  const routeToBestServer = async (): Promise<TestServer> => {
+  const routeToBestServer = async (overrideClientInfo?: ClientInfo | null): Promise<TestServer> => {
     setPhase("routing");
     setProgressPercent(15);
 
     const origin = window.location.origin;
+    const activeClientInfo = overrideClientInfo !== undefined ? overrideClientInfo : clientInfo;
 
     const hasCoords =
-      clientInfo &&
-      typeof clientInfo.latitude === "number" &&
-      Number.isFinite(clientInfo.latitude) &&
-      typeof clientInfo.longitude === "number" &&
-      Number.isFinite(clientInfo.longitude) &&
-      !(clientInfo.latitude === 0 && clientInfo.longitude === 0);
+      activeClientInfo &&
+      typeof activeClientInfo.latitude === "number" &&
+      Number.isFinite(activeClientInfo.latitude) &&
+      typeof activeClientInfo.longitude === "number" &&
+      Number.isFinite(activeClientInfo.longitude) &&
+      !(activeClientInfo.latitude === 0 && activeClientInfo.longitude === 0);
+
+    let serversToUse = [...SERVER_LIST];
 
     // If client coordinates are valid, probe 5 closest candidate servers.
     // If client coordinates are unavailable, probe ALL servers to find the lowest latency.
     const candidates = hasCoords
       ? pickClosestN(
-          withDistances(clientInfo.latitude, clientInfo.longitude, SERVER_LIST),
-          5,
-        )
-      : withDistances(0, 0, SERVER_LIST);
+        withDistances(activeClientInfo.latitude!, activeClientInfo.longitude!, serversToUse),
+        5,
+      )
+      : withDistances(0, 0, serversToUse);
 
     if (hasCoords) {
       setClosestServers(candidates);
@@ -595,84 +722,134 @@ export default function SpeedTest() {
       hostLatency = 20; // fallback
     }
 
-    const isLocalHost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      window.location.hostname === "::1" ||
-      window.location.hostname.startsWith("192.168.") ||
-      window.location.hostname.startsWith("10.") ||
-      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(window.location.hostname);
+    const isLocalConnection = isLocalHost(window.location.hostname);
 
     const probe = async (srv: TestServer) => {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 1200);
+      const lat = activeClientInfo?.latitude || 0;
+      const lon = activeClientInfo?.longitude || 0;
+      const latencies: number[] = [];
 
-      const start = performance.now();
-      try {
-        const lat = clientInfo?.latitude || 0;
-        const lon = clientInfo?.longitude || 0;
-        const testUrl = srv.region
-          ? `${origin}/api/ping?region=${srv.region}&serverId=${srv.id}&clientLat=${lat}&clientLon=${lon}&hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`
-          : `${origin}/api/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${Math.random()}`;
+      for (let i = 0; i < 3; i++) {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 1200);
 
-        const res = await fetch(testUrl, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
-        if (!res.ok) return { srv, latency: undefined };
+        const start = performance.now();
+        try {
+          const testUrl = srv.region
+            ? `${origin}/api/ping?region=${srv.region}&serverId=${srv.id}&clientLat=${lat}&clientLon=${lon}&hostLatency=${hostLatency}&cb=${Date.now()}-${i}-${Math.random()}`
+            : `${origin}/api/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${i}-${Math.random()}`;
 
-        await res.text();
-        let latencyVal = performance.now() - start;
-        if (isLocalHost) {
-          latencyVal = Math.max(1.5, latencyVal - hostLatency);
+          const res = await fetch(testUrl, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (res.ok) {
+            await res.text();
+            let latencyVal = performance.now() - start;
+            if (isLocalConnection) {
+              latencyVal = Math.max(1.5, latencyVal);
+            }
+            latencies.push(latencyVal);
+          }
+        } catch (_) {
+          // Ignore individual probe failures
+        } finally {
+          window.clearTimeout(timeoutId);
         }
-        return { srv, latency: latencyVal };
-      } catch (_) {
-        return { srv, latency: undefined };
-      } finally {
-        window.clearTimeout(timeoutId);
+        // Small pause between sequential probes to the same server to prevent queueing
+        await sleep(30);
       }
+
+      if (latencies.length === 0) {
+        setTerminalLogs((prev) => [...prev, `[PROBE] ${srv.name} - Failed`]);
+        return { srv, minLatency: undefined, avgLatency: undefined, jitter: undefined, successCount: 0 };
+      }
+
+      const minLatency = calculateMin(latencies);
+      const avgLatency = calculateMean(latencies);
+      const jitter = calculateJitter(latencies);
+
+      setTerminalLogs((prev) => [
+        ...prev,
+        `[PROBE] ${srv.name} - min: ${minLatency.toFixed(1)}ms, avg: ${avgLatency.toFixed(1)}ms, jitter: ${jitter.toFixed(1)}ms`,
+      ]);
+
+      return { srv, minLatency, avgLatency, jitter, successCount: latencies.length };
     };
 
-    const probes = await Promise.all(candidates.map(probe));
+    const probes = [];
+    for (const srv of candidates) {
+      probes.push(await probe(srv));
+    }
 
-    // Populate results map for all successful probes
+    // Populate results map for all successful probes using the minLatency
     for (const p of probes) {
-      if (typeof p.latency === "number" && Number.isFinite(p.latency)) {
-        results[p.srv.id] = p.latency;
+      if (typeof p.minLatency === "number" && Number.isFinite(p.minLatency)) {
+        results[p.srv.id] = p.minLatency;
       }
     }
 
-    // Sort successful probes using the bucketing + distance prioritization algorithm
-    const successfulProbes = probes
+    // Sort successful probes using standard-setting sorting algorithm:
+    // 1. Success rate (packet loss)
+    // 2. Latency bucket (10ms granularity)
+    // 3. Jitter (stability)
+    // 4. Geographic distance
+    let successfulProbes = probes
       .filter(
-        (p): p is { srv: TestServer; latency: number } =>
-          typeof p.latency === "number" && Number.isFinite(p.latency),
-      )
-      .sort((a, b) => {
-        // Group latencies into 15ms buckets to treat minor jitter differences as equivalent
-        const bucketA = Math.floor(a.latency / 15);
-        const bucketB = Math.floor(b.latency / 15);
-        if (bucketA !== bucketB) {
-          return bucketA - bucketB; // Prioritize lower latency category
-        }
+        (p): p is { srv: TestServer; minLatency: number; avgLatency: number; jitter: number; successCount: number } =>
+          typeof p.minLatency === "number" && Number.isFinite(p.minLatency) && p.successCount >= 2,
+      );
 
-        // If in the same latency bucket, prioritize the geographically closest server
-        const distA = a.srv.distance ?? Infinity;
-        const distB = b.srv.distance ?? Infinity;
-        if (distA !== distB) {
-          return distA - distB;
-        }
+    if (successfulProbes.length === 0) {
+      // Fallback to any server with at least 1 successful response
+      successfulProbes = probes.filter(
+        (p): p is { srv: TestServer; minLatency: number; avgLatency: number; jitter: number; successCount: number } =>
+          typeof p.minLatency === "number" && Number.isFinite(p.minLatency) && p.successCount >= 1,
+      );
+    }
 
-        // Fallback to exact latency if distances are also identical
-        return a.latency - b.latency;
-      });
+    successfulProbes.sort((a, b) => {
+      // Prioritize higher success rate (lower packet loss during probe)
+      if (a.successCount !== b.successCount) {
+        return b.successCount - a.successCount;
+      }
+
+      // Group latencies into 10ms buckets to treat minor network variance as equivalent
+      const bucketA = Math.floor(a.minLatency / 10);
+      const bucketB = Math.floor(b.minLatency / 10);
+      if (bucketA !== bucketB) {
+        return bucketA - bucketB; // Prioritize lower latency bucket
+      }
+
+      // Within the same bucket, prioritize the server with lower jitter (stability)
+      const jitterDiff = a.jitter - b.jitter;
+      if (Math.abs(jitterDiff) > 2) {
+        return jitterDiff;
+      }
+
+      // If jitter is also equivalent, prioritize the geographically closest server
+      const distA = a.srv.distance ?? Infinity;
+      const distB = b.srv.distance ?? Infinity;
+      if (distA !== distB) {
+        return distA - distB;
+      }
+
+      // Fallback to exact min latency
+      return a.minLatency - b.minLatency;
+    });
 
     const locked =
       successfulProbes.length > 0 ? successfulProbes[0].srv : candidates[0];
     if (!locked) throw new Error("No candidate servers available for routing.");
     setRoutingResults(results);
     setSelectedServer(locked);
+    selectedServerRef.current = locked;
+
+    setTerminalLogs((prev) => [
+      ...prev,
+      `[OK] Locked optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ""}`,
+    ]);
+
     setStatusMessage(
       `Selected optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ""}`,
     );
@@ -686,8 +863,57 @@ export default function SpeedTest() {
   const startSpeedTest = async () => {
     if (phase !== "idle" && phase !== "complete" && phase !== "error") return;
 
-    const clientLat = clientInfo?.latitude || 0;
-    const clientLon = clientInfo?.longitude || 0;
+    let currentClientInfo = clientInfo;
+    let clientLat = clientInfo?.latitude || 0;
+    let clientLon = clientInfo?.longitude || 0;
+
+    // Trigger browser geolocation prompt on user action if not already precise
+    if ("geolocation" in navigator && (!clientInfo || !clientInfo.isPrecise)) {
+      setStatusMessage("Requesting browser geolocation for optimal server routing...");
+      setTerminalLogs((prev) => [...prev, "[INFO] Requesting browser geolocation for high accuracy routing..."]);
+      const coords = await getPreciseCoords();
+      if (coords) {
+        try {
+          let city = "";
+          let region = "";
+          let countryCode = "";
+          try {
+            const res = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${coords.latitude}&longitude=${coords.longitude}&localityLanguage=en`
+            );
+            if (res.ok) {
+              const bdcData = await res.json();
+              city = bdcData.city || bdcData.locality || "";
+              region = bdcData.principalSubdivision || "";
+              countryCode = bdcData.countryCode || "";
+            }
+          } catch (e) {
+            console.warn("Client-side reverse geocoding failed during test start:", e);
+          }
+
+          let upgradeUrl = `/api/ip-geo?clientLat=${coords.latitude}&clientLon=${coords.longitude}`;
+          if (city) upgradeUrl += `&city=${encodeURIComponent(city)}`;
+          if (region) upgradeUrl += `&region=${encodeURIComponent(region)}`;
+          if (countryCode) upgradeUrl += `&countryCode=${encodeURIComponent(countryCode)}`;
+
+          const upgradeRes = await fetch(upgradeUrl);
+          if (upgradeRes.ok) {
+            const upgradeData = await upgradeRes.json();
+            currentClientInfo = {
+              ...upgradeData,
+              isPrecise: true,
+            };
+            setClientInfo(currentClientInfo);
+            initializeLocationData(currentClientInfo);
+            clientLat = coords.latitude;
+            clientLon = coords.longitude;
+            setStatusMessage(`Precise location loaded: ${currentClientInfo?.city || "Unknown City"}, ${currentClientInfo?.country || "Unknown Country"}`);
+          }
+        } catch (err) {
+          console.warn("Failed to upgrade coordinates during test start:", err);
+        }
+      }
+    }
 
     // Reset stats
     downloadRequestsRef.current = [];
@@ -709,8 +935,18 @@ export default function SpeedTest() {
       max: 0,
       latencies: [],
     });
+    latencyStatsRef.current = {
+      current: 0,
+      avg: 0,
+      jitter: 0,
+      min: Infinity,
+      max: 0,
+      latencies: [],
+    };
     setDownloadStats({ current: 0, avg: 0, peak: 0 });
+    downloadStatsRef.current = { current: 0, avg: 0, peak: 0 };
     setUploadStats({ current: 0, avg: 0, peak: 0 });
+    uploadStatsRef.current = { current: 0, avg: 0, peak: 0 };
     setDlLoadedLatency(0);
     setDlLoadedJitter(0);
     setUlLoadedLatency(0);
@@ -719,14 +955,31 @@ export default function SpeedTest() {
     setProgressPercent(0);
     setCompletionTime("");
 
-    // Initial routing pre-ping (top-3 closest + parallel 200 OK latency probe)
-    const anchorServer = await routeToBestServer();
+    setTerminalLogs([
+      "Welcome to Net-Speed CLI v0.1.1",
+      "System ready. Initializing speedtest...",
+      `$ speedtest --server=auto`,
+      `Client IP: ${currentClientInfo?.ip || "Detecting..."} (${currentClientInfo?.org || "Detecting..."})`,
+      `Location: ${currentClientInfo?.city || "Detecting..."}, ${currentClientInfo?.region || ""}, ${currentClientInfo?.country || ""}`,
+      "Finding optimal edge server via routing probes...",
+    ]);
+    setActiveProgressLine(null);
+
+    // Always run routing probes to lock the best server by latency at the start of the test
+    const anchorServer = await routeToBestServer(currentClientInfo);
 
     // Launch worker thread
     initCharts();
     setPhase("ping");
     setStatusMessage(`Pinging locked server: ${anchorServer.name}`);
     setProgressPercent(40);
+
+    setTerminalLogs((prev) => [
+      ...prev,
+      "",
+      `$ ping -c 15 ${anchorServer.id}`,
+      `PING ${anchorServer.name} (${anchorServer.lat.toFixed(4)}, ${anchorServer.lon.toFixed(4)}) 56(84) bytes of data.`,
+    ]);
 
     const origin = window.location.origin;
     const baseUrl = `${origin}/api`;
@@ -752,19 +1005,23 @@ export default function SpeedTest() {
           unloadedPingStatsRef.current = stats;
           setUnloadedPingStats(stats);
 
-          setLatencyStats({
+          const newLatencyStats = {
             current: data.latency,
-            avg:
-              data.latencies.reduce((a: number, b: number) => a + b, 0) /
-              data.latencies.length,
+            avg: calculateMean(data.latencies),
             jitter: data.jitter,
-            min: Math.min(...data.latencies),
+            min: calculateMin(data.latencies),
             max: Math.max(...data.latencies),
             latencies: data.latencies,
-          });
+          };
+          setLatencyStats(newLatencyStats);
+          latencyStatsRef.current = newLatencyStats;
           setProgressPercent(
             40 + Math.round((data.iteration / data.totalIterations) * 10),
           );
+          setTerminalLogs((prev) => [
+            ...prev,
+            `64 bytes from ${anchorServer.id}: icmp_seq=${data.iteration} time=${data.latency.toFixed(1)} ms`,
+          ]);
           break;
         }
 
@@ -785,9 +1042,25 @@ export default function SpeedTest() {
           );
 
           const pings = data.latencies || [];
+          const min = pings.length > 0 ? calculateMin(pings) : 0;
+          const avg = pings.length > 0 ? calculateMean(pings) : 0;
+          const max = pings.length > 0 ? Math.max(...pings) : 0;
+          const jitter = data.jitter || 0;
+          const loss = data.pingSent > 0 ? ((data.pingLost / data.pingSent) * 100).toFixed(1) : "0.0";
+
+          setTerminalLogs((prev) => [
+            ...prev,
+            `--- ${anchorServer.id} ping statistics ---`,
+            `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
+            `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
+            "",
+            `$ speedtest --download --streams=3`,
+            `Starting download throughput test (3 streams, 8s window)...`,
+          ]);
+
           const calculatedAvgPing =
             pings.length > 0
-              ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+              ? calculateMean(pings)
               : 20;
 
           workerRef.current?.postMessage({
@@ -804,21 +1077,30 @@ export default function SpeedTest() {
         }
 
         // Download Progress Messages
-        case "DOWNLOAD_PROGRESS":
+        case "DOWNLOAD_PROGRESS": {
           const downloadMbps = data.instantaneousSpeed / 1000000;
 
-          setDownloadStats({
+          const newDownloadStats = {
             current: data.instantaneousSpeed,
             avg: data.averageSpeed,
             peak: data.peakSpeed,
-          });
+          };
+          setDownloadStats(newDownloadStats);
+          downloadStatsRef.current = newDownloadStats;
 
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart("download", downloadMbps);
+          const dlPct = Math.min(100, Math.round((data.elapsedTime / 10) * 100));
+          const dlBarLen = Math.floor(dlPct / 5);
+          const dlBar = "█".repeat(dlBarLen) + " ".repeat(20 - dlBarLen);
+          setActiveProgressLine(
+            `Download: ${downloadMbps.toFixed(1)} Mbps [${dlBar}] ${dlPct}% (${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB transferred)`
+          );
+
           setProgressPercent(
-            Math.min(74, 50 + Math.round((data.elapsedTime / 8) * 25)),
+            Math.min(74, 50 + Math.round((data.elapsedTime / 10) * 25)),
           ); // cap at 74%
 
           if (data.loadedLatencies) {
@@ -835,6 +1117,7 @@ export default function SpeedTest() {
             setDownloadRequests(data.requests);
           }
           break;
+        }
 
         case "DOWNLOAD_COMPLETE": {
           const stats = {
@@ -845,11 +1128,13 @@ export default function SpeedTest() {
           dlLoadedPingStatsRef.current = stats;
           setDlLoadedPingStats(stats);
 
-          setDownloadStats({
+          const newDownloadStats = {
             current: 0,
             avg: data.averageSpeed,
             peak: data.peakSpeed,
-          });
+          };
+          setDownloadStats(newDownloadStats);
+          downloadStatsRef.current = newDownloadStats;
 
           setProgressPercent(75);
           // Transition to Upload
@@ -864,10 +1149,21 @@ export default function SpeedTest() {
             setDownloadRequests(data.requests);
           }
 
+          const finalDlMbps = data.averageSpeed / 1000000;
+          setTerminalLogs((prev) => [
+            ...prev,
+            `Download: ${finalDlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
+            `[OK] Download test finished.`,
+            "",
+            `$ speedtest --upload --streams=3`,
+            `Starting upload throughput test (3 streams, 8s window)...`,
+          ]);
+          setActiveProgressLine(null);
+
           const pings = unloadedPingStatsRef.current.latencies || [];
           const calculatedAvgPing =
             pings.length > 0
-              ? pings.reduce((a: number, b: number) => a + b, 0) / pings.length
+              ? calculateMean(pings)
               : 20;
 
           workerRef.current?.postMessage({
@@ -879,25 +1175,35 @@ export default function SpeedTest() {
             clientLon,
             basePing: calculatedAvgPing,
             parallelStreams: 3,
+            downloadSpeed: downloadStatsRef.current.avg,
           });
           break;
         }
 
         // Upload Progress Messages
-        case "UPLOAD_PROGRESS":
+        case "UPLOAD_PROGRESS": {
           const uploadMbps = data.instantaneousSpeed / 1000000;
-          setUploadStats({
+          const newUploadStats = {
             current: data.instantaneousSpeed,
             avg: data.averageSpeed,
             peak: data.peakSpeed,
-          });
+          };
+          setUploadStats(newUploadStats);
+          uploadStatsRef.current = newUploadStats;
 
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart("upload", uploadMbps);
+          const ulPct = Math.min(100, Math.round((data.elapsedTime / 10) * 100));
+          const ulBarLen = Math.floor(ulPct / 5);
+          const ulBar = "█".repeat(ulBarLen) + " ".repeat(20 - ulBarLen);
+          setActiveProgressLine(
+            `Upload: ${uploadMbps.toFixed(1)} Mbps [${ulBar}] ${ulPct}% (${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB transferred)`
+          );
+
           setProgressPercent(
-            Math.min(99, 75 + Math.round((data.elapsedTime / 8) * 20)),
+            Math.min(99, 75 + Math.round((data.elapsedTime / 10) * 20)),
           ); // cap at 99%
 
           if (data.loadedLatencies) {
@@ -914,6 +1220,7 @@ export default function SpeedTest() {
             setUploadRequests(data.requests);
           }
           break;
+        }
 
         case "UPLOAD_COMPLETE": {
           const stats = {
@@ -924,11 +1231,13 @@ export default function SpeedTest() {
           ulLoadedPingStatsRef.current = stats;
           setUlLoadedPingStats(stats);
 
-          setUploadStats({
+          const newUploadStats = {
             current: 0,
             avg: data.averageSpeed,
             peak: data.peakSpeed,
-          });
+          };
+          setUploadStats(newUploadStats);
+          uploadStatsRef.current = newUploadStats;
 
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
@@ -938,19 +1247,29 @@ export default function SpeedTest() {
             setUploadRequests(data.requests);
           }
 
+          const finalUlMbps = data.averageSpeed / 1000000;
+          setTerminalLogs((prev) => [
+            ...prev,
+            `Upload: ${finalUlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
+            `[OK] Upload test finished.`,
+          ]);
+          setActiveProgressLine(null);
+
           // Run packet loss simulator checks
-          runPacketLossCheck();
+          runPacketLossCheck(data.averageSpeed);
           break;
         }
 
         case "CANCELLED":
           setPhase("idle");
           setStatusMessage("Speed test stopped by user.");
+          setTerminalLogs((prev) => [...prev, "[ERROR] Speed test stopped by user.", "$"]);
           break;
 
         case "ERROR":
           setPhase("error");
           setStatusMessage(`Test failure: ${data.message}`);
+          setTerminalLogs((prev) => [...prev, `[ERROR] Test failure: ${data.message}`, "$"]);
           break;
       }
     };
@@ -967,17 +1286,16 @@ export default function SpeedTest() {
   };
 
   // 7. Mock packet loss framework logic
-  const runPacketLossCheck = () => {
+  const runPacketLossCheck = (finalUploadAvg: number) => {
     setPhase("complete");
     setProgressPercent(100);
     setStatusMessage("Speed test complete.");
-    setCompletionTime(
-      new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-    );
+    const timeStr = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    setCompletionTime(timeStr);
 
     const totalSent =
       unloadedPingStatsRef.current.sent +
@@ -996,6 +1314,21 @@ export default function SpeedTest() {
           ? parseFloat((Math.random() * 0.4).toFixed(1))
           : 0.0;
     setPacketLoss(lossPercentage);
+
+    setTerminalLogs((prev) => [
+      ...prev,
+      "",
+      "--------------------------------------------------",
+      `Speedtest execution finished at ${timeStr}`,
+      `Server: ${selectedServerRef.current?.name || "Auto Edge"}`,
+      `  Download Speed: ${(downloadStatsRef.current.avg / 1000000).toFixed(1)} Mbps`,
+      `  Upload Speed: ${(finalUploadAvg / 1000000).toFixed(1)} Mbps`,
+      `  Latency (unloaded): ${latencyStatsRef.current.avg.toFixed(1)} ms`,
+      `  Jitter: ${latencyStatsRef.current.jitter.toFixed(1)} ms`,
+      `  Packet Loss: ${lossPercentage.toFixed(1)}%`,
+      "--------------------------------------------------",
+      "$",
+    ]);
 
     if (workerRef.current) {
       workerRef.current.terminate();
@@ -1199,272 +1532,332 @@ export default function SpeedTest() {
         </div>
       ) : null}
 
-      {/* 3. Main Dashboard Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-        {/* Column 1: Download */}
-        <div className="md:col-span-4 flex flex-col gap-4 bg-canvas border border-hairline p-6 rounded-lg shadow-xs justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-2">
-              <span>DOWNLOAD</span>
-              <InfoTooltip content="The speed at which data is transferred from the internet to your device. Higher download speeds enable smoother video streaming, faster file downloads, and quicker webpage loading." />
-            </div>
-
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === "download"
-                  ? formatSpeed(downloadStats.current).value
-                  : downloadStats.avg > 0
-                    ? formatSpeed(downloadStats.avg).value
-                    : "0.0"}
-              </span>
-              <span className="text-xl text-mute font-mono">
-                {phase === "download"
-                  ? formatSpeed(downloadStats.current).unit
-                  : downloadStats.avg > 0
-                    ? formatSpeed(downloadStats.avg).unit
-                    : "Mbps"}
-              </span>
-            </div>
-
-            {/* Orange Area Chart */}
-            <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
-              <canvas ref={downloadChartRef} />
-              {(phase === "idle" ||
-                phase === "routing" ||
-                phase === "ping") && (
-                <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
-                  Chart starts drawing during download test.
+      {/* Side-by-side Layout: Web Dashboard on Left, Terminal Simulator on Right */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left Column - Web UI Dashboard */}
+        <div className="lg:col-span-8 flex flex-col gap-8">
+          {/* 3. Main Dashboard Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+            {/* Column 1: Download & Upload */}
+            <div className="md:col-span-8 flex flex-col gap-4 bg-canvas border border-hairline p-6 rounded-lg shadow-xs justify-between">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-2">
+                  <span>DOWNLOAD</span>
+                  <InfoTooltip content="The speed at which data is transferred from the internet to your device. Higher download speeds enable smoother video streaming, faster file downloads, and quicker webpage loading." />
                 </div>
-              )}
+
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
+                    {phase === "download"
+                      ? formatSpeed(downloadStats.current).value
+                      : downloadStats.avg > 0
+                        ? formatSpeed(downloadStats.avg).value
+                        : "0.0"}
+                  </span>
+                  <span className="text-xl text-mute font-mono">
+                    {phase === "download"
+                      ? formatSpeed(downloadStats.current).unit
+                      : downloadStats.avg > 0
+                        ? formatSpeed(downloadStats.avg).unit
+                        : "Mbps"}
+                  </span>
+                </div>
+
+                {/* Orange Area Chart */}
+                <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
+                  <canvas ref={downloadChartRef} />
+                  {(phase === "idle" ||
+                    phase === "routing" ||
+                    phase === "ping") && (
+                      <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
+                        Chart starts drawing during download test.
+                      </div>
+                    )}
+                </div>
+
+                <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
+                  <span>Peak Speed:</span>
+                  <span className="font-semibold text-ink tabular-nums">
+                    {downloadStats.peak > 0
+                      ? `${formatSpeed(downloadStats.peak).value} ${formatSpeed(downloadStats.peak).unit}`
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+              <hr className="border-hairline w-full h-4" />
+              <div>
+                <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-2">
+                  <span>UPLOAD</span>
+                  <InfoTooltip content="The speed at which data is transferred from your device to the internet. Higher upload speeds are critical for smooth video calls, online gaming, uploading large files, and sending emails with attachments." />
+                </div>
+
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
+                    {phase === "upload"
+                      ? formatSpeed(uploadStats.current).value
+                      : uploadStats.avg > 0
+                        ? formatSpeed(uploadStats.avg).value
+                        : "0.0"}
+                  </span>
+                  <span className="text-xl text-mute font-mono">
+                    {phase === "upload"
+                      ? formatSpeed(uploadStats.current).unit
+                      : uploadStats.avg > 0
+                        ? formatSpeed(uploadStats.avg).unit
+                        : "Mbps"}
+                  </span>
+                </div>
+
+                {/* Purple Area Chart */}
+                <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
+                  <canvas ref={uploadChartRef} />
+                  {(phase === "idle" ||
+                    phase === "routing" ||
+                    phase === "ping" ||
+                    phase === "download") && (
+                      <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
+                        Chart starts drawing during upload test.
+                      </div>
+                    )}
+                </div>
+
+                <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
+                  <span>Peak Speed:</span>
+                  <span className="font-semibold text-ink tabular-nums">
+                    {uploadStats.peak > 0
+                      ? `${formatSpeed(uploadStats.peak).value} ${formatSpeed(uploadStats.peak).unit}`
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Latency, Jitter, Packet Loss Stack */}
+            <div className="md:col-span-4 flex flex-col gap-4">
+              {/* Latency card */}
+              <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-1 flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
+                      <span>LATENCY</span>
+                      <InfoTooltip content="Latency (ping) measures the round-trip response time for data. Lower latency is vital for real-time applications like online gaming or voice calls. Unloaded represents idle latency, while Loaded (Down/Up Arrow) measures latency under heavy network load." />
+                    </div>
+                    <Wifi className="w-4 h-4 text-mute" aria-hidden="true" />
+                  </div>
+
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
+                      {unloadedPingStats.latencies.length > 0
+                        ? latencyStats.avg.toFixed(1)
+                        : "—"}
+                    </span>
+                    <span className="text-xs text-mute font-mono">ms (unloaded)</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
+                  <div className="flex items-center gap-1">
+                    <ArrowDown
+                      className="w-3.5 h-3.5 text-[#eb6f20]"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      Down:{" "}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {dlLoadedPingStats.latencies.length > 0
+                          ? `${dlLoadedLatency.toFixed(0)} ms`
+                          : "—"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <ArrowUp
+                      className="w-3.5 h-3.5 text-[#8b5cf6]"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      Up:{" "}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {ulLoadedPingStats.latencies.length > 0
+                          ? `${ulLoadedLatency.toFixed(0)} ms`
+                          : "—"}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Jitter card */}
+              <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-1 flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
+                      <span>JITTER</span>
+                      <InfoTooltip content="Jitter is the variance in latency over time. Steady, consistent latency results in lower jitter, which is essential for smooth audio streams and live gaming. High jitter causes sudden lag spikes." />
+                    </div>
+                    <Activity className="w-4 h-4 text-mute" aria-hidden="true" />
+                  </div>
+
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
+                      {unloadedPingStats.latencies.length > 1
+                        ? latencyStats.jitter.toFixed(1)
+                        : "—"}
+                    </span>
+                    <span className="text-xs text-mute font-mono">ms</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
+                  <div className="flex items-center gap-1">
+                    <ArrowDown
+                      className="w-3.5 h-3.5 text-[#eb6f20]"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      Down:{" "}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {dlLoadedPingStats.latencies.length > 1
+                          ? `${dlLoadedJitter.toFixed(0)} ms`
+                          : "—"}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <ArrowUp
+                      className="w-3.5 h-3.5 text-[#8b5cf6]"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      Up:{" "}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {ulLoadedPingStats.latencies.length > 1
+                          ? `${ulLoadedJitter.toFixed(0)} ms`
+                          : "—"}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Packet Loss card */}
+              <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-1 flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
+                      <span>PACKET LOSS</span>
+                      <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. It results in choppy voice calls, freezing videos, and gaming lag. Ideally, packet loss should be 0.0%." />
+                    </div>
+                    <AlertTriangle
+                      className="w-4 h-4 text-mute"
+                      aria-hidden="true"
+                    />
+                  </div>
+
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
+                      {phase === "complete"
+                        ? `${packetLoss}%`
+                        : phase === "idle"
+                          ? "—"
+                          : "0.0%"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex flex-col justify-between items-center">
+                  <span>Measured Packet Loss</span>
+                  <span className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}>
+                    {packetLoss > 0 ? "Suboptimal" : "Excellent"}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
-            <span>Peak Speed:</span>
-            <span className="font-semibold text-ink tabular-nums">
-              {downloadStats.peak > 0
-                ? `${formatSpeed(downloadStats.peak).value} ${formatSpeed(downloadStats.peak).unit}`
-                : "—"}
-            </span>
-          </div>
+          {/* 4. Network Quality Score Panel */}
+          <QualityScores
+            phase={phase}
+            downloadAvg={downloadStats.avg}
+            uploadAvg={uploadStats.avg}
+            latencyAvg={latencyStats.avg}
+            latencyJitter={latencyStats.jitter}
+          />
+
+          {/* 5. Detailed Measurements Breakdown */}
+          <DetailedMeasurements
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            unloadedPingStats={unloadedPingStats}
+            dlLoadedPingStats={dlLoadedPingStats}
+            ulLoadedPingStats={ulLoadedPingStats}
+            downloadRequests={downloadRequests}
+            uploadRequests={uploadRequests}
+          />
+
+          {/* 6. Technical Details Drawer */}
+          <TechnicalLogs
+            clientInfo={clientInfo}
+            selectedServer={selectedServer}
+            routingResults={routingResults}
+          />
         </div>
 
-        {/* Column 2: Upload */}
-        <div className="md:col-span-4 flex flex-col gap-4 bg-canvas border border-hairline p-6 rounded-lg shadow-xs justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-2">
-              <span>UPLOAD</span>
-              <InfoTooltip content="The speed at which data is transferred from your device to the internet. Higher upload speeds are critical for smooth video calls, online gaming, uploading large files, and sending emails with attachments." />
+        {/* Right Column - Interactive Terminal Speed Test Simulator */}
+        <div className="lg:col-span-4 w-full flex flex-1 flex-col bg-[#0a0a0a] rounded-lg border border-hairline overflow-hidden shadow-md lg:sticky lg:top-20">
+          {/* macOS window header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#222222] bg-[#171717] select-none">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f56] opacity-80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e] opacity-80" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f] opacity-80" />
             </div>
+            <span className="text-[10px] font-mono text-mute tracking-wider uppercase">speedtest-cli --terminal</span>
+            <div className="w-10" />
+          </div>
 
-            <div className="flex items-baseline gap-2 mb-4">
-              <span className="text-5xl md:text-6xl font-bold tracking-tighter tabular-nums text-ink">
-                {phase === "upload"
-                  ? formatSpeed(uploadStats.current).value
-                  : uploadStats.avg > 0
-                    ? formatSpeed(uploadStats.avg).value
-                    : "0.0"}
-              </span>
-              <span className="text-xl text-mute font-mono">
-                {phase === "upload"
-                  ? formatSpeed(uploadStats.current).unit
-                  : uploadStats.avg > 0
-                    ? formatSpeed(uploadStats.avg).unit
-                    : "Mbps"}
-              </span>
-            </div>
+          {/* Terminal output stream body */}
+          <div
+            ref={terminalBodyRef}
+            className="h-full max-h-[calc(100vh-200px)] overflow-y-scroll p-4 flex flex-col gap-1.5 text-left font-mono text-[11px] leading-relaxed text-[#fafafa]"
+          >
+            {terminalLogs.map((log, index) => {
+              let style: React.CSSProperties = { color: "#fafafa" };
+              if (log.startsWith("$")) style = { color: "#50e3c2", fontWeight: "bold" };
+              else if (log.includes("[OK]")) style = { color: "#0070f3", fontWeight: "500" };
+              else if (log.includes("[PROBE]")) style = { color: "#888888" };
+              else if (log.includes("[ERROR]") || log.startsWith("Error:")) style = { color: "#ee0000" };
 
-            {/* Purple Area Chart */}
-            <div className="h-44 relative w-full border border-hairline bg-canvas-soft rounded-md overflow-hidden p-2">
-              <canvas ref={uploadChartRef} />
-              {(phase === "idle" ||
-                phase === "routing" ||
-                phase === "ping" ||
-                phase === "download") && (
-                <div className="absolute inset-0 bg-canvas/40 backdrop-blur-xs flex items-center justify-center text-[10px] font-mono text-mute text-center p-4">
-                  Chart starts drawing during upload test.
+              return (
+                <div key={index} style={style} className="whitespace-pre-wrap">
+                  {log}
                 </div>
-              )}
-            </div>
+              );
+            })}
+            {activeProgressLine && (
+              <div style={{ color: "#e2e8f0" }} className="animate-pulse whitespace-pre-wrap">
+                {activeProgressLine}
+              </div>
+            )}
           </div>
 
-          <div className="flex justify-between items-center text-xs font-mono border-t border-hairline pt-3 mt-2 text-mute">
-            <span>Peak Speed:</span>
-            <span className="font-semibold text-ink tabular-nums">
-              {uploadStats.peak > 0
-                ? `${formatSpeed(uploadStats.peak).value} ${formatSpeed(uploadStats.peak).unit}`
-                : "—"}
-            </span>
-          </div>
-        </div>
-
-        {/* Column 3: Latency, Jitter, Packet Loss Stack */}
-        <div className="md:col-span-4 flex flex-col gap-4">
-          {/* Latency card */}
-          <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-                <span>LATENCY</span>
-                <InfoTooltip content="Latency (ping) measures the round-trip response time for data. Lower latency is vital for real-time applications like online gaming or voice calls. Unloaded represents idle latency, while Loaded (Down/Up Arrow) measures latency under heavy network load." />
-              </div>
-              <Wifi className="w-4 h-4 text-mute" aria-hidden="true" />
-            </div>
-
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {unloadedPingStats.latencies.length > 0
-                  ? latencyStats.avg.toFixed(1)
-                  : "—"}
-              </span>
-              <span className="text-xs text-mute font-mono">ms (unloaded)</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
-              <div className="flex items-center gap-1">
-                <ArrowDown
-                  className="w-3.5 h-3.5 text-[#eb6f20]"
-                  aria-hidden="true"
-                />
-                <span>
-                  Down:{" "}
-                  <span className="font-semibold text-ink font-mono tabular-nums">
-                    {dlLoadedPingStats.latencies.length > 0
-                      ? `${dlLoadedLatency.toFixed(0)} ms`
-                      : "—"}
-                  </span>
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <ArrowUp
-                  className="w-3.5 h-3.5 text-[#8b5cf6]"
-                  aria-hidden="true"
-                />
-                <span>
-                  Up:{" "}
-                  <span className="font-semibold text-ink font-mono tabular-nums">
-                    {ulLoadedPingStats.latencies.length > 0
-                      ? `${ulLoadedLatency.toFixed(0)} ms`
-                      : "—"}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Jitter card */}
-          <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-                <span>JITTER</span>
-                <InfoTooltip content="Jitter is the variance in latency over time. Steady, consistent latency results in lower jitter, which is essential for smooth audio streams and live gaming. High jitter causes sudden lag spikes." />
-              </div>
-              <Activity className="w-4 h-4 text-mute" aria-hidden="true" />
-            </div>
-
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                {unloadedPingStats.latencies.length > 1
-                  ? latencyStats.jitter.toFixed(1)
-                  : "—"}
-              </span>
-              <span className="text-xs text-mute font-mono">ms</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-2 border-t border-hairline pt-2 text-[11px] font-mono text-mute">
-              <div className="flex items-center gap-1">
-                <ArrowDown
-                  className="w-3.5 h-3.5 text-[#eb6f20]"
-                  aria-hidden="true"
-                />
-                <span>
-                  Down:{" "}
-                  <span className="font-semibold text-ink font-mono tabular-nums">
-                    {dlLoadedPingStats.latencies.length > 1
-                      ? `${dlLoadedJitter.toFixed(0)} ms`
-                      : "—"}
-                  </span>
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <ArrowUp
-                  className="w-3.5 h-3.5 text-[#8b5cf6]"
-                  aria-hidden="true"
-                />
-                <span>
-                  Up:{" "}
-                  <span className="font-semibold text-ink font-mono tabular-nums">
-                    {ulLoadedPingStats.latencies.length > 1
-                      ? `${ulLoadedJitter.toFixed(0)} ms`
-                      : "—"}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Packet Loss card */}
-          <div className="bg-canvas border border-hairline p-5 rounded-lg shadow-xs flex flex-col justify-between h-full">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-                  <span>PACKET LOSS</span>
-                  <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. It results in choppy voice calls, freezing videos, and gaming lag. Ideally, packet loss should be 0.0%." />
-                </div>
-                <AlertTriangle
-                  className="w-4 h-4 text-mute"
-                  aria-hidden="true"
-                />
-              </div>
-
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-bold tracking-tight text-ink tabular-nums">
-                  {phase === "complete"
-                    ? `${packetLoss}%`
-                    : phase === "idle"
-                      ? "—"
-                      : "0.0%"}
-                </span>
-              </div>
-            </div>
-
-            <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex justify-between items-center">
-              <span>Measured Packet Loss</span>
-              <span
-                className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}
-              >
-                {packetLoss > 0 ? "Suboptimal" : "Excellent"}
-              </span>
-            </div>
-          </div>
+          {/* Terminal prompt input form */}
+          <form
+            onSubmit={handleCliSubmit}
+            className="flex items-center gap-1.5 px-4 py-3 border-t border-[#222222]/80 bg-[#0c0c0c] text-[11px] font-mono text-[#00dfd8]"
+          >
+            <span>$</span>
+            <input
+              type="text"
+              value={cliInput}
+              onChange={(e) => setCliInput(e.target.value)}
+              disabled={phase !== "idle" && phase !== "complete" && phase !== "error"}
+              placeholder={phase !== "idle" && phase !== "complete" && phase !== "error" ? "Test in progress..." : "Type 'run' or 'help'..."}
+              className="flex-1 bg-transparent border-none outline-hidden text-[#fafafa] font-mono p-0 focus:ring-0 text-[11px]"
+            />
+          </form>
         </div>
       </div>
-
-      {/* 4. Network Quality Score Panel */}
-      <QualityScores
-        phase={phase}
-        downloadAvg={downloadStats.avg}
-        uploadAvg={uploadStats.avg}
-        latencyAvg={latencyStats.avg}
-        latencyJitter={latencyStats.jitter}
-      />
-
-      {/* 5. Detailed Measurements Breakdown */}
-      <DetailedMeasurements
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        unloadedPingStats={unloadedPingStats}
-        dlLoadedPingStats={dlLoadedPingStats}
-        ulLoadedPingStats={ulLoadedPingStats}
-        downloadRequests={downloadRequests}
-        uploadRequests={uploadRequests}
-      />
-
-      {/* 6. Technical Details Drawer */}
-      <TechnicalLogs
-        clientInfo={clientInfo}
-        selectedServer={selectedServer}
-        routingResults={routingResults}
-      />
     </div>
   );
 }

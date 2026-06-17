@@ -319,42 +319,35 @@ export default function DetailedMeasurements({
                   {
                     name: "100 kB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size ? size === 100 * 1024 : r.bytes < 500 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size < 500 * 1024;
                     },
                   },
                   {
                     name: "1 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 1 * 1024 * 1024
-                        : r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 500 * 1024 && size < 5 * 1024 * 1024;
                     },
                   },
                   {
                     name: "10 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 10 * 1024 * 1024
-                        : r.bytes >= 5 * 1024 * 1024 &&
-                            r.bytes < 15 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 5 * 1024 * 1024 && size < 15 * 1024 * 1024;
                     },
                   },
                   {
                     name: "25 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 25 * 1024 * 1024
-                        : r.bytes >= 15 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 15 * 1024 * 1024;
                     },
                   },
                 ];
 
                 return bins.map((bin) => {
-                  const binReqs = downloadRequests.filter(bin.filter);
+                  const binReqs = downloadRequests.filter((r) => bin.filter(r) && r.bytes > 0);
                   const speeds = binReqs.map((r) => r.bps / 1000000);
                   const hasData = speeds.length > 0;
 
@@ -419,42 +412,35 @@ export default function DetailedMeasurements({
                   {
                     name: "100 kB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size ? size === 100 * 1024 : r.bytes < 500 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size < 500 * 1024;
                     },
                   },
                   {
                     name: "1 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 1 * 1024 * 1024
-                        : r.bytes >= 500 * 1024 && r.bytes < 5 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 500 * 1024 && size < 5 * 1024 * 1024;
                     },
                   },
                   {
                     name: "10 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 10 * 1024 * 1024
-                        : r.bytes >= 5 * 1024 * 1024 &&
-                            r.bytes < 15 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 5 * 1024 * 1024 && size < 15 * 1024 * 1024;
                     },
                   },
                   {
                     name: "25 MB",
                     filter: (r: any) => {
-                      const size = r.phaseSize || r.payloadSize;
-                      return size
-                        ? size === 25 * 1024 * 1024
-                        : r.bytes >= 15 * 1024 * 1024;
+                      const size = r.payloadSize || r.phaseSize || r.bytes;
+                      return size >= 15 * 1024 * 1024;
                     },
                   },
                 ];
 
                 return bins.map((bin) => {
-                  const binReqs = uploadRequests.filter(bin.filter);
+                  const binReqs = uploadRequests.filter((r) => bin.filter(r) && r.bytes > 0);
                   const speeds = binReqs.map((r) => r.bps / 1000000);
                   const hasData = speeds.length > 0;
 

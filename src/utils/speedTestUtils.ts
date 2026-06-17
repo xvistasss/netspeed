@@ -1,10 +1,11 @@
-// Configured array of globally distributed test servers
+// Configured array of globally distributed test measurement nodes
+// These represent geographic locations for latency estimation, NOT actual server endpoints.
+// All API calls use the same origin (window.location.origin) - latency is simulated via estimateRtt().
 export interface TestServer {
   id: string;
   name: string;
   lat: number;
   lon: number;
-  url: string; // Will default to current host API endpoints
   region?: string;
   distance: number;
 }
@@ -22,9 +23,9 @@ export function haversineDistance(
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -66,6 +67,7 @@ export interface ClientInfo {
   latitude: number;
   longitude: number;
   isLocal: boolean;
+  isPrecise?: boolean;
 }
 
 export interface DetailPingStats {
@@ -116,3 +118,139 @@ export const formatSpeed = (bps: number) => {
   }
   return { value: mbps.toFixed(1), unit: "Mbps" };
 };
+
+// Helper to check for local loopback or private range IPs / Hostnames / URLs
+// Used to determine if we should proxy to Cloudflare for real throughput measurement
+export function isLocalHost(value: string | null | undefined): boolean {
+  if (!value) return false;
+  let hostname = value;
+  if (value.includes("://")) {
+    try {
+      hostname = new URL(value).hostname;
+    } catch (_) {
+      // ignore
+    }
+  } else {
+    // If it contains a port, strip it
+    hostname = value.split(":")[0];
+  }
+  hostname = hostname.toLowerCase().trim();
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("10.") ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+  );
+}
+
+// Throttled stream helper using Token Bucket pacing (consolidated from api/download and api/upload)
+export function createThrottledStream(
+  sourceStream: ReadableStream<Uint8Array>,
+  maxBps: number,
+): ReadableStream<Uint8Array> {
+  const reader = sourceStream.getReader();
+
+  // Token Bucket Pacing: allow bursts up to 200ms of data, minimum 1MB capacity
+  const capacity = Math.max(maxBps * 0.2, 1024 * 1024);
+  let tokens = capacity;
+  let lastRefillTime = performance.now();
+
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          return;
+        }
+
+        if (value) {
+          const chunkSize = value.length;
+          const now = performance.now();
+          const elapsed = now - lastRefillTime;
+          lastRefillTime = now;
+
+          // Refill tokens based on elapsed time (seconds)
+          tokens = Math.min(capacity, tokens + (elapsed / 1000) * maxBps);
+
+          if (tokens < chunkSize) {
+            // Calculate necessary wait time to acquire sufficient tokens
+            const neededTokens = chunkSize - tokens;
+            const waitTimeMs = (neededTokens / maxBps) * 1000;
+
+            await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
+
+            // Refill tokens again after sleeping
+            const postSleepNow = performance.now();
+            const postSleepElapsed = postSleepNow - lastRefillTime;
+            lastRefillTime = postSleepNow;
+            tokens = Math.min(
+              capacity,
+              tokens + (postSleepElapsed / 1000) * maxBps,
+            );
+          }
+
+          // Deduct tokens and send the chunk
+          tokens = Math.max(0, tokens - chunkSize);
+          controller.enqueue(value);
+        }
+      } catch (err) {
+        controller.error(err);
+      }
+    },
+    cancel(reason) {
+      reader.cancel(reason).catch(() => { });
+    },
+  });
+}
+
+export const REGION_DELAYS: Record<string, number> = {
+  "us-east": 40,
+  "us-west": 70,
+  "ca-central": 50,
+  "sa-east": 120,
+  "eu-west": 35,
+  "eu-central": 45,
+  "af-south": 180,
+  "ap-south": 25,
+  "ap-southeast": 60,
+  "ap-northeast": 80,
+  "me-central": 90,
+};
+
+// Estimate round-trip time based on geographic distance or region metadata.
+// This is used to simulate realistic latency in the ping API endpoint.
+// The formula: (distance_km / 100) * 1.5ms + 5ms base last-mile RTT
+export function estimateRtt(
+  region: string | undefined | null,
+  clientLat: number,
+  clientLon: number,
+  serverLat: number,
+  serverLon: number,
+  basePing?: number,
+  defaultFallback = 100,
+): number {
+  if (basePing && basePing > 0) {
+    return basePing;
+  }
+  if (
+    clientLat !== 0 &&
+    clientLon !== 0 &&
+    serverLat !== 0 &&
+    serverLon !== 0 &&
+    Number.isFinite(clientLat) &&
+    Number.isFinite(clientLon) &&
+    Number.isFinite(serverLat) &&
+    Number.isFinite(serverLon)
+  ) {
+    const distance = haversineDistance(clientLat, clientLon, serverLat, serverLon);
+    return (distance / 100) * 1.5 + 5; // 1.5ms per 100km, plus 5ms base last-mile RTT
+  }
+  if (region) {
+    return REGION_DELAYS[region] || defaultFallback;
+  }
+  return 20;
+}
+

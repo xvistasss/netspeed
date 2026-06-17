@@ -40,26 +40,32 @@ export default function TechnicalLogs({
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-mute font-semibold">ANCHOR ROUTING INFO</span>
+          <span className="text-mute font-semibold">MEASUREMENT NODE INFO</span>
           <div>
-            Server:{" "}
+            Node:{" "}
             <span className="text-ink">
               {selectedServer?.name || "Evaluating…"}
             </span>
           </div>
           <div>
-            Region URL:{" "}
+            Endpoint:{" "}
+            <span className="text-ink">
+              {window.location.origin}/api
+            </span>
+          </div>
+          <div>
+            Region Param:{" "}
             <span className="text-ink">
               {selectedServer?.region
                 ? `?region=${selectedServer.region}`
-                : "/api (Local Edge)"}
+                : "(none — local edge)"}
             </span>
           </div>
           {selectedServer &&
             selectedServer.id !== "local-edge" &&
             clientInfo.latitude !== 0 && (
               <div className="tabular-nums">
-                Distance:{" "}
+                Est. Distance:{" "}
                 <span className="text-ink">
                   {Math.round(
                     haversineDistance(
@@ -75,7 +81,7 @@ export default function TechnicalLogs({
             )}
           {selectedServer && selectedServer.id === "local-edge" && (
             <div className="tabular-nums">
-              Distance: <span className="text-ink">0 km (Local Loopback)</span>
+              Est. Distance: <span className="text-ink">0 km (Local Loopback)</span>
             </div>
           )}
           <div className="tabular-nums">
