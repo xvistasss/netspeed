@@ -40,6 +40,7 @@ export type TestPhase =
   | "ping"
   | "download"
   | "upload"
+  | "packetLoss"
   | "complete"
   | "error";
 
@@ -108,6 +109,20 @@ export const calculateJitter = (arr: number[]): number => {
     sumDiffs += Math.abs(arr[i] - arr[i - 1]);
   }
   return sumDiffs / (arr.length - 1);
+};
+
+export const calculateStdDev = (arr: number[]): number => {
+  if (arr.length <= 1) return 0;
+  const mean = calculateMean(arr);
+  const squaredDiffs = arr.map((v) => (v - mean) ** 2);
+  return Math.sqrt(squaredDiffs.reduce((s, v) => s + v, 0) / arr.length);
+};
+
+export const calculatePercentile = (arr: number[], p: number): number => {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
 };
 
 // Convert bits to string helper (standard decimal base-10 network metrics)

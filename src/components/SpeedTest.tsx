@@ -39,6 +39,7 @@ import {
   withDistances,
   pickClosestN,
 } from "../utils/serverListUtils";
+import { CONFIG } from "../utils/speedTestConfig";
 
 export default function SpeedTest() {
   const [phase, setPhase] = useState<TestPhase>("idle");
@@ -451,6 +452,9 @@ export default function SpeedTest() {
       if (!chart) return;
 
       downloadSpeedHistory.current.push(mbps);
+      if (downloadSpeedHistory.current.length > CONFIG.CHART_MAX_POINTS) {
+        downloadSpeedHistory.current.shift();
+      }
       chart.data.labels = downloadSpeedHistory.current.map(() => "");
       chart.data.datasets[0].data = downloadSpeedHistory.current;
 
@@ -464,6 +468,9 @@ export default function SpeedTest() {
       if (!chart) return;
 
       uploadSpeedHistory.current.push(mbps);
+      if (uploadSpeedHistory.current.length > CONFIG.CHART_MAX_POINTS) {
+        uploadSpeedHistory.current.shift();
+      }
       chart.data.labels = uploadSpeedHistory.current.map(() => "");
       chart.data.datasets[0].data = uploadSpeedHistory.current;
 
@@ -710,7 +717,7 @@ export default function SpeedTest() {
       await res.text();
       hostLatency = performance.now() - startWarmup;
     } catch (_) {
-      hostLatency = 20; // fallback
+      hostLatency = 0; // No artificial floor — measure real network
     }
 
     const isLocalConnection = isLocalHost(window.location.hostname);
@@ -1045,8 +1052,8 @@ export default function SpeedTest() {
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
             "",
-            `$ speedtest --download --streams=3`,
-            `Starting download throughput test (3 streams, 8s window)...`,
+            `$ speedtest --download --streams=${CONFIG.PARALLEL_STREAMS}`,
+            `Starting download throughput test (${CONFIG.PARALLEL_STREAMS} streams, 8s window)...`,
           ]);
 
           const calculatedAvgPing =
@@ -1062,7 +1069,7 @@ export default function SpeedTest() {
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 1,
+            parallelStreams: CONFIG.PARALLEL_STREAMS,
           });
           break;
         }
@@ -1146,8 +1153,8 @@ export default function SpeedTest() {
             `Download: ${finalDlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
             `[OK] Download test finished.`,
             "",
-            `$ speedtest --upload --streams=3`,
-            `Starting upload throughput test (3 streams, 8s window)...`,
+            `$ speedtest --upload --streams=${CONFIG.PARALLEL_STREAMS}`,
+            `Starting upload throughput test (${CONFIG.PARALLEL_STREAMS} streams, 8s window)...`,
           ]);
           setActiveProgressLine(null);
 
@@ -1165,7 +1172,7 @@ export default function SpeedTest() {
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: 1,
+            parallelStreams: CONFIG.PARALLEL_STREAMS,
             downloadSpeed: downloadStatsRef.current.avg,
           });
           break;
@@ -1243,11 +1250,48 @@ export default function SpeedTest() {
             ...prev,
             `Upload: ${finalUlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
             `[OK] Upload test finished.`,
+            "",
+            `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${anchorServer.id}`,
+            `Running dedicated packet loss test (${CONFIG.PACKET_LOSS_PINGS} pings)...`,
           ]);
           setActiveProgressLine(null);
 
-          // Run packet loss simulator checks
-          runPacketLossCheck(data.averageSpeed);
+          // Transition to packet loss phase
+          setPhase("packetLoss");
+          setStatusMessage("Measuring packet loss...");
+
+          // Launch dedicated packet loss test in worker
+          workerRef.current?.postMessage({
+            type: "START_PACKET_LOSS",
+            baseUrl,
+            region,
+            serverId: anchorServer.id,
+            clientLat,
+            clientLon,
+          });
+          break;
+        }
+
+        case "PACKET_LOSS_PROGRESS": {
+          setTerminalLogs((prev) => [
+            ...prev,
+            `64 bytes from ${anchorServer.id}: icmp_seq=${data.iteration} loss=${data.lost}/${data.sent}`,
+          ]);
+          break;
+        }
+
+        case "PACKET_LOSS_COMPLETE": {
+          setPacketLoss(parseFloat(data.lossPercent.toFixed(1)));
+
+          setTerminalLogs((prev) => [
+            ...prev,
+            `--- ${anchorServer.id} packet loss statistics ---`,
+            `${data.sent} pings transmitted, ${data.sent - data.lost} received, ${data.lossPercent.toFixed(1)}% packet loss`,
+            "",
+          ]);
+
+          // Run packet loss check to finalize the test
+          runPacketLossCheck(data.lossPercent);
           break;
         }
 
@@ -1276,8 +1320,8 @@ export default function SpeedTest() {
     });
   };
 
-  // 7. Mock packet loss framework logic
-  const runPacketLossCheck = (finalUploadAvg: number) => {
+  // 7. Finalize test with real measured packet loss
+  const runPacketLossCheck = (realLossPercent: number) => {
     setPhase("complete");
     setProgressPercent(100);
     setStatusMessage("Speed test complete.");
@@ -1288,35 +1332,19 @@ export default function SpeedTest() {
     });
     setCompletionTime(timeStr);
 
-    const totalSent =
-      unloadedPingStatsRef.current.sent +
-      dlLoadedPingStatsRef.current.sent +
-      ulLoadedPingStatsRef.current.sent;
-    const totalLost =
-      unloadedPingStatsRef.current.lost +
-      dlLoadedPingStatsRef.current.lost +
-      ulLoadedPingStatsRef.current.lost;
-
-    // Calculated packet loss based on actual pings; fallback if zero packets were sent
-    const lossPercentage =
-      totalSent > 0
-        ? parseFloat(((totalLost / totalSent) * 100).toFixed(1))
-        : Math.random() < 0.2
-          ? parseFloat((Math.random() * 0.4).toFixed(1))
-          : 0.0;
-    setPacketLoss(lossPercentage);
+    // Use the real measured packet loss — no random fallback
+    setPacketLoss(realLossPercent);
 
     setTerminalLogs((prev) => [
       ...prev,
-      "",
       "--------------------------------------------------",
       `Speedtest execution finished at ${timeStr}`,
       `Server: ${selectedServerRef.current?.name || "Auto Edge"}`,
       `  Download Speed: ${(downloadStatsRef.current.avg / 1000000).toFixed(1)} Mbps`,
-      `  Upload Speed: ${(finalUploadAvg / 1000000).toFixed(1)} Mbps`,
+      `  Upload Speed: ${(uploadStatsRef.current.avg / 1000000).toFixed(1)} Mbps`,
       `  Latency (unloaded): ${latencyStatsRef.current.avg.toFixed(1)} ms`,
       `  Jitter: ${latencyStatsRef.current.jitter.toFixed(1)} ms`,
-      `  Packet Loss: ${lossPercentage.toFixed(1)}%`,
+      `  Packet Loss: ${realLossPercent.toFixed(1)}%`,
       "--------------------------------------------------",
       "$",
     ]);
@@ -1773,6 +1801,7 @@ export default function SpeedTest() {
             uploadAvg={uploadStats.avg}
             latencyAvg={latencyStats.avg}
             latencyJitter={latencyStats.jitter}
+            packetLossPercent={packetLoss}
           />
 
           {/* 5. Detailed Measurements Breakdown */}

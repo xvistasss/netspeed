@@ -1,14 +1,20 @@
 import type { APIRoute } from "astro";
 import { isLocalHost } from "../../utils/speedTestUtils";
+import { CONFIG } from "../../utils/speedTestConfig";
 
-
-// Server-side fallback geolocation
+// Server-side fallback geolocation with 3-service chain and timeouts.
 async function fetchServerGeo(ip: string) {
+  const timeoutMs = CONFIG.GEO_SERVICE_TIMEOUT_MS;
+
   // 1. Try freeipapi.com
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`https://freeipapi.com/api/json/${ip}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" }
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data.latitude === "number") {
@@ -28,9 +34,13 @@ async function fetchServerGeo(ip: string) {
 
   // 2. Try ipapi.co
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`https://ipapi.co/${ip}/json/`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" }
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data.latitude === "number") {
@@ -46,6 +56,35 @@ async function fetchServerGeo(ip: string) {
     }
   } catch (err) {
     console.error("Server-side ipapi lookup failed:", err);
+  }
+
+  // 3. Try ipinfo.io as final fallback
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`https://ipinfo.io/${ip}/json`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.loc) {
+        const [lat, lon] = data.loc.split(",").map(Number);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          return {
+            city: data.city || "Unknown City",
+            region: data.region || "Unknown Region",
+            countryCode: data.country || "",
+            latitude: lat,
+            longitude: lon,
+            org: data.org || "Edge Network Provider",
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Server-side ipinfo lookup failed:", err);
   }
 
   return null;

@@ -6,6 +6,8 @@ import {
   calculateMin,
   calculateMax,
   calculateJitter,
+  calculateStdDev,
+  calculatePercentile,
 } from "../../utils/speedTestUtils";
 import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 
@@ -95,6 +97,12 @@ export default function DetailedMeasurements({
                   MEDIAN (MS)
                 </th>
                 <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                  P95 (MS)
+                </th>
+                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                  STDDEV (MS)
+                </th>
+                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MIN (MS)
                 </th>
                 <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
@@ -115,27 +123,37 @@ export default function DetailedMeasurements({
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
                     ? calculateMean(unloadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
                     ? calculateMedian(unloadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {unloadedPingStats.latencies.length > 0
+                    ? calculatePercentile(unloadedPingStats.latencies, 95).toFixed(1)
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {unloadedPingStats.latencies.length > 0
+                    ? calculateStdDev(unloadedPingStats.latencies).toFixed(1)
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
                     ? calculateMin(unloadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
                     ? calculateMax(unloadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
                     ? calculateJitter(unloadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
               </tr>
               {/* Download Loaded Row */}
@@ -147,27 +165,37 @@ export default function DetailedMeasurements({
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
                     ? calculateMean(dlLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
                     ? calculateMedian(dlLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {dlLoadedPingStats.latencies.length > 0
+                    ? calculatePercentile(dlLoadedPingStats.latencies, 95).toFixed(1)
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {dlLoadedPingStats.latencies.length > 0
+                    ? calculateStdDev(dlLoadedPingStats.latencies).toFixed(1)
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
                     ? calculateMin(dlLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
                     ? calculateMax(dlLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
                     ? calculateJitter(dlLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
               </tr>
               {/* Upload Loaded Row */}
@@ -179,27 +207,37 @@ export default function DetailedMeasurements({
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
                     ? calculateMean(ulLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
                     ? calculateMedian(ulLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {ulLoadedPingStats.latencies.length > 0
+                    ? calculatePercentile(ulLoadedPingStats.latencies, 95).toFixed(1)
+                    : "\u2014"}
+                </td>
+                <td className="py-3 px-4 font-mono text-body tabular-nums">
+                  {ulLoadedPingStats.latencies.length > 0
+                    ? calculateStdDev(ulLoadedPingStats.latencies).toFixed(1)
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
                     ? calculateMin(ulLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
                     ? calculateMax(ulLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
                     ? calculateJitter(ulLoadedPingStats.latencies).toFixed(1)
-                    : "—"}
+                    : "\u2014"}
                 </td>
               </tr>
             </tbody>
@@ -318,31 +356,19 @@ export default function DetailedMeasurements({
                 const bins = [
                   {
                     name: "100 kB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size < 500 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 100 * 1024,
                   },
                   {
                     name: "1 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 500 * 1024 && size < 5 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 1 * 1024 * 1024,
                   },
                   {
                     name: "10 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 5 * 1024 * 1024 && size < 15 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 10 * 1024 * 1024,
                   },
                   {
                     name: "25 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 15 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 25 * 1024 * 1024,
                   },
                 ];
 
@@ -411,31 +437,19 @@ export default function DetailedMeasurements({
                 const bins = [
                   {
                     name: "100 kB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size < 500 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 100 * 1024,
                   },
                   {
                     name: "1 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 500 * 1024 && size < 5 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 1 * 1024 * 1024,
                   },
                   {
                     name: "10 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 5 * 1024 * 1024 && size < 15 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 10 * 1024 * 1024,
                   },
                   {
                     name: "25 MB",
-                    filter: (r: any) => {
-                      const size = r.payloadSize || r.phaseSize || r.bytes;
-                      return size >= 15 * 1024 * 1024;
-                    },
+                    filter: (r: any) => r.phaseSize === 25 * 1024 * 1024,
                   },
                 ];
 
