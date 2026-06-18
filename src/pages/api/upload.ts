@@ -36,7 +36,7 @@ function sleep(ms: number): Promise<void> {
  * - POST https://speed.cloudflare.com/__up
  * - Requires Referer and Origin headers for Cloudflare to accept the request
  */
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, url }) => {
   try {
     const uploadBody = request.body;
 
@@ -47,15 +47,52 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // Proxy to Cloudflare with retry for transient 429 rate limiting
+    // Extract region/serverId from query params for observability logging
+    const regionParam = url.searchParams.get("region");
+    const serverIdParam = url.searchParams.get("serverId");
+
+    // Buffer the entire request body to count actual bytes received.
+    // This prevents phantom byte counts when the connection drops mid-upload.
+    const reader = uploadBody.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytesReceived = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        totalBytesReceived += value.length;
+      }
+    }
+
+    // Reconstruct a single ArrayBuffer from the buffered chunks
+    const bodyBuffer = new Uint8Array(totalBytesReceived);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bodyBuffer.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    if (totalBytesReceived === 0) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Empty upload body received" }),
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    // Proxy the buffered body to Cloudflare with retry for transient 429 rate limiting
+    // Region and serverId are included for observability; Cloudflare routes to nearest edge.
+    const cfUrl = new URL(CF_SPEED_TEST_ENDPOINT);
+    if (regionParam) cfUrl.searchParams.set("region", regionParam);
+    if (serverIdParam) cfUrl.searchParams.set("serverId", serverIdParam);
+
     let lastError: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const cfResponse = await fetch(CF_SPEED_TEST_ENDPOINT, {
+        const cfResponse = await fetch(cfUrl.toString(), {
           method: "POST",
-          body: uploadBody,
-          // @ts-ignore — duplex is required by Node/Undici for stream bodies
-          duplex: "half",
+          body: bodyBuffer,
           headers: {
             Referer: "https://speed.cloudflare.com/",
             Origin: "https://speed.cloudflare.com",
@@ -88,13 +125,8 @@ export const POST: APIRoute = async ({ request }) => {
         // Read response to ensure completion
         await cfResponse.text();
 
-        const bytesReceived = parseInt(
-          request.headers.get("content-length") || "0",
-          10,
-        );
-
         return new Response(
-          JSON.stringify({ success: true, bytesReceived }),
+          JSON.stringify({ success: true, bytesReceived: totalBytesReceived }),
           { status: 200, headers: corsHeaders },
         );
       } catch (err: any) {
@@ -116,7 +148,10 @@ export const POST: APIRoute = async ({ request }) => {
         success: false,
         error: err?.message || "Upload test failed",
       }),
-      { status: 502, headers: corsHeaders },
+      {
+        status: 502,
+        headers: corsHeaders,
+      },
     );
   }
 };

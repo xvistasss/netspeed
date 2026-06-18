@@ -1,6 +1,13 @@
 import type { APIRoute } from "astro";
-import fs from "fs/promises";
-import path from "path";
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -18,56 +25,35 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const submission = {
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      name,
-      email,
-      subject,
-      message,
-    };
+    // 2. Basic input sanitization
+    const trimmedName = String(name).trim().slice(0, 200);
+    const trimmedEmail = String(email).trim().slice(0, 254);
+    const trimmedSubject = String(subject).trim().slice(0, 200);
+    const trimmedMessage = String(message).trim().slice(0, 5000);
 
-    // 2. Local Storage (Save to src/data/contacts.json)
-    let savedLocally = false;
-    try {
-      const dataDir = path.resolve("src/data");
-      await fs.mkdir(dataDir, { recursive: true });
-      const filePath = path.join(dataDir, "contacts.json");
-
-      let submissions = [];
-      try {
-        const existingData = await fs.readFile(filePath, "utf-8");
-        submissions = JSON.parse(existingData);
-      } catch (e) {
-        // File doesn't exist or is empty
-      }
-
-      submissions.push(submission);
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(submissions, null, 2),
-        "utf-8",
-      );
-      savedLocally = true;
-      console.log(
-        `[Contact Submission] Saved locally. Timestamp: ${submission.timestamp}`,
-      );
-    } catch (fsErr: any) {
-      console.warn(
-        `[Contact Submission] Local storage is not available/failed: ${fsErr.message}`,
+    if (!trimmedName || !trimmedEmail || !trimmedSubject || !trimmedMessage) {
+      return new Response(
+        JSON.stringify({ error: "All fields are required" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
       );
     }
 
-    console.log(`[Contact Submission Details]`);
-    console.log(`- Timestamp: ${submission.timestamp}`);
-    console.log(`- From: ${name} <${email}>`);
-    console.log(`- Subject: ${subject}`);
-    console.log(`- Message: ${message}`);
+    const submission = {
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      name: trimmedName,
+      email: trimmedEmail,
+      subject: trimmedSubject,
+      message: trimmedMessage,
+    };
+
+    console.log(`[Contact Submission] Received at ${submission.timestamp}`);
 
     let emailSent = false;
-    let emailMessage = savedLocally
-      ? "Saved locally to src/data/contacts.json"
-      : "Submission received (local file storage unavailable)";
+    let emailMessage = "Submission received";
 
     // 3. Optional Email dispatch (SMTP via nodemailer if configured)
     if (
@@ -87,33 +73,35 @@ export const POST: APIRoute = async ({ request }) => {
           },
         });
 
+        // Escape all user input for HTML email to prevent XSS
+        const safeName = escapeHtml(trimmedName);
+        const safeEmail = escapeHtml(trimmedEmail);
+        const safeSubject = escapeHtml(trimmedSubject);
+        const safeMessage = escapeHtml(trimmedMessage).replace(/\n/g, "<br>");
+
         const mailOptions = {
           from: `"NetSpeed Contact" <${process.env.SMTP_USER}>`,
           to: process.env.CONTACT_EMAIL || process.env.SMTP_USER,
-          replyTo: email,
-          subject: `NetSpeed Contact Form: ${subject}`,
-          text: `Name: ${name}\nEmail: ${email}\nSubject: ${subject}\n\nMessage:\n${message}`,
-          html: `<p><strong>Name:</strong> ${name}</p>
-                 <p><strong>Email:</strong> ${email}</p>
-                 <p><strong>Subject:</strong> ${subject}</p>
+          replyTo: trimmedEmail,
+          subject: `NetSpeed Contact Form: ${trimmedSubject}`,
+          text: `Name: ${trimmedName}\nEmail: ${trimmedEmail}\nSubject: ${trimmedSubject}\n\nMessage:\n${trimmedMessage}`,
+          html: `<p><strong>Name:</strong> ${safeName}</p>
+                 <p><strong>Email:</strong> ${safeEmail}</p>
+                 <p><strong>Subject:</strong> ${safeSubject}</p>
                  <p><strong>Message:</strong></p>
-                 <p>${message.replace(/\n/g, "<br>")}</p>`,
+                 <p>${safeMessage}</p>`,
         };
 
         await transporter.sendMail(mailOptions);
         emailSent = true;
-        emailMessage = savedLocally
-          ? "Saved locally & email dispatched successfully"
-          : "Email dispatched successfully (local storage unavailable)";
+        emailMessage = "Email dispatched successfully";
         console.log("[Contact Submission] Email sent successfully.");
       } catch (err: any) {
         console.error(
           "[Contact Submission] Failed to send email via SMTP:",
           err.message,
         );
-        emailMessage = savedLocally
-          ? `Saved locally, but SMTP email dispatch failed: ${err.message}`
-          : `Submission received, but SMTP email dispatch failed: ${err.message}`;
+        emailMessage = `Submission received, but SMTP email dispatch failed: ${err.message}`;
       }
     } else {
       console.log(

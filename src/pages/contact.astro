@@ -46,8 +46,9 @@ import Layout from "../layouts/Layout.astro";
               id="name"
               name="name"
               required
+              autocomplete="name"
               placeholder="e.g. Alex Rivera"
-              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-all focus:ring-1 focus:ring-link shadow-2xs"
+              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-[border-color,box-shadow] focus:ring-1 focus:ring-link shadow-2xs"
             />
           </div>
 
@@ -63,8 +64,9 @@ import Layout from "../layouts/Layout.astro";
               id="email"
               name="email"
               required
+              autocomplete="email"
               placeholder="e.g. alex@example.com"
-              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-all focus:ring-1 focus:ring-link shadow-2xs"
+              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-[border-color,box-shadow] focus:ring-1 focus:ring-link shadow-2xs"
             />
           </div>
 
@@ -79,7 +81,7 @@ import Layout from "../layouts/Layout.astro";
               id="subject"
               name="subject"
               required
-              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-all focus:ring-1 focus:ring-link shadow-2xs cursor-pointer"
+              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm px-4 h-10 w-full transition-[border-color,box-shadow] focus:ring-1 focus:ring-link shadow-2xs cursor-pointer"
             >
               <option value="" disabled selected>Select an option</option>
               <option value="issue"
@@ -108,15 +110,16 @@ import Layout from "../layouts/Layout.astro";
               required
               rows="5"
               placeholder="Provide context regarding routing paths, device specifications, or server locations..."
-              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm p-4 w-full transition-all focus:ring-1 focus:ring-link shadow-2xs resize-y min-h-[120px]"
+              class="bg-canvas text-ink border border-hairline hover:border-hairline-strong focus:border-link outline-none text-sm rounded-sm p-4 w-full transition-[border-color,box-shadow] focus:ring-1 focus:ring-link shadow-2xs resize-y min-h-[120px]"
             ></textarea>
           </div>
 
+          <div id="form-error" class="hidden text-sm text-error bg-error/10 border border-error/20 rounded-md px-4 py-3 mt-2" role="alert"></div>
           <div class="pt-2">
             <button
               type="submit"
               id="submit-button"
-              class="w-full bg-primary text-on-primary font-medium text-sm rounded-full py-3 hover:opacity-90 active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs select-none"
+              class="w-full bg-primary text-on-primary font-medium text-sm rounded-full py-3 hover:opacity-90 active:scale-[0.98] transition-[opacity,transform] flex items-center justify-center gap-2 cursor-pointer shadow-xs select-none"
             >
               Send Message
             </button>
@@ -126,7 +129,7 @@ import Layout from "../layouts/Layout.astro";
         {/* Success Feedback View (Hidden initially) */}
         <div
           id="success-view"
-          class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-canvas border border-hairline rounded-md shadow-xs opacity-0 scale-95 transition-all duration-300"
+          class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-canvas border border-hairline rounded-md shadow-xs opacity-0 scale-95 transition-[opacity,transform] duration-300"
         >
           <div
             class="w-12 h-12 bg-link-bg-soft rounded-full flex items-center justify-center text-link mb-4"
@@ -153,7 +156,7 @@ import Layout from "../layouts/Layout.astro";
           </p>
           <button
             id="reset-button"
-            class="bg-canvas text-ink border border-hairline hover:border-hairline-strong font-medium text-xs rounded-full py-2 px-6 active:scale-95 transition-all cursor-pointer select-none"
+            class="bg-canvas text-ink border border-hairline hover:border-hairline-strong font-medium text-xs rounded-full py-2 px-6 active:scale-95 transition-[border-color,transform] cursor-pointer select-none"
           >
             Send Another Message
           </button>
@@ -200,7 +203,8 @@ import Layout from "../layouts/Layout.astro";
           });
 
           if (!res.ok) {
-            throw new Error("Telemetry transmission failed");
+            const errData = await res.json().catch(() => null);
+            throw new Error(errData?.error || "Submission failed. Please try again.");
           }
 
           // Hide form
@@ -219,9 +223,11 @@ import Layout from "../layouts/Layout.astro";
           }, 300);
         } catch (err) {
           console.error(err);
-          alert(
-            "Submission failed. Please check your internet connection and try again.",
-          );
+          const errorEl = document.getElementById("form-error");
+          if (errorEl) {
+            errorEl.textContent = "Submission failed. Please check your internet connection and try again.";
+            errorEl.classList.remove("hidden");
+          }
           submitBtn.disabled = false;
           submitBtn.textContent = "Send Message";
           submitBtn.classList.remove("opacity-80");

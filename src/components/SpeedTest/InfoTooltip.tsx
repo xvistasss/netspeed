@@ -6,17 +6,13 @@ interface InfoTooltipProps {
 
 export default function InfoTooltip({ content }: InfoTooltipProps) {
   const [visible, setVisible] = useState(false);
-  const [xOffset, setXOffset] = useState(0);
-  const [yPosition, setYPosition] = useState<"top" | "bottom">("top");
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipId = useId();
 
-  // Dynamic positioning calculation to prevent viewport overflow (horizontal & vertical)
   useEffect(() => {
     if (!visible) {
-      setXOffset(0);
-      setYPosition("top");
       return;
     }
 
@@ -25,49 +21,64 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       const container = containerRef.current;
       if (!tooltip || !container) return;
 
-      const containerRect = container.getBoundingClientRect();
-      const tooltipHeight =
-        tooltip.offsetHeight || tooltip.getBoundingClientRect().height || 80;
-      const margin = 12; // safety margin from viewport edges
+      const triggerRect = container.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const margin = 8;
+      const gap = 12;
 
-      // 1. Vertical space check (flip below the button if not enough room above)
-      const spaceAbove = containerRect.top;
-      const spaceBelow = window.innerHeight - containerRect.bottom;
+      const tooltipW = tooltipRect.width || 256;
+      const tooltipH = tooltipRect.height || 80;
 
-      let nextY: "top" | "bottom" = "top";
-      if (spaceAbove - tooltipHeight - margin < 0 && spaceBelow > spaceAbove) {
-        nextY = "bottom";
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      const header = document.querySelector("header");
+      const headerH = header ? header.getBoundingClientRect().height : 0;
+
+      // Horizontal: center on trigger, clamp to viewport
+      let x = triggerRect.left + triggerRect.width / 2 - tooltipW / 2;
+      if (x < margin) x = margin;
+      if (x + tooltipW > vw - margin) x = vw - margin - tooltipW;
+
+      // Vertical: prefer above, flip below if not enough room
+      const spaceAbove = triggerRect.top - gap - headerH;
+      const spaceBelow = vh - triggerRect.bottom - gap;
+
+      let y: number;
+      let pos: "top" | "bottom";
+
+      if (spaceAbove >= tooltipH + margin) {
+        y = triggerRect.top - gap - tooltipH;
+        pos = "top";
+      } else if (spaceBelow >= tooltipH + margin) {
+        y = triggerRect.bottom + gap;
+        pos = "bottom";
+      } else if (spaceBelow >= spaceAbove) {
+        y = triggerRect.bottom + gap;
+        pos = "bottom";
+        // Clamp so bottom edge stays in viewport
+        if (y + tooltipH > vh - margin) y = vh - margin - tooltipH;
+      } else {
+        y = triggerRect.top - gap - tooltipH;
+        pos = "top";
+        // Clamp so top edge stays below the header
+        if (y < headerH + margin) y = headerH + margin;
       }
-      setYPosition(nextY);
 
-      // 2. Horizontal space check
-      // Temporarily reset transform to get natural bounding rect
-      tooltip.style.transform = "translate(-50%, 0)";
-
-      const rect = tooltip.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-
-      let shift = 0;
-      if (rect.left < margin) {
-        shift = margin - rect.left;
-      } else if (rect.right > viewportWidth - margin) {
-        shift = viewportWidth - margin - rect.right;
-      }
-
-      setXOffset(shift);
+      setPos({ x, y });
     };
 
     const animId = requestAnimationFrame(adjustPosition);
-
     window.addEventListener("resize", adjustPosition);
+    window.addEventListener("scroll", adjustPosition, { passive: true });
 
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", adjustPosition);
+      window.removeEventListener("scroll", adjustPosition);
     };
   }, [visible]);
 
-  // Click outside to dismiss the tooltip on mobile and desktop
   useEffect(() => {
     if (!visible) return;
 
@@ -130,22 +141,12 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
           id={tooltipId}
           role="tooltip"
           style={{
-            transform: `translate(calc(-50% + ${xOffset}px), 0)`,
+            position: "fixed",
+            left: pos.x,
+            top: pos.y,
           }}
-          className={`absolute left-1/2 w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left ${
-            yPosition === "top" ? "bottom-6" : "top-6"
-          }`}
+          className="w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left"
         >
-          <div
-            style={{
-              left: `clamp(12px, calc(50% - ${xOffset}px), 244px)`,
-            }}
-            className={`absolute -translate-x-1/2 w-0 h-0 border-x-4 border-x-transparent ${
-              yPosition === "top"
-                ? "top-full border-t-4 border-t-primary"
-                : "bottom-full border-b-4 border-b-primary"
-            }`}
-          />
           {content}
         </div>
       )}

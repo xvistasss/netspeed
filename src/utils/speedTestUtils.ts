@@ -10,6 +10,20 @@ export interface TestServer {
   distance: number;
 }
 
+export interface SpeedTestRequest {
+  time: number;
+  direction: "download" | "upload";
+  bytes: number;
+  payloadSize: number;
+  phaseSize: number;
+  latency: number;
+  bps: number;
+  duration: number;
+  serverTime: number;
+  responseSize: number;
+  loadedLatencies: number[];
+}
+
 // Haversine Math to calculate distance between two coordinates in km
 export function haversineDistance(
   lat1: number,
@@ -69,6 +83,10 @@ export interface ClientInfo {
   longitude: number;
   isLocal: boolean;
   isPrecise?: boolean;
+  connectionType?: string;    // e.g. "wifi", "ethernet", "cellular", "unknown"
+  effectiveType?: string;     // e.g. "4g", "3g", "2g", "slow-2g"
+  downlink?: number;          // Mbps estimate from Network Information API
+  rtt?: number;               // ms estimate from Network Information API
 }
 
 export interface DetailPingStats {
@@ -83,6 +101,19 @@ export const calculateMean = (arr: number[]): number => {
   return arr.reduce((sum, val) => sum + val, 0) / arr.length;
 };
 
+// Trimmed mean: discard top and bottom 10% of samples before averaging.
+// This eliminates GC pauses, OS scheduler hiccups, and transient spikes
+// that inflate the raw mean. Standard practice for latency measurement.
+export const calculateTrimmedMean = (arr: number[], trimPercent: number = 0.1): number => {
+  if (arr.length === 0) return 0;
+  if (arr.length <= 3) return calculateMean(arr); // too few samples to trim
+  const sorted = [...arr].sort((a, b) => a - b);
+  const trimCount = Math.max(1, Math.floor(sorted.length * trimPercent));
+  const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
+  if (trimmed.length === 0) return calculateMean(arr);
+  return trimmed.reduce((sum, val) => sum + val, 0) / trimmed.length;
+};
+
 export const calculateMedian = (arr: number[]): number => {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
@@ -94,12 +125,12 @@ export const calculateMedian = (arr: number[]): number => {
 
 export const calculateMin = (arr: number[]): number => {
   if (arr.length === 0) return 0;
-  return Math.min(...arr);
+  return arr.reduce((min, val) => (val < min ? val : min), arr[0]);
 };
 
 export const calculateMax = (arr: number[]): number => {
   if (arr.length === 0) return 0;
-  return Math.max(...arr);
+  return arr.reduce((max, val) => (val > max ? val : max), arr[0]);
 };
 
 export const calculateJitter = (arr: number[]): number => {
@@ -123,6 +154,24 @@ export const calculatePercentile = (arr: number[], p: number): number => {
   const sorted = [...arr].sort((a, b) => a - b);
   const idx = Math.ceil((p / 100) * sorted.length) - 1;
   return sorted[Math.max(0, idx)];
+};
+
+// Adaptive parallel stream count based on measured bandwidth.
+// Slower connections use fewer streams to avoid buffer bloat and
+// accurately represent real-world single/multi-connection performance.
+export const getAdaptiveStreamCount = (
+  estimatedBps: number,
+  defaultCount: number,
+  slowThreshold: number,
+  mediumThreshold: number,
+  slowCount: number = 2,
+  mediumCount: number = 4,
+  fastCount: number = 6,
+): number => {
+  if (estimatedBps <= 0) return defaultCount;
+  if (estimatedBps < slowThreshold) return slowCount;
+  if (estimatedBps < mediumThreshold) return mediumCount;
+  return fastCount;
 };
 
 // Convert bits to string helper (standard decimal base-10 network metrics)
@@ -158,114 +207,5 @@ export function isLocalHost(value: string | null | undefined): boolean {
     hostname.startsWith("10.") ||
     /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
   );
-}
-
-// Throttled stream helper using Token Bucket pacing (consolidated from api/download and api/upload)
-export function createThrottledStream(
-  sourceStream: ReadableStream<Uint8Array>,
-  maxBps: number,
-): ReadableStream<Uint8Array> {
-  const reader = sourceStream.getReader();
-
-  // Token Bucket Pacing: allow bursts up to 200ms of data, minimum 1MB capacity
-  const capacity = Math.max(maxBps * 0.2, 1024 * 1024);
-  let tokens = capacity;
-  let lastRefillTime = performance.now();
-
-  return new ReadableStream({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-
-        if (value) {
-          const chunkSize = value.length;
-          const now = performance.now();
-          const elapsed = now - lastRefillTime;
-          lastRefillTime = now;
-
-          // Refill tokens based on elapsed time (seconds)
-          tokens = Math.min(capacity, tokens + (elapsed / 1000) * maxBps);
-
-          if (tokens < chunkSize) {
-            // Calculate necessary wait time to acquire sufficient tokens
-            const neededTokens = chunkSize - tokens;
-            const waitTimeMs = (neededTokens / maxBps) * 1000;
-
-            await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
-
-            // Refill tokens again after sleeping
-            const postSleepNow = performance.now();
-            const postSleepElapsed = postSleepNow - lastRefillTime;
-            lastRefillTime = postSleepNow;
-            tokens = Math.min(
-              capacity,
-              tokens + (postSleepElapsed / 1000) * maxBps,
-            );
-          }
-
-          // Deduct tokens and send the chunk
-          tokens = Math.max(0, tokens - chunkSize);
-          controller.enqueue(value);
-        }
-      } catch (err) {
-        controller.error(err);
-      }
-    },
-    cancel(reason) {
-      reader.cancel(reason).catch(() => { });
-    },
-  });
-}
-
-export const REGION_DELAYS: Record<string, number> = {
-  "us-east": 40,
-  "us-west": 70,
-  "ca-central": 50,
-  "sa-east": 120,
-  "eu-west": 35,
-  "eu-central": 45,
-  "af-south": 180,
-  "ap-south": 25,
-  "ap-southeast": 60,
-  "ap-northeast": 80,
-  "me-central": 90,
-};
-
-// Estimate round-trip time based on geographic distance or region metadata.
-// This is used to simulate realistic latency in the ping API endpoint.
-// The formula: (distance_km / 100) * 1.5ms + 5ms base last-mile RTT
-export function estimateRtt(
-  region: string | undefined | null,
-  clientLat: number,
-  clientLon: number,
-  serverLat: number,
-  serverLon: number,
-  basePing?: number,
-  defaultFallback = 100,
-): number {
-  if (basePing && basePing > 0) {
-    return basePing;
-  }
-  if (
-    clientLat !== 0 &&
-    clientLon !== 0 &&
-    serverLat !== 0 &&
-    serverLon !== 0 &&
-    Number.isFinite(clientLat) &&
-    Number.isFinite(clientLon) &&
-    Number.isFinite(serverLat) &&
-    Number.isFinite(serverLon)
-  ) {
-    const distance = haversineDistance(clientLat, clientLon, serverLat, serverLon);
-    return (distance / 100) * 1.5 + 5; // 1.5ms per 100km, plus 5ms base last-mile RTT
-  }
-  if (region) {
-    return REGION_DELAYS[region] || defaultFallback;
-  }
-  return 20;
 }
 

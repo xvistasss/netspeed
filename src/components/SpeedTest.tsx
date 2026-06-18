@@ -9,7 +9,28 @@ import {
   Play,
   Square,
 } from "lucide-react";
-import Chart from "chart.js/auto";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  LineController,
+  Filler,
+  Tooltip,
+  Legend,
+} from "chart.js";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  LineController,
+  Filler,
+  Tooltip,
+  Legend,
+);
 
 // Import sub-components
 import InfoTooltip from "./SpeedTest/InfoTooltip";
@@ -19,26 +40,21 @@ import TechnicalLogs from "./SpeedTest/TechnicalLogs";
 
 // Import utilities, types and configuration
 import type {
-  TestServer,
   TestPhase,
   LatencyStats,
   SpeedStats,
   ClientInfo,
   DetailPingStats,
+  SpeedTestRequest,
 } from "../utils/speedTestUtils";
 import {
   sleep,
   formatSpeed,
   isLocalHost,
-  calculateMean,
-  calculateJitter,
+  calculateTrimmedMean,
   calculateMin,
+  getAdaptiveStreamCount,
 } from "../utils/speedTestUtils";
-import {
-  SERVER_LIST,
-  withDistances,
-  pickClosestN,
-} from "../utils/serverListUtils";
 import { CONFIG } from "../utils/speedTestConfig";
 
 export default function SpeedTest() {
@@ -49,13 +65,11 @@ export default function SpeedTest() {
     "latency" | "packetLoss" | "download" | "upload"
   >("latency");
 
-  // Geolocation & Server State
+  // Geolocation State
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
-  const [closestServers, setClosestServers] = useState<TestServer[]>([]);
-  const [selectedServer, setSelectedServer] = useState<TestServer | null>(null);
-  const [routingResults, setRoutingResults] = useState<{
-    [key: string]: number;
-  }>({});
+
+  // Edge node info (Cloudflare handles routing via Anycast BGP)
+  const EDGE_NODE = { id: "cloudflare-edge", name: "Cloudflare Edge (nearest)", region: "auto" };
 
   // Test Metrics
   const [latencyStats, setLatencyStats] = useState<LatencyStats>({
@@ -79,10 +93,17 @@ export default function SpeedTest() {
   const [packetLoss, setPacketLoss] = useState<number>(0);
 
   // Terminal simulation state
+  const MAX_LOG_ENTRIES = 500;
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
     "Welcome to Net-Speed CLI v0.1.1",
     "System ready. Click 'Start Speed Test' or type 'run' in terminal.",
   ]);
+  const appendLogs = (newLogs: string[]) => {
+    setTerminalLogs((prev) => {
+      const combined = [...prev, ...newLogs];
+      return combined.length > MAX_LOG_ENTRIES ? combined.slice(-MAX_LOG_ENTRIES) : combined;
+    });
+  };
   const [activeProgressLine, setActiveProgressLine] = useState<string | null>(null);
   const [cliInput, setCliInput] = useState("");
   const terminalBodyRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +119,6 @@ export default function SpeedTest() {
     max: 0,
     latencies: [],
   });
-  const selectedServerRef = useRef<TestServer | null>(null);
 
   useEffect(() => {
     if (terminalBodyRef.current) {
@@ -111,35 +131,27 @@ export default function SpeedTest() {
     const cmd = cliInput.trim().toLowerCase();
     if (!cmd) return;
 
-    setTerminalLogs((prev) => [...prev, `$ ${cliInput}`]);
+    appendLogs([`$ ${cliInput}`]);
     setCliInput("");
 
     if (cmd === "clear") {
       setTerminalLogs([]);
       setActiveProgressLine(null);
     } else if (cmd === "help") {
-      setTerminalLogs((prev) => [
-        ...prev,
+      appendLogs([
         "Available commands:",
         "  run, speedtest  - Start the network speed test",
-        "  list, servers   - List all available speed test edge servers",
         "  clear           - Clear the terminal screen",
         "  help            - Show this help message",
       ]);
-    } else if (cmd === "list" || cmd === "servers") {
-      setTerminalLogs((prev) => [
-        ...prev,
-        "Configured Edge Servers:",
-        ...SERVER_LIST.map((s) => `  - ${s.id}: ${s.name} (${s.region})`),
-      ]);
     } else if (cmd === "run" || cmd === "speedtest") {
       if (phase !== "idle" && phase !== "complete" && phase !== "error") {
-        setTerminalLogs((prev) => [...prev, "Error: A speed test is already running."]);
+        appendLogs(["Error: A speed test is already running."]);
       } else {
         startSpeedTest();
       }
     } else {
-      setTerminalLogs((prev) => [...prev, `Unknown command: ${cmd}. Type 'help' for options.`]);
+      appendLogs([`Unknown command: ${cmd}. Type 'help' for options.`]);
     }
   };
 
@@ -165,8 +177,12 @@ export default function SpeedTest() {
     lost: 0,
     latencies: [],
   });
-  const [downloadRequests, setDownloadRequests] = useState<any[]>([]);
-  const [uploadRequests, setUploadRequests] = useState<any[]>([]);
+  const [downloadRequests, setDownloadRequests] = useState<SpeedTestRequest[]>([]);
+  const [uploadRequests, setUploadRequests] = useState<SpeedTestRequest[]>([]);
+
+  // Measurement reliability flags
+  const [downloadReliable, setDownloadReliable] = useState(true);
+  const [uploadReliable, setUploadReliable] = useState(true);
 
   // Completion Time
   const [completionTime, setCompletionTime] = useState<string>("");
@@ -178,8 +194,8 @@ export default function SpeedTest() {
   const workerRef = useRef<Worker | null>(null);
   const downloadChartRef = useRef<HTMLCanvasElement | null>(null);
   const uploadChartRef = useRef<HTMLCanvasElement | null>(null);
-  const downloadChartInstance = useRef<Chart | null>(null);
-  const uploadChartInstance = useRef<Chart | null>(null);
+  const downloadChartInstance = useRef<ChartJS | null>(null);
+  const uploadChartInstance = useRef<ChartJS | null>(null);
 
   // Speed data arrays for charting
   const downloadSpeedHistory = useRef<number[]>([]);
@@ -203,8 +219,8 @@ export default function SpeedTest() {
   });
 
   // Request logs for Cloudflare CSV export
-  const downloadRequestsRef = useRef<any[]>([]);
-  const uploadRequestsRef = useRef<any[]>([]);
+  const downloadRequestsRef = useRef<SpeedTestRequest[]>([]);
+  const uploadRequestsRef = useRef<SpeedTestRequest[]>([]);
   const autorunTriggered = useRef(false);
 
   // 1. Initialize client details on load and check theme state
@@ -260,60 +276,22 @@ export default function SpeedTest() {
     const textColor = theme === "dark" ? "#a1a1a1" : "#888888";
 
     if (downloadChartInstance.current) {
-      // @ts-ignore
-      downloadChartInstance.current.options.scales.y.grid.color = gridColor;
-      // @ts-ignore
-      downloadChartInstance.current.options.scales.y.ticks.color = textColor;
+      const opts = downloadChartInstance.current.options as any;
+      if (opts.scales?.y) {
+        opts.scales.y.grid.color = gridColor;
+        opts.scales.y.ticks.color = textColor;
+      }
       downloadChartInstance.current.update("none");
     }
     if (uploadChartInstance.current) {
-      // @ts-ignore
-      uploadChartInstance.current.options.scales.y.grid.color = gridColor;
-      // @ts-ignore
-      uploadChartInstance.current.options.scales.y.ticks.color = textColor;
+      const opts = uploadChartInstance.current.options as any;
+      if (opts.scales?.y) {
+        opts.scales.y.grid.color = gridColor;
+        opts.scales.y.ticks.color = textColor;
+      }
       uploadChartInstance.current.update("none");
     }
   }, [theme]);
-
-  // Dispatch selectedServer details to Astro header
-  useEffect(() => {
-    if (!selectedServer) return;
-    const distStr =
-      selectedServer.distance && selectedServer.distance > 0
-        ? `${selectedServer.distance} km`
-        : "";
-    const latencyVal = routingResults[selectedServer.id];
-    const event = new CustomEvent("server-selected", {
-      detail: {
-        id: selectedServer.id,
-        name: selectedServer.name,
-        distance: distStr,
-        latency: latencyVal,
-      },
-    });
-    window.dispatchEvent(event);
-  }, [selectedServer, routingResults]);
-
-  // Dispatch dynamic servers list to Astro header
-  useEffect(() => {
-    if (closestServers.length > 0) {
-      const event = new CustomEvent("servers-discovered", {
-        detail: {
-          servers: closestServers.map((s) => ({
-            id: s.id,
-            name: s.name,
-            distance:
-              s.distance !== undefined && s.distance > 0
-                ? `${s.distance} km`
-                : "",
-          })),
-        },
-      });
-      window.dispatchEvent(event);
-    }
-  }, [closestServers]);
-
-  // Server dropdown selection no longer used: routing now auto-locks the best server
 
   // 2. Setup Chart.js instances
   const destroyCharts = () => {
@@ -339,7 +317,7 @@ export default function SpeedTest() {
 
     // Download Chart Initializer
     if (downloadChartRef.current) {
-      downloadChartInstance.current = new Chart(downloadChartRef.current, {
+      downloadChartInstance.current = new ChartJS(downloadChartRef.current, {
         type: "line",
         data: {
           labels: [],
@@ -393,7 +371,7 @@ export default function SpeedTest() {
 
     // Upload Chart Initializer
     if (uploadChartRef.current) {
-      uploadChartInstance.current = new Chart(uploadChartRef.current, {
+      uploadChartInstance.current = new ChartJS(uploadChartRef.current, {
         type: "line",
         data: {
           labels: [],
@@ -483,40 +461,9 @@ export default function SpeedTest() {
   };
 
 
-  const initializeLocationData = (data: any) => {
-    const hasValidCoords = (d: any) => {
-      return (
-        d &&
-        typeof d.latitude === "number" &&
-        Number.isFinite(d.latitude) &&
-        typeof d.longitude === "number" &&
-        Number.isFinite(d.longitude) &&
-        !(d.latitude === 0 && d.longitude === 0)
-      );
-    };
-
-    const hasCoords = hasValidCoords(data);
-    const clientLat = hasCoords ? data.latitude : 0;
-    const clientLon = hasCoords ? data.longitude : 0;
-
-    let serversToUse = [...SERVER_LIST];
-
-    const enriched = withDistances(clientLat, clientLon, serversToUse as any);
-
-    let closest: TestServer[];
-    if (hasCoords) {
-      closest = pickClosestN(enriched, 3);
-    } else {
-      // Find globally neutral default servers to avoid regional bias
-      const defaultIds = ["new-york", "frankfurt", "singapore"];
-      closest = enriched.filter((s) => defaultIds.includes(s.id));
-      if (closest.length === 0) {
-        closest = enriched.slice(0, 3);
-      }
-    }
-
-    setClosestServers(closest);
-    setSelectedServer(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const initializeLocationData = (_data: any) => {
+    // No-op: Cloudflare Anycast BGP handles edge routing automatically.
   };
 
   const getPreciseCoords = (): Promise<{ latitude: number; longitude: number } | null> => {
@@ -529,7 +476,7 @@ export default function SpeedTest() {
       // Try highly accurate precise location (GPS-level) first with a 6-second timeout and 5-minute cache.
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log(`High-accuracy Geolocation received from device: Lat ${position.coords.latitude}, Lon ${position.coords.longitude}`);
+          setTerminalLogs((prev) => [...prev, "[INFO] High-accuracy geolocation obtained from device."]);
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -547,7 +494,7 @@ export default function SpeedTest() {
           // Try low-accuracy fallback (Wi-Fi/cell) with a 4-second timeout and allowing cached positions of any age
           navigator.geolocation.getCurrentPosition(
             (pos) => {
-              console.log(`Low-accuracy Geolocation received from device: Lat ${pos.coords.latitude}, Lon ${pos.coords.longitude}`);
+              setTerminalLogs((prev) => [...prev, "[INFO] Low-accuracy geolocation obtained from device."]);
               resolve({
                 latitude: pos.coords.latitude,
                 longitude: pos.coords.longitude,
@@ -637,10 +584,39 @@ export default function SpeedTest() {
       }
 
       // Initialize UI with the geocoded data
-      const initialData = {
+      const initialData: ClientInfo = {
         ...data,
         isPrecise: !!preGrantedCoords,
       };
+
+      // Detect connection type via Network Information API (Fix #12)
+      if ("connection" in navigator) {
+        const conn = (navigator as any).connection;
+        if (conn) {
+          initialData.effectiveType = conn.effectiveType || undefined;
+          initialData.downlink = conn.downlink || undefined;
+          initialData.rtt = conn.rtt || undefined;
+
+          // Determine connection type from effectiveType or type property
+          if (conn.type) {
+            initialData.connectionType = conn.type; // "wifi", "ethernet", "cellular", etc.
+          } else if (conn.effectiveType) {
+            // Map effectiveType to a general category
+            const et = conn.effectiveType;
+            if (et === "4g") initialData.connectionType = "cellular-4g";
+            else if (et === "3g") initialData.connectionType = "cellular-3g";
+            else if (et === "2g" || et === "slow-2g") initialData.connectionType = "cellular-2g";
+            else initialData.connectionType = "unknown";
+          }
+
+          appendLogs([
+            `[INFO] Connection: ${initialData.connectionType || "unknown"} (${initialData.effectiveType || "N/A"})`,
+            initialData.downlink ? `[INFO] Estimated downlink: ${initialData.downlink} Mbps` : "",
+            initialData.rtt ? `[INFO] Network RTT: ${initialData.rtt} ms` : "",
+          ].filter(Boolean));
+        }
+      }
+
       setClientInfo(initialData);
       initializeLocationData(initialData);
       setStatusMessage(
@@ -667,48 +643,16 @@ export default function SpeedTest() {
     }
   };
 
-  // 5. Routing: pick closest servers (if location available) or all servers (if location unavailable),
-  // probe in parallel, and lock best-by-latency (200 OK only)
-  const routeToBestServer = async (overrideClientInfo?: ClientInfo | null): Promise<TestServer> => {
+  // 5. Warmup: single ping to establish TCP/TLS keep-alive with Cloudflare edge.
+  // Cloudflare Anycast BGP handles optimal edge routing automatically.
+  const warmupEdge = async (): Promise<{ id: string; name: string; region: string }> => {
     setPhase("routing");
     setProgressPercent(15);
+    setStatusMessage("Warming up connection to Cloudflare edge…");
 
     const origin = window.location.origin;
-    const activeClientInfo = overrideClientInfo !== undefined ? overrideClientInfo : clientInfo;
 
-    const hasCoords =
-      activeClientInfo &&
-      typeof activeClientInfo.latitude === "number" &&
-      Number.isFinite(activeClientInfo.latitude) &&
-      typeof activeClientInfo.longitude === "number" &&
-      Number.isFinite(activeClientInfo.longitude) &&
-      !(activeClientInfo.latitude === 0 && activeClientInfo.longitude === 0);
-
-    let serversToUse = [...SERVER_LIST];
-
-    // If client coordinates are valid, probe 5 closest candidate servers.
-    // If client coordinates are unavailable, probe ALL servers to find the lowest latency.
-    const candidates = hasCoords
-      ? pickClosestN(
-        withDistances(activeClientInfo.latitude!, activeClientInfo.longitude!, serversToUse),
-        5,
-      )
-      : withDistances(0, 0, serversToUse);
-
-    if (hasCoords) {
-      setClosestServers(candidates);
-    }
-
-    const isAllProbe = !hasCoords;
-    setStatusMessage(
-      isAllProbe
-        ? "Routing: selecting optimal server (all locations) via parallel latency probes…"
-        : "Routing: selecting optimal server (5 closest) via parallel latency probes…",
-    );
-
-    const results: { [key: string]: number } = {};
-
-    // Measure host latency on the main thread first
+    // Single warmup ping — establishes TCP/TLS connection, measures baseline latency
     let hostLatency = 0;
     try {
       const warmupUrl = `${origin}/api/ping?warmup=true&cb=${Date.now()}`;
@@ -717,144 +661,23 @@ export default function SpeedTest() {
       await res.text();
       hostLatency = performance.now() - startWarmup;
     } catch (_) {
-      hostLatency = 0; // No artificial floor — measure real network
+      hostLatency = 0;
     }
 
     const isLocalConnection = isLocalHost(window.location.hostname);
-
-    const probe = async (srv: TestServer) => {
-      const lat = activeClientInfo?.latitude || 0;
-      const lon = activeClientInfo?.longitude || 0;
-      const latencies: number[] = [];
-
-      for (let i = 0; i < 3; i++) {
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 1200);
-
-        const start = performance.now();
-        try {
-          const testUrl = srv.region
-            ? `${origin}/api/ping?region=${srv.region}&serverId=${srv.id}&clientLat=${lat}&clientLon=${lon}&hostLatency=${hostLatency}&cb=${Date.now()}-${i}-${Math.random()}`
-            : `${origin}/api/ping?hostLatency=${hostLatency}&cb=${Date.now()}-${i}-${Math.random()}`;
-
-          const res = await fetch(testUrl, {
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          if (res.ok) {
-            await res.text();
-            let latencyVal = performance.now() - start;
-            if (isLocalConnection) {
-              latencyVal = Math.max(1.5, latencyVal);
-            }
-            latencies.push(latencyVal);
-          }
-        } catch (_) {
-          // Ignore individual probe failures
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-        // Small pause between sequential probes to the same server to prevent queueing
-        await sleep(30);
-      }
-
-      if (latencies.length === 0) {
-        setTerminalLogs((prev) => [...prev, `[PROBE] ${srv.name} - Failed`]);
-        return { srv, minLatency: undefined, avgLatency: undefined, jitter: undefined, successCount: 0 };
-      }
-
-      const minLatency = calculateMin(latencies);
-      const avgLatency = calculateMean(latencies);
-      const jitter = calculateJitter(latencies);
-
-      setTerminalLogs((prev) => [
-        ...prev,
-        `[PROBE] ${srv.name} - min: ${minLatency.toFixed(1)}ms, avg: ${avgLatency.toFixed(1)}ms, jitter: ${jitter.toFixed(1)}ms`,
-      ]);
-
-      return { srv, minLatency, avgLatency, jitter, successCount: latencies.length };
-    };
-
-    const probes = [];
-    for (const srv of candidates) {
-      probes.push(await probe(srv));
+    if (isLocalConnection) {
+      hostLatency = Math.max(1.5, hostLatency);
     }
-
-    // Populate results map for all successful probes using the minLatency
-    for (const p of probes) {
-      if (typeof p.minLatency === "number" && Number.isFinite(p.minLatency)) {
-        results[p.srv.id] = p.minLatency;
-      }
-    }
-
-    // Sort successful probes using standard-setting sorting algorithm:
-    // 1. Success rate (packet loss)
-    // 2. Latency bucket (10ms granularity)
-    // 3. Jitter (stability)
-    // 4. Geographic distance
-    let successfulProbes = probes
-      .filter(
-        (p): p is { srv: TestServer; minLatency: number; avgLatency: number; jitter: number; successCount: number } =>
-          typeof p.minLatency === "number" && Number.isFinite(p.minLatency) && p.successCount >= 2,
-      );
-
-    if (successfulProbes.length === 0) {
-      // Fallback to any server with at least 1 successful response
-      successfulProbes = probes.filter(
-        (p): p is { srv: TestServer; minLatency: number; avgLatency: number; jitter: number; successCount: number } =>
-          typeof p.minLatency === "number" && Number.isFinite(p.minLatency) && p.successCount >= 1,
-      );
-    }
-
-    successfulProbes.sort((a, b) => {
-      // Prioritize higher success rate (lower packet loss during probe)
-      if (a.successCount !== b.successCount) {
-        return b.successCount - a.successCount;
-      }
-
-      // Group latencies into 10ms buckets to treat minor network variance as equivalent
-      const bucketA = Math.floor(a.minLatency / 10);
-      const bucketB = Math.floor(b.minLatency / 10);
-      if (bucketA !== bucketB) {
-        return bucketA - bucketB; // Prioritize lower latency bucket
-      }
-
-      // Within the same bucket, prioritize the server with lower jitter (stability)
-      const jitterDiff = a.jitter - b.jitter;
-      if (Math.abs(jitterDiff) > 2) {
-        return jitterDiff;
-      }
-
-      // If jitter is also equivalent, prioritize the geographically closest server
-      const distA = a.srv.distance ?? Infinity;
-      const distB = b.srv.distance ?? Infinity;
-      if (distA !== distB) {
-        return distA - distB;
-      }
-
-      // Fallback to exact min latency
-      return a.minLatency - b.minLatency;
-    });
-
-    const locked =
-      successfulProbes.length > 0 ? successfulProbes[0].srv : candidates[0];
-    if (!locked) throw new Error("No candidate servers available for routing.");
-    setRoutingResults(results);
-    setSelectedServer(locked);
-    selectedServerRef.current = locked;
 
     setTerminalLogs((prev) => [
       ...prev,
-      `[OK] Locked optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ""}`,
+      `[OK] Connected to Cloudflare edge (warmup: ${hostLatency.toFixed(1)}ms)`,
     ]);
 
-    setStatusMessage(
-      `Selected optimal edge: ${locked.name}${results[locked.id] !== undefined ? ` (${Math.round(results[locked.id])}ms)` : ""}`,
-    );
-
+    setStatusMessage(`Cloudflare edge ready (${hostLatency.toFixed(1)}ms warmup)`);
     setProgressPercent(30);
-    await sleep(300);
-    return locked;
+    await sleep(200);
+    return EDGE_NODE;
   };
 
   // 6. Primary Speed Test Orchestrator
@@ -868,7 +691,7 @@ export default function SpeedTest() {
     // Trigger browser geolocation prompt on user action if not already precise
     if ("geolocation" in navigator && (!clientInfo || !clientInfo.isPrecise)) {
       setStatusMessage("Requesting browser geolocation for optimal server routing...");
-      setTerminalLogs((prev) => [...prev, "[INFO] Requesting browser geolocation for high accuracy routing..."]);
+      appendLogs(["[INFO] Requesting browser geolocation for high accuracy routing..."]);
       const coords = await getPreciseCoords();
       if (coords) {
         try {
@@ -952,36 +775,38 @@ export default function SpeedTest() {
     setPacketLoss(0);
     setProgressPercent(0);
     setCompletionTime("");
+    setDownloadReliable(true);
+    setUploadReliable(true);
 
     setTerminalLogs([
       "Welcome to Net-Speed CLI v0.1.1",
       "System ready. Initializing speedtest...",
-      `$ speedtest --server=auto`,
+      `$ speedtest`,
       `Client IP: ${currentClientInfo?.ip || "Detecting..."} (${currentClientInfo?.org || "Detecting..."})`,
       `Location: ${currentClientInfo?.city || "Detecting..."}, ${currentClientInfo?.region || ""}, ${currentClientInfo?.country || ""}`,
-      "Finding optimal edge server via routing probes...",
+      "Connecting to Cloudflare edge (Anycast BGP routing)...",
     ]);
     setActiveProgressLine(null);
 
-    // Always run routing probes to lock the best server by latency at the start of the test
-    const anchorServer = await routeToBestServer(currentClientInfo);
+    // Single warmup ping to establish connection — Cloudflare BGP handles edge routing
+    const edgeNode = await warmupEdge();
 
     // Launch worker thread
     initCharts();
     setPhase("ping");
-    setStatusMessage(`Pinging locked server: ${anchorServer.name}`);
+    setStatusMessage("Pinging Cloudflare edge…");
     setProgressPercent(40);
 
     setTerminalLogs((prev) => [
       ...prev,
       "",
-      `$ ping -c 15 ${anchorServer.id}`,
-      `PING ${anchorServer.name} (${anchorServer.lat.toFixed(4)}, ${anchorServer.lon.toFixed(4)}) 56(84) bytes of data.`,
+      `$ ping -c 15 ${edgeNode.id}`,
+      `PING ${edgeNode.name} 56(84) bytes of data.`,
     ]);
 
     const origin = window.location.origin;
     const baseUrl = `${origin}/api`;
-    const region = anchorServer.region;
+    const region = edgeNode.region;
 
     // Instantiate worker from local path
     workerRef.current = new Worker(
@@ -1005,7 +830,7 @@ export default function SpeedTest() {
 
           const newLatencyStats = {
             current: data.latency,
-            avg: calculateMean(data.latencies),
+            avg: calculateTrimmedMean(data.latencies),
             jitter: data.jitter,
             min: calculateMin(data.latencies),
             max: Math.max(...data.latencies),
@@ -1018,7 +843,7 @@ export default function SpeedTest() {
           );
           setTerminalLogs((prev) => [
             ...prev,
-            `64 bytes from ${anchorServer.id}: icmp_seq=${data.iteration} time=${data.latency.toFixed(1)} ms`,
+            `64 bytes from ${edgeNode.id}: icmp_seq=${data.iteration} time=${data.latency.toFixed(1)} ms`,
           ]);
           break;
         }
@@ -1041,35 +866,67 @@ export default function SpeedTest() {
 
           const pings = data.latencies || [];
           const min = pings.length > 0 ? calculateMin(pings) : 0;
-          const avg = pings.length > 0 ? calculateMean(pings) : 0;
+          // Use trimmed mean for latency — eliminates GC pauses and transient spikes (Fix #10)
+          const avg = pings.length > 0 ? calculateTrimmedMean(pings) : 0;
           const max = pings.length > 0 ? Math.max(...pings) : 0;
           const jitter = data.jitter || 0;
           const loss = data.pingSent > 0 ? ((data.pingLost / data.pingSent) * 100).toFixed(1) : "0.0";
 
+          // Calculate dynamic warmup based on Bandwidth-Delay Product (Fix #8)
+          // BDP = bandwidth × RTT. Higher BDP needs longer warmup for TCP to fill the pipe.
+          // Estimate bandwidth from connection API or use a conservative default.
+          const estimatedBandwidthBps = clientInfo?.downlink
+            ? clientInfo.downlink * 1_000_000
+            : avg > 0 ? (10_000_000) : (5_000_000); // conservative 5 Mbps default
+          const rttSec = avg / 1000;
+          const bdpBytes = estimatedBandwidthBps * rttSec;
+          // Warmup needs at least 2× BDP worth of data transfer to fill the TCP window
+          const dynamicWarmupMs = Math.min(
+            CONFIG.DYNAMIC_WARMUP_MAX_MS,
+            Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000))
+          );
+          const dynamicRampMs = Math.min(
+            CONFIG.DYNAMIC_RAMP_MAX_MS,
+            Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / estimatedBandwidthBps) * 1000))
+          );
+
+          // Adaptive parallel streams based on estimated bandwidth (Fix #7)
+          const adaptiveStreams = getAdaptiveStreamCount(
+            estimatedBandwidthBps,
+            CONFIG.PARALLEL_STREAMS_DEFAULT,
+            CONFIG.BANDWIDTH_SLOW_THRESHOLD,
+            CONFIG.BANDWIDTH_MEDIUM_THRESHOLD,
+            CONFIG.PARALLEL_STREAMS_SLOW,
+            CONFIG.PARALLEL_STREAMS_MEDIUM,
+            CONFIG.PARALLEL_STREAMS_FAST,
+          );
+
           setTerminalLogs((prev) => [
             ...prev,
-            `--- ${anchorServer.id} ping statistics ---`,
+            `--- ${edgeNode.id} ping statistics ---`,
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
+            `[INFO] Connection type: ${clientInfo?.connectionType || "unknown"}`,
+            `[INFO] BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB, warmup: ${dynamicWarmupMs}ms, ramp: ${dynamicRampMs}ms`,
+            `[INFO] Adaptive streams: ${adaptiveStreams} (estimated bandwidth: ${(estimatedBandwidthBps / 1_000_000).toFixed(1)} Mbps)`,
             "",
-            `$ speedtest --download --streams=${CONFIG.PARALLEL_STREAMS}`,
-            `Starting download throughput test (${CONFIG.PARALLEL_STREAMS} streams, 8s window)...`,
+            `$ speedtest --download --streams=${adaptiveStreams}`,
+            `Starting download throughput test (${adaptiveStreams} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
           ]);
 
-          const calculatedAvgPing =
-            pings.length > 0
-              ? calculateMean(pings)
-              : 20;
+          const calculatedAvgPing = avg > 0 ? avg : 20;
 
           workerRef.current?.postMessage({
             type: "START_DOWNLOAD",
             baseUrl,
             region,
-            serverId: anchorServer.id,
+            serverId: edgeNode.id,
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: CONFIG.PARALLEL_STREAMS,
+            parallelStreams: adaptiveStreams,
+            dynamicWarmupMs,
+            dynamicRampMs,
           });
           break;
         }
@@ -1090,7 +947,7 @@ export default function SpeedTest() {
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart("download", downloadMbps);
-          const dlPct = Math.min(100, Math.round((data.elapsedTime / 10) * 100));
+          const dlPct = Math.min(100, Math.round((data.elapsedTime / 20) * 100));
           const dlBarLen = Math.floor(dlPct / 5);
           const dlBar = "█".repeat(dlBarLen) + " ".repeat(20 - dlBarLen);
           setActiveProgressLine(
@@ -1098,8 +955,8 @@ export default function SpeedTest() {
           );
 
           setProgressPercent(
-            Math.min(74, 50 + Math.round((data.elapsedTime / 10) * 25)),
-          ); // cap at 74%
+            Math.min(74, 50 + Math.round((data.elapsedTime / 20) * 25)),
+          ); // cap at 74% — 20s total download test
 
           if (data.loadedLatencies) {
             const stats = {
@@ -1134,6 +991,8 @@ export default function SpeedTest() {
           setDownloadStats(newDownloadStats);
           downloadStatsRef.current = newDownloadStats;
 
+          if (data.reliable === false) setDownloadReliable(false);
+
           setProgressPercent(75);
           // Transition to Upload
           setPhase("upload");
@@ -1148,32 +1007,61 @@ export default function SpeedTest() {
           }
 
           const finalDlMbps = data.averageSpeed / 1000000;
+          const reliabilityNote = data.reliable === false
+            ? " [UNRELIABLE - insufficient data]"
+            : "";
+
+          // Reuse adaptive stream count and dynamic warmup from download phase
+          const pings = unloadedPingStatsRef.current.latencies || [];
+          const calculatedAvgPing = pings.length > 0 ? calculateTrimmedMean(pings) : 20;
+
+          // Calculate dynamic warmup for upload based on BDP
+          const estimatedBandwidthBps = clientInfo?.downlink
+            ? clientInfo.downlink * 1_000_000
+            : calculatedAvgPing > 0 ? 10_000_000 : 5_000_000;
+          const rttSec = calculatedAvgPing / 1000;
+          const bdpBytes = estimatedBandwidthBps * rttSec;
+          const dynamicWarmupMs = Math.min(
+            CONFIG.DYNAMIC_WARMUP_MAX_MS,
+            Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000))
+          );
+          const dynamicRampMs = Math.min(
+            CONFIG.DYNAMIC_RAMP_MAX_MS,
+            Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / estimatedBandwidthBps) * 1000))
+          );
+
+          const adaptiveStreams = getAdaptiveStreamCount(
+            estimatedBandwidthBps,
+            CONFIG.PARALLEL_STREAMS_DEFAULT,
+            CONFIG.BANDWIDTH_SLOW_THRESHOLD,
+            CONFIG.BANDWIDTH_MEDIUM_THRESHOLD,
+            CONFIG.PARALLEL_STREAMS_SLOW,
+            CONFIG.PARALLEL_STREAMS_MEDIUM,
+            CONFIG.PARALLEL_STREAMS_FAST,
+          );
+
           setTerminalLogs((prev) => [
             ...prev,
-            `Download: ${finalDlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
+            `Download: ${finalDlMbps.toFixed(1)} Mbps${reliabilityNote} [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
             `[OK] Download test finished.`,
             "",
-            `$ speedtest --upload --streams=${CONFIG.PARALLEL_STREAMS}`,
-            `Starting upload throughput test (${CONFIG.PARALLEL_STREAMS} streams, 8s window)...`,
+            `$ speedtest --upload --streams=${adaptiveStreams}`,
+            `Starting upload throughput test (${adaptiveStreams} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.UPLOAD_MEASURE_MS + CONFIG.UPLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
           ]);
           setActiveProgressLine(null);
-
-          const pings = unloadedPingStatsRef.current.latencies || [];
-          const calculatedAvgPing =
-            pings.length > 0
-              ? calculateMean(pings)
-              : 20;
 
           workerRef.current?.postMessage({
             type: "START_UPLOAD",
             baseUrl,
             region,
-            serverId: anchorServer.id,
+            serverId: edgeNode.id,
             clientLat,
             clientLon,
             basePing: calculatedAvgPing,
-            parallelStreams: CONFIG.PARALLEL_STREAMS,
+            parallelStreams: adaptiveStreams,
             downloadSpeed: downloadStatsRef.current.avg,
+            dynamicWarmupMs,
+            dynamicRampMs,
           });
           break;
         }
@@ -1193,7 +1081,7 @@ export default function SpeedTest() {
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
           updateThroughputChart("upload", uploadMbps);
-          const ulPct = Math.min(100, Math.round((data.elapsedTime / 10) * 100));
+          const ulPct = Math.min(100, Math.round((data.elapsedTime / 20) * 100));
           const ulBarLen = Math.floor(ulPct / 5);
           const ulBar = "█".repeat(ulBarLen) + " ".repeat(20 - ulBarLen);
           setActiveProgressLine(
@@ -1201,8 +1089,8 @@ export default function SpeedTest() {
           );
 
           setProgressPercent(
-            Math.min(99, 75 + Math.round((data.elapsedTime / 10) * 20)),
-          ); // cap at 99%
+            Math.min(99, 75 + Math.round((data.elapsedTime / 20) * 20)),
+          ); // cap at 99% — 20s total upload test
 
           if (data.loadedLatencies) {
             const stats = {
@@ -1237,6 +1125,8 @@ export default function SpeedTest() {
           setUploadStats(newUploadStats);
           uploadStatsRef.current = newUploadStats;
 
+          if (data.reliable === false) setUploadReliable(false);
+
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
 
@@ -1246,12 +1136,15 @@ export default function SpeedTest() {
           }
 
           const finalUlMbps = data.averageSpeed / 1000000;
+          const reliabilityNote = data.reliable === false
+            ? " [UNRELIABLE - insufficient data]"
+            : "";
           setTerminalLogs((prev) => [
             ...prev,
-            `Upload: ${finalUlMbps.toFixed(1)} Mbps [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
+            `Upload: ${finalUlMbps.toFixed(1)} Mbps${reliabilityNote} [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
             `[OK] Upload test finished.`,
             "",
-            `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${anchorServer.id}`,
+            `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${edgeNode.id}`,
             `Running dedicated packet loss test (${CONFIG.PACKET_LOSS_PINGS} pings)...`,
           ]);
           setActiveProgressLine(null);
@@ -1265,7 +1158,7 @@ export default function SpeedTest() {
             type: "START_PACKET_LOSS",
             baseUrl,
             region,
-            serverId: anchorServer.id,
+            serverId: edgeNode.id,
             clientLat,
             clientLon,
           });
@@ -1275,7 +1168,7 @@ export default function SpeedTest() {
         case "PACKET_LOSS_PROGRESS": {
           setTerminalLogs((prev) => [
             ...prev,
-            `64 bytes from ${anchorServer.id}: icmp_seq=${data.iteration} loss=${data.lost}/${data.sent}`,
+            `64 bytes from ${edgeNode.id}: icmp_seq=${data.iteration} loss=${data.lost}/${data.sent}`,
           ]);
           break;
         }
@@ -1285,7 +1178,7 @@ export default function SpeedTest() {
 
           setTerminalLogs((prev) => [
             ...prev,
-            `--- ${anchorServer.id} packet loss statistics ---`,
+            `--- ${edgeNode.id} packet loss statistics ---`,
             `${data.sent} pings transmitted, ${data.sent - data.lost} received, ${data.lossPercent.toFixed(1)}% packet loss`,
             "",
           ]);
@@ -1314,7 +1207,7 @@ export default function SpeedTest() {
       type: "START_PING",
       baseUrl,
       region,
-      serverId: anchorServer.id,
+      serverId: edgeNode.id,
       clientLat,
       clientLon,
     });
@@ -1339,7 +1232,7 @@ export default function SpeedTest() {
       ...prev,
       "--------------------------------------------------",
       `Speedtest execution finished at ${timeStr}`,
-      `Server: ${selectedServerRef.current?.name || "Auto Edge"}`,
+      `Server: ${EDGE_NODE.name}`,
       `  Download Speed: ${(downloadStatsRef.current.avg / 1000000).toFixed(1)} Mbps`,
       `  Upload Speed: ${(uploadStatsRef.current.avg / 1000000).toFixed(1)} Mbps`,
       `  Latency (unloaded): ${latencyStatsRef.current.avg.toFixed(1)} ms`,
@@ -1765,7 +1658,7 @@ export default function SpeedTest() {
                   <div className="flex justify-between items-center mb-2">
                     <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
                       <span>PACKET LOSS</span>
-                      <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. It results in choppy voice calls, freezing videos, and gaming lag. Ideally, packet loss should be 0.0%." />
+                      <InfoTooltip content="Packet Loss occurs when data packets fail to reach their destination. Measured via HTTP request failures during dedicated ping phase. Note: HTTP operates over TCP with retransmission, so this measures application-level loss, not raw network packet loss. True network packet loss is typically higher but masked by TCP retransmits." />
                     </div>
                     <AlertTriangle
                       className="w-4 h-4 text-mute"
@@ -1784,11 +1677,14 @@ export default function SpeedTest() {
                   </div>
                 </div>
 
-                <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex flex-col justify-between items-center">
-                  <span>Measured Packet Loss</span>
+                <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-4 flex flex-col justify-between items-center gap-1">
+                  <span>HTTP-Level Loss (TCP retransmits masked)</span>
                   <span className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}>
                     {packetLoss > 0 ? "Suboptimal" : "Excellent"}
                   </span>
+                  {packetLoss === 0 && phase === "complete" && (
+                    <span className="text-[9px] text-mute italic">Does not reflect raw network loss</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1818,8 +1714,6 @@ export default function SpeedTest() {
           {/* 6. Technical Details Drawer */}
           <TechnicalLogs
             clientInfo={clientInfo}
-            selectedServer={selectedServer}
-            routingResults={routingResults}
           />
         </div>
 

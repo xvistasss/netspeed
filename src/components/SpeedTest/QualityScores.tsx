@@ -1,5 +1,6 @@
 import InfoTooltip from "./InfoTooltip";
 import type { TestPhase } from "../../utils/speedTestUtils";
+import { Check, Minus, X } from "lucide-react";
 
 interface QualityScoresProps {
   phase: TestPhase;
@@ -98,9 +99,9 @@ function getCategoryScores(
   }
 
   return {
-    streaming: { rating: streamingRating, color: streamingColor },
-    gaming: { rating: gamingRating, color: gamingColor },
-    chatting: { rating: chattingRating, color: chattingColor },
+    streaming: { rating: streamingRating, color: streamingColor, icon: streamingRating === "Great" ? "check" : streamingRating === "Good" ? "minus" : "x" },
+    gaming: { rating: gamingRating, color: gamingColor, icon: gamingRating === "Great" ? "check" : gamingRating === "Good" ? "minus" : "x" },
+    chatting: { rating: chattingRating, color: chattingColor, icon: chattingRating === "Great" ? "check" : chattingRating === "Good" ? "minus" : "x" },
   };
 }
 
@@ -123,10 +124,10 @@ export default function QualityScores({
   const categories = hasData
     ? getCategoryScores(dlMbps, ulMbps, latencyAvg, latencyJitter)
     : {
-        streaming: { rating: "\u2014", color: "text-mute" },
-        gaming: { rating: "\u2014", color: "text-mute" },
-        chatting: { rating: "\u2014", color: "text-mute" },
-      };
+      streaming: { rating: "\u2014", color: "text-mute", icon: null },
+      gaming: { rating: "\u2014", color: "text-mute", icon: null },
+      chatting: { rating: "\u2014", color: "text-mute", icon: null },
+    };
 
   // Stroke-dasharray for the circular gauge (r=54, circumference ~339.3)
   const circumference = 2 * Math.PI * 54;
@@ -138,20 +139,20 @@ export default function QualityScores({
     <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs">
       <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-4 pb-2 border-b border-hairline">
         <span>NETWORK QUALITY SCORE</span>
-        <InfoTooltip content="Composite 0\u2013100 score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical <25." />
+        <InfoTooltip content="Composite – score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical <25." />
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-8">
         {/* Circular gauge */}
         <div className="relative flex-shrink-0">
-          <svg width="130" height="130" viewBox="0 0 120 120">
+          <svg width="130" height="130" viewBox="0 0 120 120" role="img" aria-label={score ? `Network quality score: ${score.total} out of 100. Grade: ${score.grade}` : "Network quality score"}>
             {/* Background track */}
             <circle
               cx="60"
               cy="60"
               r="54"
               fill="none"
-              stroke="#ebebeb"
+              stroke="var(--color-hairline)"
               strokeWidth="8"
             />
             {/* Score arc */}
@@ -160,7 +161,7 @@ export default function QualityScores({
               cy="60"
               r="54"
               fill="none"
-              stroke={score ? (score.total >= 70 ? "#0070f3" : score.total >= 50 ? "#f5a623" : "#ee0000") : "#ebebeb"}
+              stroke={score ? (score.total >= 70 ? "#0070f3" : score.total >= 50 ? "#f5a623" : "#ee0000") : "var(--color-hairline)"}
               strokeWidth="8"
               strokeLinecap="round"
               strokeDasharray={circumference}
@@ -195,7 +196,10 @@ export default function QualityScores({
               <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
                 Streaming
               </span>
-              <span className={`text-sm font-bold transition-colors duration-150 ${categories.streaming.color}`}>
+              <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.streaming.color}`}>
+                {categories.streaming.icon === "check" && <Check className="w-3.5 h-3.5" />}
+                {categories.streaming.icon === "minus" && <Minus className="w-3.5 h-3.5" />}
+                {categories.streaming.icon === "x" && <X className="w-3.5 h-3.5" />}
                 {categories.streaming.rating}
               </span>
             </div>
@@ -203,7 +207,10 @@ export default function QualityScores({
               <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
                 Gaming
               </span>
-              <span className={`text-sm font-bold transition-colors duration-150 ${categories.gaming.color}`}>
+              <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.gaming.color}`}>
+                {categories.gaming.icon === "check" && <Check className="w-3.5 h-3.5" />}
+                {categories.gaming.icon === "minus" && <Minus className="w-3.5 h-3.5" />}
+                {categories.gaming.icon === "x" && <X className="w-3.5 h-3.5" />}
                 {categories.gaming.rating}
               </span>
             </div>
@@ -211,7 +218,10 @@ export default function QualityScores({
               <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
                 Video Chat
               </span>
-              <span className={`text-sm font-bold transition-colors duration-150 ${categories.chatting.color}`}>
+              <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.chatting.color}`}>
+                {categories.chatting.icon === "check" && <Check className="w-3.5 h-3.5" />}
+                {categories.chatting.icon === "minus" && <Minus className="w-3.5 h-3.5" />}
+                {categories.chatting.icon === "x" && <X className="w-3.5 h-3.5" />}
                 {categories.chatting.rating}
               </span>
             </div>

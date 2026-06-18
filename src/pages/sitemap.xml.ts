@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 
 export const GET: APIRoute = async ({ url }) => {
   const origin = url.origin;
+  const lastmod = new Date().toISOString().split("T")[0];
 
   const pages = [
     { loc: "", priority: "1.0", changefreq: "daily" },
@@ -17,6 +18,7 @@ ${pages
   .map(
     (page) => `  <url>
     <loc>${origin}${page.loc}</loc>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>${page.changefreq}</changefreq>
     <priority>${page.priority}</priority>
   </url>`,

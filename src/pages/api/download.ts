@@ -49,26 +49,44 @@ function sleep(ms: number): Promise<void> {
 export const GET: APIRoute = async ({ url }) => {
   try {
     const sizeParam = url.searchParams.get("size");
+    const regionParam = url.searchParams.get("region");
+    const serverIdParam = url.searchParams.get("serverId");
 
-    // Default to 10MB if no size is specified
-    const size = sizeParam ? parseInt(sizeParam, 10) : 10 * 1024 * 1024;
+    // Default to 10MB if no size is specified; validate bounds
+    let size: number;
+    if (!sizeParam) {
+      size = 10 * 1024 * 1024;
+    } else {
+      const parsed = parseInt(sizeParam, 10);
+      if (Number.isNaN(parsed) || parsed < 1024 || parsed > 25 * 1024 * 1024) {
+        return new Response(
+          JSON.stringify({ error: "Invalid size parameter. Must be between 1 KB and 25 MB." }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      size = parsed;
+    }
 
     // Proxy to Cloudflare with retry for transient 429 rate limiting.
     // The Referer/Origin headers below prevent most 429s; retries are
     // only a safety net for legitimate transient overload at the edge.
+    // Region and serverId are logged for observability but Cloudflare's
+    // speed test endpoint routes to the nearest edge automatically.
     let lastError: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const cfResponse = await fetch(
-          `${CF_SPEED_TEST_ENDPOINT}?bytes=${size}`,
-          {
-            headers: {
-              Referer: "https://speed.cloudflare.com/",
-              Origin: "https://speed.cloudflare.com",
-              "Cache-Control": "no-store, no-cache",
-            },
+        const cfUrl = new URL(CF_SPEED_TEST_ENDPOINT);
+        cfUrl.searchParams.set("bytes", String(size));
+        if (regionParam) cfUrl.searchParams.set("region", regionParam);
+        if (serverIdParam) cfUrl.searchParams.set("serverId", serverIdParam);
+
+        const cfResponse = await fetch(cfUrl.toString(), {
+          headers: {
+            Referer: "https://speed.cloudflare.com/",
+            Origin: "https://speed.cloudflare.com",
+            "Cache-Control": "no-store, no-cache",
           },
-        );
+        });
 
         if (cfResponse.status === 429) {
           const retryAfter = parseRetryAfter(

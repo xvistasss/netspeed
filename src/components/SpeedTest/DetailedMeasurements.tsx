@@ -1,5 +1,5 @@
 import React from "react";
-import type { DetailPingStats } from "../../utils/speedTestUtils";
+import type { DetailPingStats, SpeedTestRequest } from "../../utils/speedTestUtils";
 import {
   calculateMean,
   calculateMedian,
@@ -17,8 +17,8 @@ interface DetailedMeasurementsProps {
   unloadedPingStats: DetailPingStats;
   dlLoadedPingStats: DetailPingStats;
   ulLoadedPingStats: DetailPingStats;
-  downloadRequests: any[];
-  uploadRequests: any[];
+  downloadRequests: SpeedTestRequest[];
+  uploadRequests: SpeedTestRequest[];
 }
 
 export default function DetailedMeasurements({
@@ -43,7 +43,7 @@ export default function DetailedMeasurements({
         </div>
 
         {/* Tab selector container with horizontal scroll on mobile */}
-        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar scroll-smooth flex">
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar scroll-smooth flex" role="tablist" aria-label="Measurement categories">
           <div className="flex bg-canvas-soft-2 p-1 rounded-full border border-hairline min-w-max">
             {(["latency", "packetLoss", "download", "upload"] as const).map(
               (tab) => {
@@ -65,6 +65,9 @@ export default function DetailedMeasurements({
                     key={tab}
                     onClick={() => setActiveTab(tab)}
                     type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-controls={`panel-${tab}`}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono select-none cursor-pointer transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary ${
                       isActive
                         ? "bg-primary text-on-primary font-semibold shadow-xs"
@@ -84,31 +87,32 @@ export default function DetailedMeasurements({
       {/* Tab contents */}
       <div className="overflow-x-auto w-full transition-opacity duration-200">
         {activeTab === "latency" && (
+          <div role="tabpanel" id="panel-latency" aria-label="Latency measurements">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   STAGE
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   AVG (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MEDIAN (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   P95 (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   STDDEV (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MIN (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MAX (MS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   JITTER (MS)
                 </th>
               </tr>
@@ -242,22 +246,24 @@ export default function DetailedMeasurements({
               </tr>
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "packetLoss" && (
+          <div role="tabpanel" id="panel-packetLoss" aria-label="Packet loss measurements">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   STAGE
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   PACKETS SENT
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   PACKETS LOST
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   LOSS RATE (%)
                 </th>
               </tr>
@@ -325,28 +331,30 @@ export default function DetailedMeasurements({
               </tr>
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "download" && (
+          <div role="tabpanel" id="panel-download" aria-label="Download speed measurements">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   PAYLOAD SIZE
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   AVG SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MEDIAN (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MIN SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MAX SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MEASUREMENTS
                 </th>
               </tr>
@@ -356,19 +364,19 @@ export default function DetailedMeasurements({
                 const bins = [
                   {
                     name: "100 kB",
-                    filter: (r: any) => r.phaseSize === 100 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize <= 200 * 1024,
                   },
                   {
                     name: "1 MB",
-                    filter: (r: any) => r.phaseSize === 1 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize > 200 * 1024 && r.phaseSize <= 5 * 1024 * 1024,
                   },
                   {
                     name: "10 MB",
-                    filter: (r: any) => r.phaseSize === 10 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize > 5 * 1024 * 1024 && r.phaseSize <= 15 * 1024 * 1024,
                   },
                   {
                     name: "25 MB",
-                    filter: (r: any) => r.phaseSize === 25 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize > 15 * 1024 * 1024,
                   },
                 ];
 
@@ -406,28 +414,30 @@ export default function DetailedMeasurements({
               })()}
             </tbody>
           </table>
+          </div>
         )}
 
         {activeTab === "upload" && (
+          <div role="tabpanel" id="panel-upload" aria-label="Upload speed measurements">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   PAYLOAD SIZE
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   AVG SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MEDIAN (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MIN SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MAX SPEED (MBPS)
                 </th>
-                <th className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
+                <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
                   MEASUREMENTS
                 </th>
               </tr>
@@ -436,20 +446,20 @@ export default function DetailedMeasurements({
               {(() => {
                 const bins = [
                   {
-                    name: "100 kB",
-                    filter: (r: any) => r.phaseSize === 100 * 1024,
+                    name: "< 500 kB",
+                    filter: (r: SpeedTestRequest) => r.phaseSize < 500 * 1024,
                   },
                   {
                     name: "1 MB",
-                    filter: (r: any) => r.phaseSize === 1 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize >= 500 * 1024 && r.phaseSize < 5 * 1024 * 1024,
                   },
                   {
                     name: "10 MB",
-                    filter: (r: any) => r.phaseSize === 10 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize >= 5 * 1024 * 1024 && r.phaseSize < 15 * 1024 * 1024,
                   },
                   {
                     name: "25 MB",
-                    filter: (r: any) => r.phaseSize === 25 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize >= 15 * 1024 * 1024,
                   },
                 ];
 
@@ -487,6 +497,7 @@ export default function DetailedMeasurements({
               })()}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
