@@ -6,14 +6,6 @@ export type ServerList = Array<Omit<TestServer, "distance">>;
 // Measurement nodes: geographic locations for latency estimation.
 // All API calls route to the same origin — latency is simulated via estimateRtt().
 export const SERVER_LIST: ServerList = [
-  // Local edge (special case: distance=0, used when client is on localhost)
-  // {
-  //   id: "local-edge",
-  //   name: "Local Edge",
-  //   lat: 0,
-  //   lon: 0,
-  //   region: "local-edge",
-  // },
   // Asia Pacific
   {
     id: "india-mumbai",
@@ -127,8 +119,6 @@ export const SERVER_LIST: ServerList = [
 
 /**
  * Compute haversine distance (km) on the fly.
- * - local-edge is treated as distance=0
- * - other servers get rounded haversine distance
  */
 export function withDistances(
   clientLat: number,
@@ -141,10 +131,6 @@ export function withDistances(
     !(clientLat === 0 && clientLon === 0);
 
   return servers.map((srv) => {
-    if (srv.id === "local-edge") {
-      return { ...srv, distance: 0 } as TestServer;
-    }
-
     if (!hasValidClientCoords) {
       return { ...srv, distance: 9999 } as TestServer;
     }

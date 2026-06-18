@@ -497,16 +497,7 @@ export default function SpeedTest() {
     const enriched = withDistances(clientLat, clientLon, serversToUse as any);
 
     let closest: TestServer[];
-    if (data && data.isLocal) {
-      // Always include local-edge as the primary option if connection is local
-      closest = enriched.filter((s) => s.id === "local-edge");
-      if (hasCoords) {
-        closest = [...closest, ...pickClosestN(enriched.filter((s) => s.id !== "local-edge"), 2)];
-      } else {
-        const defaultIds = ["new-york", "frankfurt", "singapore"];
-        closest = [...closest, ...enriched.filter((s) => defaultIds.includes(s.id))];
-      }
-    } else if (hasCoords) {
+    if (hasCoords) {
       closest = pickClosestN(enriched, 3);
     } else {
       // Find globally neutral default servers to avoid regional bias

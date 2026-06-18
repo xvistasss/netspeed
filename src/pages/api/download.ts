@@ -49,18 +49,9 @@ function sleep(ms: number): Promise<void> {
 export const GET: APIRoute = async ({ url }) => {
   try {
     const sizeParam = url.searchParams.get("size");
-    const region = url.searchParams.get("region");
 
     // Default to 10MB if no size is specified
     const size = sizeParam ? parseInt(sizeParam, 10) : 10 * 1024 * 1024;
-
-    // Local-edge: generate data locally (UI testing only, not real throughput)
-    if (region === "local-edge") {
-      return new Response(createLocalGeneratorStream(size), {
-        status: 200,
-        headers: corsHeaders,
-      });
-    }
 
     // Proxy to Cloudflare with retry for transient 429 rate limiting.
     // The Referer/Origin headers below prevent most 429s; retries are
@@ -137,39 +128,6 @@ export const GET: APIRoute = async ({ url }) => {
     );
   }
 };
-
-/**
- * Local data generator — only used for local-edge UI testing.
- * NOT a real throughput measurement.
- */
-function createLocalGeneratorStream(size: number): ReadableStream<Uint8Array> {
-  const bufferSize = 4 * 1024 * 1024; // 4MB buffer
-  const preGeneratedBuffer = new Uint8Array(bufferSize);
-  for (let i = 0; i < bufferSize; i++) {
-    preGeneratedBuffer[i] = Math.floor(Math.random() * 256);
-  }
-
-  const chunkSize = 256 * 1024; // 256KB chunks
-  let bytesSent = 0;
-
-  return new ReadableStream({
-    pull(controller) {
-      if (bytesSent >= size) {
-        controller.close();
-        return;
-      }
-      const remaining = size - bytesSent;
-      const currentChunkSize = Math.min(chunkSize, remaining);
-
-      const maxOffset = bufferSize - currentChunkSize;
-      const randomOffset = Math.floor(Math.random() * maxOffset);
-      controller.enqueue(
-        preGeneratedBuffer.slice(randomOffset, randomOffset + currentChunkSize),
-      );
-      bytesSent += currentChunkSize;
-    },
-  });
-}
 
 export const OPTIONS: APIRoute = async () => {
   return new Response(null, {

@@ -36,34 +36,14 @@ function sleep(ms: number): Promise<void> {
  * - POST https://speed.cloudflare.com/__up
  * - Requires Referer and Origin headers for Cloudflare to accept the request
  */
-export const POST: APIRoute = async ({ request, url }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
-    const region = url.searchParams.get("region");
     const uploadBody = request.body;
 
     if (!uploadBody) {
       return new Response(
         JSON.stringify({ success: false, error: "No upload body provided" }),
         { status: 400, headers: corsHeaders },
-      );
-    }
-
-    // Local-edge: just drain the stream (UI testing only, not real throughput)
-    if (region === "local-edge") {
-      let totalBytes = 0;
-      const reader = uploadBody.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) totalBytes += value.length;
-        }
-      } finally {
-        reader.releaseLock();
-      }
-      return new Response(
-        JSON.stringify({ success: true, bytesReceived: totalBytes }),
-        { status: 200, headers: corsHeaders },
       );
     }
 

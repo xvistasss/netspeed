@@ -58,11 +58,10 @@ export default function TechnicalLogs({
             <span className="text-ink">
               {selectedServer?.region
                 ? `?region=${selectedServer.region}`
-                : "(none — local edge)"}
+                : "(none)"}
             </span>
           </div>
           {selectedServer &&
-            selectedServer.id !== "local-edge" &&
             clientInfo.latitude !== 0 && (
               <div className="tabular-nums">
                 Est. Distance:{" "}
@@ -79,11 +78,6 @@ export default function TechnicalLogs({
                 </span>
               </div>
             )}
-          {selectedServer && selectedServer.id === "local-edge" && (
-            <div className="tabular-nums">
-              Est. Distance: <span className="text-ink">0 km (Local Loopback)</span>
-            </div>
-          )}
           <div className="tabular-nums">
             Pre-Ping Latency:{" "}
             <span className="text-ink">

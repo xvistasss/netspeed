@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { SERVER_LIST } from "../../utils/serverListUtils";
-import { sleep, isLocalHost, estimateRtt } from "../../utils/speedTestUtils";
+import { sleep, estimateRtt } from "../../utils/speedTestUtils";
 
 const corsHeaders = {
   "Content-Type": "text/plain",
@@ -23,10 +23,6 @@ export const GET: APIRoute = async ({ request, url }) => {
     const isWarmup = url.searchParams.get("warmup") === "true";
     const hostLatencyParam = url.searchParams.get("hostLatency");
     const hostLatency = hostLatencyParam ? parseFloat(hostLatencyParam) : 0;
-
-    const host = request.headers.get("host") || "";
-    const hostname = host.split(":")[0].toLowerCase();
-    const isLocal = isLocalHost(hostname);
 
     // Parse client location from params or fallback to headers or request.cf object
     const headers = request.headers;
@@ -65,12 +61,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     }
 
     // Calculate simulated target latency
-    let targetLatency = 0;
-    if (region === "local-edge") {
-      targetLatency = isLocal ? 15 : hostLatency;
-    } else {
-      targetLatency = estimateRtt(region, clientLat, clientLon, serverLat, serverLon, undefined, 20);
-    }
+    const targetLatency = estimateRtt(region, clientLat, clientLon, serverLat, serverLon, undefined, 20);
 
     // Calculate final sleep delay.
     let additionalDelay = 0;
