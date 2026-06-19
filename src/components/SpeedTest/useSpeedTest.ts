@@ -98,7 +98,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   const MAX_LOG_ENTRIES = 500;
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
-    "Welcome to Net-Speed CLI v0.1.1",
+    `Welcome to Net-Speed CLI v${__APP_VERSION__}`,
     "System ready. Click 'Start Speed Test' or type 'run' in terminal.",
   ]);
   const appendLogs = useCallback((newLogs: string[]) => {
@@ -560,7 +560,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setUploadReliable(true);
 
     setTerminalLogs([
-      "Welcome to Net-Speed CLI v0.1.1",
+      `Welcome to Net-Speed CLI v${__APP_VERSION__}`,
       "System ready. Initializing speedtest...",
       `$ speedtest`,
       `Client IP: ${currentClientInfo?.ip || "Detecting..."} (${currentClientInfo?.org || "Detecting..."})`,

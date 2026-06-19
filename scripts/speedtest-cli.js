@@ -2,6 +2,10 @@
 
 import { performance } from 'perf_hooks';
 import crypto from 'crypto';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 const BASE_URL = process.argv[2] || process.env.BASE_URL || 'http://localhost:4321';
 
@@ -66,7 +70,7 @@ function formatMbps(bps) {
 }
 
 async function main() {
-  console.log(`${BOLD}${CYAN}Welcome to Net-Speed CLI v0.1.1${RESET}`);
+  console.log(`${BOLD}${CYAN}Welcome to Net-Speed CLI v${version}${RESET}`);
   console.log(`${MUTE}Connecting to speedtest server at ${BASE_URL}...${RESET}`);
 
   // 1. Verify server is running
