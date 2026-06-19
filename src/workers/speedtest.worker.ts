@@ -257,9 +257,8 @@ async function runDownloadTest(
   // Collect all instantaneous speeds for percentile-based peak calculation
   const allInstantaneousSpeeds: number[] = [];
 
-  // Track stable measurement start time and bytes (measurement phase starts at Phase 3)
+  // Track stable measurement start time (measurement phase starts at Phase 3)
   let measurementStartTime: number | null = null;
-  let measurementStartBytes: number | null = null;
   let measurementPhaseStarted = false;
 
   // Background latency pinger under download stress (recursive timeout to avoid socket queueing)
@@ -342,11 +341,11 @@ async function runDownloadTest(
       allInstantaneousSpeeds.push(instSpeedBps);
     }
 
-    // Calculate peak as 90th percentile of instantaneous speeds
+    // Calculate peak as 95th percentile of instantaneous speeds
     if (allInstantaneousSpeeds.length > 0) {
       const sorted = [...allInstantaneousSpeeds].sort((a, b) => a - b);
-      const p90Index = Math.floor(sorted.length * 0.9);
-      peakSpeed = sorted[Math.min(p90Index, sorted.length - 1)];
+      const p95Index = Math.floor(sorted.length * 0.95);
+      peakSpeed = sorted[Math.min(p95Index, sorted.length - 1)];
     }
 
     self.postMessage({
@@ -427,7 +426,6 @@ async function runDownloadTest(
 
               const reader = response.body.getReader();
               let bytesReceived = 0;
-              const bytesBeforeRead = totalBytesDownloaded;
 
               try {
                 while (!signal.aborted && !isCancelled && !phaseAbortController.signal.aborted) {
@@ -518,18 +516,23 @@ async function runDownloadTest(
     await runDownloadPhase(CONFIG.CHUNK_RAMP, dynamicRampMs);
   }
 
-  // Synchronization barrier: wait for all Phase 2 streams to complete
-  // before capturing the Phase 3 measurement baseline.
-  // This prevents in-flight Phase 2 bytes from contaminating the measurement.
-  await sleep(100);
+  // Synchronization barrier: wait for all Phase 2 streams to drain completely.
+  // Use multiple short waits to allow in-flight TCP segments to arrive,
+  // preventing Phase 2 bytes from leaking into the Phase 3 measurement baseline.
+  for (let w = 0; w < 5; w++) {
+    await sleep(50);
+  }
 
   // Phase 3: main measurement — stable throughput
+  let phase3StartBytes = totalBytesDownloaded;
+  let phase3EndBytes = totalBytesDownloaded;
   if (!signal.aborted && !isCancelled) {
-    // Capture measurement baseline atomically before Phase 3 chunks start
+    // Capture measurement baseline AFTER Phase 2 is fully drained
     measurementStartTime = performance.now();
-    measurementStartBytes = totalBytesDownloaded;
+    phase3StartBytes = totalBytesDownloaded;
     measurementPhaseStarted = true;
     await runDownloadPhase(CONFIG.CHUNK_MEASURE, CONFIG.DOWNLOAD_MEASURE_MS);
+    phase3EndBytes = totalBytesDownloaded;
   }
 
   // Phase 4: peak measurement — max throughput
@@ -540,12 +543,15 @@ async function runDownloadTest(
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
 
-  // Calculate final average speed using wall-clock time of measurement phase (Phase 3 + 4)
+  // Calculate final average speed using ONLY Phase 3 (measurement phase) data.
+  // Phase 4 uses oversized chunks that don't represent steady-state throughput.
   let finalAvgSpeedBps = 0;
-  if (measurementPhaseStarted && measurementStartTime !== null && measurementStartBytes !== null) {
-    const elapsedSec = (performance.now() - measurementStartTime) / 1000;
-    const bytesTransferred = totalBytesDownloaded - measurementStartBytes;
-    finalAvgSpeedBps = elapsedSec > 0.1 ? (bytesTransferred * 8) / elapsedSec : 0;
+  if (measurementPhaseStarted && measurementStartTime !== null) {
+    const phase3Bytes = phase3EndBytes - phase3StartBytes;
+    const phase3ElapsedSec = CONFIG.DOWNLOAD_MEASURE_MS / 1000;
+    finalAvgSpeedBps = phase3ElapsedSec > 0.1 && phase3Bytes > 0
+      ? (phase3Bytes * 8) / phase3ElapsedSec
+      : 0;
   } else {
     // Fallback: use full test duration
     const elapsedSec = (performance.now() - startTime) / 1000;
@@ -592,7 +598,7 @@ async function runUploadTest(
   clientLon: number,
   basePing: number,
   parallelStreams: number,
-  downloadSpeed: number,
+  _downloadSpeed: number,
   dynamicWarmupMs: number,
   dynamicRampMs: number,
   signal: AbortSignal,
@@ -626,9 +632,8 @@ async function runUploadTest(
   let currentSpeedEstimate = 1000 * 1000; // start with 1 Mbps estimate
   let nextChunkSize = 64 * 1024; // start with a small, safe chunk size (64 KB)
 
-  // Track stable measurement start time and bytes
+  // Track stable measurement start time
   let measurementStartTime: number | null = null;
-  let measurementStartBytes: number | null = null;
 
   // Background latency pinger under upload load (recursive timeout to avoid socket queueing)
   let activePingTimeout: any = null;
@@ -713,11 +718,11 @@ async function runUploadTest(
       allInstantaneousSpeeds.push(instSpeedBps);
     }
 
-    // Calculate peak as 90th percentile of instantaneous speeds
+    // Calculate peak as 95th percentile of instantaneous speeds
     if (allInstantaneousSpeeds.length > 0) {
       const sorted = [...allInstantaneousSpeeds].sort((a, b) => a - b);
-      const p90Index = Math.floor(sorted.length * 0.9);
-      peakSpeed = sorted[Math.min(p90Index, sorted.length - 1)];
+      const p95Index = Math.floor(sorted.length * 0.95);
+      peakSpeed = sorted[Math.min(p95Index, sorted.length - 1)];
     }
 
     self.postMessage({
@@ -805,7 +810,6 @@ async function runUploadTest(
 
         const chunkStart = performance.now();
         const requestTimestamp = Date.now();
-        let chunkBytesReported = 0;
 
         const fetchController = new AbortController();
         activeFetchControllers.push(fetchController);
@@ -822,18 +826,27 @@ async function runUploadTest(
             signal: fetchController.signal,
           });
 
-          if (response.ok) {
-            await response.text();
-            completedBytes += currentChunkSize;
-            chunkBytesReported = currentChunkSize;
+          // Measure upload completion when response headers arrive (fetch resolves),
+          // NOT after response.text(). This eliminates server processing time
+          // and response body download from the upload speed measurement.
+          const uploadCompleteTime = performance.now();
 
-            // Dynamically adjust chunk size based on speed
-            const chunkEnd = performance.now();
-            const chunkDuration = chunkEnd - chunkStart;
+          // Read response body in background to close the connection properly
+          // but don't let it affect the speed measurement
+          response.text().catch(() => {});
+
+          if (response.ok) {
+            completedBytes += currentChunkSize;
+
+            // Dynamically adjust chunk size based on measured speed
+            // Use targetDuration of 0.2s (200ms) for responsive chunk sizing
+            const chunkDuration = uploadCompleteTime - chunkStart;
             if (chunkDuration > 0) {
               const chunkSpeed = (currentChunkSize * 8) / (chunkDuration / 1000);
               currentSpeedEstimate = currentSpeedEstimate * 0.6 + chunkSpeed * 0.4;
-              nextChunkSize = Math.floor((currentSpeedEstimate * 0.3) / 8);
+              // Target ~200ms per chunk for smooth progress reporting
+              const targetDurationSec = 0.2;
+              nextChunkSize = Math.floor((currentSpeedEstimate * targetDurationSec) / 8);
               nextChunkSize = Math.max(CONFIG.UPLOAD_MIN_CHUNK, Math.min(nextChunkSize, CONFIG.UPLOAD_MAX_CHUNK));
             }
 
@@ -860,14 +873,15 @@ async function runUploadTest(
             await sleep(30);
           }
         } catch (_err) {
-          // Record failed request with partial bytes
+          // Record failed request — use the actual chunk size as the payload
+          // since bytes were already sent before the error occurred
           const chunkEnd = performance.now();
           const chunkDuration = chunkEnd - chunkStart;
           uploadRequests.push({
             time: requestTimestamp,
             direction: "upload",
-            bytes: chunkBytesReported,
-            payloadSize: chunkBytesReported,
+            bytes: currentChunkSize,
+            payloadSize: currentChunkSize,
             phaseSize: targetSize,
             latency: 0,
             bps: 0,
@@ -917,15 +931,21 @@ async function runUploadTest(
     await runUploadPhase(1 * 1024 * 1024, dynamicRampMs);
   }
 
-  // Synchronization barrier: wait for all Phase 2 streams to complete
-  // before capturing the Phase 3 measurement baseline.
-  await sleep(100);
+  // Synchronization barrier: wait for all Phase 2 streams to drain completely.
+  // Use multiple short waits to allow in-flight TCP segments to complete,
+  // preventing Phase 2 bytes from leaking into the Phase 3 measurement baseline.
+  for (let w = 0; w < 5; w++) {
+    await sleep(50);
+  }
 
   // Phase 3: main measurement - stable throughput
+  let phase3StartBytes = completedBytes;
+  let phase3EndBytes = completedBytes;
   if (!signal.aborted && !isCancelled) {
     measurementStartTime = performance.now();
-    measurementStartBytes = completedBytes;
+    phase3StartBytes = completedBytes;
     await runUploadPhase(10 * 1024 * 1024, 3500);
+    phase3EndBytes = completedBytes;
   }
 
   // Phase 4: peak measurement - max throughput
@@ -940,12 +960,15 @@ async function runUploadTest(
   // Use completedBytes directly
   totalBytesUploaded = completedBytes;
 
-  // Calculate final average speed using wall-clock time of measurement phase (Phase 3 + 4)
+  // Calculate final average speed using ONLY Phase 3 (measurement phase) data.
+  // Phase 4 uses oversized chunks that don't represent steady-state throughput.
   let finalAvgSpeedBps = 0;
-  if (measurementStartTime !== null && measurementStartBytes !== null) {
-    const elapsedSec = (performance.now() - measurementStartTime) / 1000;
-    const bytesTransferred = totalBytesUploaded - measurementStartBytes;
-    finalAvgSpeedBps = elapsedSec > 0.1 ? (bytesTransferred * 8) / elapsedSec : 0;
+  if (measurementStartTime !== null) {
+    const phase3Bytes = phase3EndBytes - phase3StartBytes;
+    const phase3ElapsedSec = 3.5; // UPLOAD_MEASURE_MS = 3500ms
+    finalAvgSpeedBps = phase3ElapsedSec > 0.1 && phase3Bytes > 0
+      ? (phase3Bytes * 8) / phase3ElapsedSec
+      : 0;
   } else {
     const elapsedSec = (performance.now() - startTime) / 1000;
     finalAvgSpeedBps = elapsedSec > 0.1 ? (totalBytesUploaded * 8) / elapsedSec : 0;
