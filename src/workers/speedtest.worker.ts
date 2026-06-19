@@ -377,8 +377,6 @@ async function runDownloadTest(
       signal.addEventListener("abort", abortHandler);
 
       const runStream = async (): Promise<void> => {
-        const useDirectCF = !isLocalHost(baseUrl);
-
         while (
           !signal.aborted &&
           !isCancelled &&
@@ -395,21 +393,13 @@ async function runDownloadTest(
             const chunkStart = performance.now();
 
             try {
-              const url = useDirectCF
-                ? `https://speed.cloudflare.com/__down?bytes=${chunkSize}`
-                : region
-                  ? `${baseUrl}/download?size=${chunkSize}&region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
-                  : `${baseUrl}/download?size=${chunkSize}&cb=${Date.now()}-${Math.random()}`;
+              const url = region
+                ? `${baseUrl}/download?size=${chunkSize}&region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
+                : `${baseUrl}/download?size=${chunkSize}&cb=${Date.now()}-${Math.random()}`;
 
-              const fetchHeaders: Record<string, string> = useDirectCF
-                ? {
-                  Referer: "https://speed.cloudflare.com/",
-                  Origin: "https://speed.cloudflare.com",
-                  "Cache-Control": "no-store, no-cache",
-                }
-                : {
-                  "Cache-Control": "no-store, no-cache",
-                };
+              const fetchHeaders: Record<string, string> = {
+                "Cache-Control": "no-store, no-cache",
+              };
 
               const response = await fetch(url, {
                 method: "GET",
@@ -759,8 +749,6 @@ async function runUploadTest(
     }
   }
 
-  const useDirectCF = !isLocalHost(baseUrl);
-
   // Run a single continuous upload phase using fetch with ArrayBuffer body.
   // Progress is tracked at request-completion granularity (each completed chunk
   // increments completedBytes atomically). This avoids ReadableStream/Content-Length
@@ -793,23 +781,14 @@ async function runUploadTest(
           const currentChunkSize = streamNextChunkSize;
           const uploadChunk = randomDataPool.subarray(0, currentChunkSize);
 
-          const url = useDirectCF
-            ? "https://speed.cloudflare.com/__up"
-            : region
-              ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
-              : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`;
+          const url = region
+            ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
+            : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`;
 
-          const fetchHeaders: Record<string, string> = useDirectCF
-            ? {
-              "Content-Type": "application/octet-stream",
-              Referer: "https://speed.cloudflare.com/",
-              Origin: "https://speed.cloudflare.com",
-              "Cache-Control": "no-store, no-cache",
-            }
-            : {
-              "Content-Type": "application/octet-stream",
-              "Cache-Control": "no-store, no-cache",
-            };
+          const fetchHeaders: Record<string, string> = {
+            "Content-Type": "application/octet-stream",
+            "Cache-Control": "no-store, no-cache",
+          };
 
           const chunkStart = performance.now();
           const requestTimestamp = Date.now();
