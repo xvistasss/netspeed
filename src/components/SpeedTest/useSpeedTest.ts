@@ -45,7 +45,6 @@ export interface TerminalLogEntry {
 export interface UseSpeedTestReturn {
   phase: TestPhase;
   statusMessage: string;
-  theme: "light" | "dark";
   activeTab: "latency" | "packetLoss" | "download" | "upload";
   setActiveTab: (tab: "latency" | "packetLoss" | "download" | "upload") => void;
   clientInfo: ClientInfo | null;
@@ -79,7 +78,7 @@ export interface UseSpeedTestReturn {
   uploadChartRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-const EDGE_NODE = { id: "cloudflare-edge", name: "Cloudflare Edge (nearest)", region: "auto" };
+const OPTIMAL_SERVER = { id: "cloudflare-optimal", name: "Cloudflare Optimal Server", region: "auto" };
 
 export function useSpeedTest(): UseSpeedTestReturn {
   const [phase, setPhase] = useState<TestPhase>("idle");
@@ -485,10 +484,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
   }, [appendLogs, getPreciseCoords, reverseGeocode, upgradeToPreciseLocation]);
 
   // --- Warmup ---
-  const warmupEdge = useCallback(async (): Promise<typeof EDGE_NODE> => {
+  const warmupServer = useCallback(async (): Promise<typeof OPTIMAL_SERVER> => {
     setPhase("routing");
     setProgressPercent(15);
-    setStatusMessage("Warming up connection to Cloudflare edge…");
+    setStatusMessage("Selecting optimal server…");
     const origin = window.location.origin;
     let hostLatency = 0;
     try {
@@ -499,11 +498,11 @@ export function useSpeedTest(): UseSpeedTestReturn {
       hostLatency = performance.now() - startWarmup;
     } catch (_) { hostLatency = 0; }
     if (isLocalHost(window.location.hostname)) hostLatency = Math.max(1.5, hostLatency);
-    setTerminalLogs((prev) => [...prev, `[OK] Connected to Cloudflare edge (warmup: ${hostLatency.toFixed(1)}ms)`]);
-    setStatusMessage(`Cloudflare edge ready (${hostLatency.toFixed(1)}ms warmup)`);
+    setTerminalLogs((prev) => [...prev, `[OK] Connected to optimal server (warmup: ${hostLatency.toFixed(1)}ms)`]);
+    setStatusMessage(`Optimal server ready (${hostLatency.toFixed(1)}ms warmup)`);
     setProgressPercent(30);
     await sleep(200);
-    return EDGE_NODE;
+    return OPTIMAL_SERVER;
   }, []);
 
   // --- Speed Test Orchestrator ---
@@ -516,7 +515,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     // Trigger browser geolocation if not precise
     if ("geolocation" in navigator && (!currentClientInfo || !currentClientInfo.isPrecise)) {
-      setStatusMessage("Requesting browser geolocation for optimal server routing...");
+      setStatusMessage("Requesting browser geolocation for optimal server selection...");
       appendLogs(["[INFO] Requesting browser geolocation for high accuracy routing..."]);
       const upgraded = await upgradeToPreciseLocation();
       if (upgraded) {
@@ -560,14 +559,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
       `$ speedtest`,
       `Client IP: ${currentClientInfo?.ip || "Detecting..."} (${currentClientInfo?.org || "Detecting..."})`,
       `Location: ${currentClientInfo?.city || "Detecting..."}, ${currentClientInfo?.region || ""}, ${currentClientInfo?.country || ""}`,
-      "Connecting to Cloudflare edge (Anycast BGP routing)...",
+      "Selecting optimal server (Anycast BGP routing)...",
     ]);
     setActiveProgressLine(null);
 
-    const edgeNode = await warmupEdge();
+    const edgeNode = await warmupServer();
     await initCharts();
     setPhase("ping");
-    setStatusMessage("Pinging Cloudflare edge…");
+    setStatusMessage("Pinging optimal server…");
     setProgressPercent(40);
 
     setTerminalLogs((prev) => [
@@ -808,7 +807,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     };
 
     workerRef.current.postMessage({ type: "START_PING", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
-  }, [phase, appendLogs, getPreciseCoords, upgradeToPreciseLocation, warmupEdge, initCharts, updateThroughputChart]);
+  }, [phase, appendLogs, getPreciseCoords, upgradeToPreciseLocation, warmupServer, initCharts, updateThroughputChart]);
 
   const runPacketLossCheck = useCallback((realLossPercent: number) => {
     setPhase("complete");
@@ -821,7 +820,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
       ...prev,
       "--------------------------------------------------",
       `Speedtest execution finished at ${timeStr}`,
-      `Server: ${EDGE_NODE.name}`,
+      `Server: ${OPTIMAL_SERVER.name}`,
       `  Download Speed: ${(stateRef.current.downloadStats.avg / 1000000).toFixed(1)} Mbps`,
       `  Upload Speed: ${(stateRef.current.uploadStats.avg / 1000000).toFixed(1)} Mbps`,
       `  Latency (unloaded): ${stateRef.current.latencyStats.avg.toFixed(1)} ms`,
@@ -882,7 +881,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
   }, [cliInput, phase, appendLogs, startSpeedTest]);
 
   return {
-    phase, statusMessage, theme, activeTab, setActiveTab,
+    phase, statusMessage, activeTab, setActiveTab,
     clientInfo, latencyStats, downloadStats, uploadStats, packetLoss,
     terminalLogs, activeProgressLine, cliInput, setCliInput, handleCliSubmit,
     dlLoadedLatency, dlLoadedJitter, ulLoadedLatency, ulLoadedJitter,

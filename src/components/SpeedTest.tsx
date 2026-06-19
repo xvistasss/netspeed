@@ -41,7 +41,7 @@ export default function SpeedTest() {
         </h1>
         <p className="text-sm md:text-base text-body max-w-2xl mt-1">
           A professional-grade, latency-critical speed test engine measuring
-          packet jitters, concurrent downloads, and uploads at the edge.
+          packet jitters, concurrent downloads, and uploads via optimal server selection.
         </p>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 mb-4">

@@ -92,8 +92,8 @@ async function main() {
     clientInfo = { latitude: 0, longitude: 0, ip: '127.0.0.1', org: 'Local Loopback' };
   }
 
-  // 3. Probing Closest Edge Server
-  console.log(`\n${BOLD}2. Selecting optimal edge server...${RESET}`);
+  // 3. Selecting Optimal Server
+  console.log(`\n${BOLD}2. Selecting optimal server...${RESET}`);
   const SERVER_LIST = [
     { id: "india-mumbai", name: "Mumbai, India", lat: 19.0760, lon: 72.8777, region: "ap-south" },
     { id: "india-bangalore", name: "Bangalore, India", lat: 12.9716, lon: 77.5946, region: "ap-south" },
@@ -151,14 +151,14 @@ async function main() {
   }
 
   if (probeResults.length === 0) {
-    console.error(`${RED}[ERROR] No edge servers responded!${RESET}`);
+    console.error(`${RED}[ERROR] No servers responded!${RESET}`);
     process.exit(1);
   }
 
   probeResults.sort((a, b) => a.latency - b.latency);
   const best = probeResults[0].server;
   const bestLatency = probeResults[0].latency;
-  console.log(`   ${GREEN}[OK] Selected optimal edge: ${best.name} (Latency: ${bestLatency.toFixed(1)}ms)${RESET}`);
+  console.log(`   ${GREEN}[OK] Selected optimal server: ${best.name} (Latency: ${bestLatency.toFixed(1)}ms)${RESET}`);
 
   // 4. Run Ping iterations (with trimmed mean)
   console.log(`\n${BOLD}3. Pinging selected server (${CONFIG.PING_ITERATIONS} iterations)...${RESET}`);
@@ -403,7 +403,7 @@ async function main() {
   console.log(`\n${BOLD}==================================================${RESET}`);
   console.log(`${BOLD}${GREEN}               SPEEDTEST CLI SUMMARY${RESET}`);
   console.log(`${BOLD}==================================================${RESET}`);
-  console.log(`  Target Edge Node:  ${best.name} (${best.region})`);
+  console.log(`  Target Server:     ${best.name} (${best.region})`);
   console.log(`  Unloaded Ping:     ${GREEN}${avgPing.toFixed(1)} ms${RESET} (trimmed mean)`);
   console.log(`  Jitter:            ${GREEN}${jitter.toFixed(1)} ms${RESET}`);
   console.log(`  Packet Loss:       ${lossPercent > 0 ? RED : GREEN}${lossPercent.toFixed(1)} %${RESET} (HTTP-level, TCP retransmits masked)`);

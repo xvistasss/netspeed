@@ -70,7 +70,7 @@ export default function TechnicalLogs({
             </span>
           </div>
           <div className="text-[10px] text-mute mt-2 leading-relaxed">
-            Cloudflare routes to the nearest edge via BGP.
+            Cloudflare routes to the optimal server via BGP.
             No manual server selection — path is determined by
             real-time network topology.
           </div>

@@ -1,15 +1,3 @@
-// Configured array of globally distributed test measurement nodes
-// These represent geographic locations for latency estimation, NOT actual server endpoints.
-// All API calls use the same origin (window.location.origin) - latency is simulated via estimateRtt().
-export interface TestServer {
-  id: string;
-  name: string;
-  lat: number;
-  lon: number;
-  region?: string;
-  distance: number;
-}
-
 export interface SpeedTestRequest {
   time: number;
   direction: "download" | "upload";
@@ -22,26 +10,6 @@ export interface SpeedTestRequest {
   serverTime: number;
   responseSize: number;
   loadedLatencies: number[];
-}
-
-// Haversine Math to calculate distance between two coordinates in km
-export function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371; // Radius of the Earth in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-    Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 // Helper to delay execution

@@ -57,11 +57,6 @@ export const CONFIG = {
   // ── Charts ──
   CHART_MAX_POINTS: 200,
 
-  // ── Routing ──
-  ROUTE_PROBE_COUNT: 3,
-  ROUTE_PROBE_TIMEOUT_MS: 1200,
-  ROUTE_CLOSEST_CANDIDATES: 5,
-
   // ── Geo Services ──
   GEO_SERVICE_TIMEOUT_MS: 3000,
 

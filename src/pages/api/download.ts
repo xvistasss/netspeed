@@ -69,9 +69,9 @@ export const GET: APIRoute = async ({ url }) => {
 
     // Proxy to Cloudflare with retry for transient 429 rate limiting.
     // The Referer/Origin headers below prevent most 429s; retries are
-    // only a safety net for legitimate transient overload at the edge.
+    // only a safety net for legitimate transient overload at the server.
     // Region and serverId are logged for observability but Cloudflare's
-    // speed test endpoint routes to the nearest edge automatically.
+    // speed test endpoint routes to the optimal server automatically.
     let lastError: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {

@@ -1,4 +1,4 @@
-import React from "react";
+import type { ReactNode } from "react";
 import type { DetailPingStats, SpeedTestRequest } from "../../utils/speedTestUtils";
 import {
   calculateMean,
@@ -54,7 +54,7 @@ export default function DetailedMeasurements({
                   download: "Download Speeds",
                   upload: "Upload Speeds",
                 };
-                const icons: Record<string, React.ReactNode> = {
+                const icons: Record<string, ReactNode> = {
                   latency: <Wifi className="w-3.5 h-3.5" />,
                   packetLoss: <AlertTriangle className="w-3.5 h-3.5" />,
                   download: <ArrowDown className="w-3.5 h-3.5" />,
