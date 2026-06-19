@@ -86,8 +86,7 @@ export default function DetailedMeasurements({
 
       {/* Tab contents */}
       <div className="overflow-x-auto w-full transition-opacity duration-200">
-        {activeTab === "latency" && (
-          <div role="tabpanel" id="panel-latency" aria-label="Latency measurements">
+          <div role="tabpanel" id="panel-latency" aria-label="Latency measurements" aria-hidden={activeTab !== "latency"} tabIndex={0} className={activeTab !== "latency" ? "hidden" : undefined}>
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
@@ -247,10 +246,8 @@ export default function DetailedMeasurements({
             </tbody>
           </table>
           </div>
-        )}
 
-        {activeTab === "packetLoss" && (
-          <div role="tabpanel" id="panel-packetLoss" aria-label="Packet loss measurements">
+          <div role="tabpanel" id="panel-packetLoss" aria-label="Packet loss measurements" aria-hidden={activeTab !== "packetLoss"} tabIndex={0} className={activeTab !== "packetLoss" ? "hidden" : undefined}>
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
@@ -332,10 +329,8 @@ export default function DetailedMeasurements({
             </tbody>
           </table>
           </div>
-        )}
 
-        {activeTab === "download" && (
-          <div role="tabpanel" id="panel-download" aria-label="Download speed measurements">
+          <div role="tabpanel" id="panel-download" aria-label="Download speed measurements" aria-hidden={activeTab !== "download"} tabIndex={0} className={activeTab !== "download" ? "hidden" : undefined}>
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
@@ -415,10 +410,8 @@ export default function DetailedMeasurements({
             </tbody>
           </table>
           </div>
-        )}
 
-        {activeTab === "upload" && (
-          <div role="tabpanel" id="panel-upload" aria-label="Upload speed measurements">
+          <div role="tabpanel" id="panel-upload" aria-label="Upload speed measurements" aria-hidden={activeTab !== "upload"} tabIndex={0} className={activeTab !== "upload" ? "hidden" : undefined}>
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-canvas-soft border-b border-hairline text-mute">
@@ -498,7 +491,6 @@ export default function DetailedMeasurements({
             </tbody>
           </table>
           </div>
-        )}
       </div>
     </div>
   );
