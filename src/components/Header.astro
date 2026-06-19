@@ -1,10 +1,5 @@
 ---
 import { version } from "../../package.json";
-interface Props {
-  showServerStatus?: boolean;
-}
-
-const { showServerStatus = false } = Astro.props;
 ---
 
 <header
@@ -41,24 +36,11 @@ const { showServerStatus = false } = Astro.props;
       </nav>
     </div>
 
-    <!-- Right: Server Status + Theme Toggle -->
+    <!-- Right: Theme Toggle -->
     <div class="flex items-center gap-1.5 md:gap-3 shrink-0">
-      {
-        showServerStatus && (
-          <div class="flex items-center gap-1.5 text-xs font-mono text-mute select-none min-w-0 max-w-[100px] sm:max-w-[180px] md:max-w-[260px] lg:max-w-[400px]">
-            <span class="server-status-dot w-1.5 h-1.5 rounded-full bg-mute animate-pulse shrink-0" />
-            <span
-              id="header-server-text"
-              class="truncate bg-transparent text-mute border-none text-xs font-mono hidden sm:inline"
-            >
-              Auto: Detecting…
-            </span>
-          </div>
-        )
-      }
       <button
         id="header-theme-toggle"
-        class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-all shadow-xs flex items-center justify-center cursor-pointer select-none"
+        class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
         title="Switch Theme"
         aria-label="Toggle dark mode"
       >
@@ -93,41 +75,4 @@ const { showServerStatus = false } = Astro.props;
   </div>
 </header>
 
-<script>
-  const serverText = document.getElementById(
-    "header-server-text",
-  ) as HTMLSpanElement | null;
-  const statusDots = document.querySelectorAll(".server-status-dot");
 
-  window.addEventListener("servers-discovered", (e: any) => {
-    const { servers } = e.detail;
-    if (!serverText) return;
-
-    const first =
-      Array.isArray(servers) && servers.length > 0 ? servers[0] : null;
-    if (!first) {
-      serverText.textContent = "Server: Auto Detecting…";
-      return;
-    }
-
-    const distStr = first.distance ? ` (${first.distance})` : "";
-    serverText.textContent = `Server (Auto): ${first.name}${distStr}`;
-  });
-
-  window.addEventListener("server-selected", (e: any) => {
-    const { name, distance, latency } = e.detail;
-
-    const distStr = distance ? ` (${distance})` : "";
-    const latStr =
-      latency !== undefined && latency > 0 ? ` [${Math.round(latency)}ms]` : "";
-
-    statusDots.forEach((dot) => {
-      dot.className =
-        "server-status-dot w-1.5 h-1.5 rounded-full bg-[#0070f3] animate-pulse shrink-0";
-    });
-
-    if (serverText) {
-      serverText.textContent = `Server (Auto): ${name}${distStr}${latStr}`;
-    }
-  });
-</script>

@@ -15,11 +15,16 @@ let errorStack: string | undefined = undefined;
 if (error instanceof Error) {
   errorName = error.name;
   errorMessage = error.message;
-  errorStack = error.stack;
+  // Only expose stack traces in development
+  if (import.meta.env.DEV) {
+    errorStack = error.stack;
+  }
 } else if (error && typeof error === "object") {
   errorName = (error as any).name || errorName;
   errorMessage = (error as any).message || String(error);
-  errorStack = (error as any).stack;
+  if (import.meta.env.DEV) {
+    errorStack = (error as any).stack;
+  }
 } else if (error) {
   errorMessage = String(error);
 }
@@ -61,7 +66,7 @@ const timestamp =
       >
         <button
           onclick="window.location.reload()"
-          class="bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 hover:opacity-90 active:scale-95 transition-all text-center select-none cursor-pointer flex items-center justify-center gap-2"
+          class="bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 hover:opacity-90 active:scale-95 transition-[opacity,transform] text-center select-none cursor-pointer flex items-center justify-center gap-2"
         >
           <svg
             class="w-4 h-4"
@@ -80,7 +85,7 @@ const timestamp =
         </button>
         <a
           href="/"
-          class="bg-canvas border border-hairline hover:border-hairline-strong text-ink font-medium text-sm rounded-full py-2.5 px-6 active:scale-95 transition-all text-center select-none cursor-pointer inline-flex items-center justify-center"
+          class="bg-canvas border border-hairline hover:border-hairline-strong text-ink font-medium text-sm rounded-full py-2.5 px-6 active:scale-95 transition-[border-color,transform] text-center select-none cursor-pointer inline-flex items-center justify-center"
         >
           Go back home
         </a>

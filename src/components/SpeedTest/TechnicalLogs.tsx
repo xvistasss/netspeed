@@ -1,16 +1,11 @@
-import type { ClientInfo, TestServer } from "../../utils/speedTestUtils";
-import { haversineDistance } from "../../utils/speedTestUtils";
+import type { ClientInfo } from "../../utils/speedTestUtils";
 
 interface TechnicalLogsProps {
   clientInfo: ClientInfo | null;
-  selectedServer: TestServer | null;
-  routingResults: { [key: string]: number };
 }
 
 export default function TechnicalLogs({
   clientInfo,
-  selectedServer,
-  routingResults,
 }: TechnicalLogsProps) {
   if (!clientInfo) return null;
 
@@ -37,54 +32,47 @@ export default function TechnicalLogs({
               {clientInfo.city}, {clientInfo.region}, {clientInfo.country}
             </span>
           </div>
+          {clientInfo.connectionType && (
+            <div>
+              Connection:{" "}
+              <span className="text-ink">{clientInfo.connectionType}</span>
+              {clientInfo.effectiveType && (
+                <span className="text-mute"> ({clientInfo.effectiveType})</span>
+              )}
+            </div>
+          )}
+          {clientInfo.downlink && (
+            <div className="tabular-nums">
+              Est. Downlink:{" "}
+              <span className="text-ink">{clientInfo.downlink} Mbps</span>
+            </div>
+          )}
+          {clientInfo.rtt && (
+            <div className="tabular-nums">
+              Network RTT:{" "}
+              <span className="text-ink">{clientInfo.rtt} ms</span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-mute font-semibold">ANCHOR ROUTING INFO</span>
+          <span className="text-mute font-semibold">MEASUREMENT NODE</span>
           <div>
-            Server:{" "}
-            <span className="text-ink">
-              {selectedServer?.name || "Evaluating…"}
-            </span>
+            Provider: <span className="text-ink">Cloudflare</span>
           </div>
           <div>
-            Region URL:{" "}
+            Routing: <span className="text-ink">Anycast BGP (automatic)</span>
+          </div>
+          <div>
+            Endpoint:{" "}
             <span className="text-ink">
-              {selectedServer?.region
-                ? `?region=${selectedServer.region}`
-                : "/api (Local Edge)"}
+              {window.location.origin}/api
             </span>
           </div>
-          {selectedServer &&
-            selectedServer.id !== "local-edge" &&
-            clientInfo.latitude !== 0 && (
-              <div className="tabular-nums">
-                Distance:{" "}
-                <span className="text-ink">
-                  {Math.round(
-                    haversineDistance(
-                      clientInfo.latitude,
-                      clientInfo.longitude,
-                      selectedServer.lat,
-                      selectedServer.lon,
-                    ),
-                  )}{" "}
-                  km
-                </span>
-              </div>
-            )}
-          {selectedServer && selectedServer.id === "local-edge" && (
-            <div className="tabular-nums">
-              Distance: <span className="text-ink">0 km (Local Loopback)</span>
-            </div>
-          )}
-          <div className="tabular-nums">
-            Pre-Ping Latency:{" "}
-            <span className="text-ink">
-              {routingResults[selectedServer?.id || ""]
-                ? `${Math.round(routingResults[selectedServer?.id || ""])}ms`
-                : "Not pinged"}
-            </span>
+          <div className="text-[10px] text-mute mt-2 leading-relaxed">
+            Cloudflare routes to the optimal server via BGP.
+            No manual server selection — path is determined by
+            real-time network topology.
           </div>
         </div>
       </div>

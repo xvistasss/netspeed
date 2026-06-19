@@ -1,23 +1,20 @@
 import type { APIRoute } from "astro";
+import { isLocalHost } from "../../utils/speedTestUtils";
+import { CONFIG } from "../../utils/speedTestConfig";
 
-// Helper to check for local loopback or private range IPs
-const isLocalIp = (ip: string) => {
-  return (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip.startsWith("10.") ||
-    ip.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)
-  );
-};
-
-// Server-side fallback geolocation
+// Server-side fallback geolocation with 3-service chain and timeouts.
 async function fetchServerGeo(ip: string) {
+  const timeoutMs = CONFIG.GEO_SERVICE_TIMEOUT_MS;
+
   // 1. Try freeipapi.com
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`https://freeipapi.com/api/json/${ip}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" }
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data.latitude === "number") {
@@ -37,9 +34,13 @@ async function fetchServerGeo(ip: string) {
 
   // 2. Try ipapi.co
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(`https://ipapi.co/${ip}/json/`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" }
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data.latitude === "number") {
@@ -57,12 +58,46 @@ async function fetchServerGeo(ip: string) {
     console.error("Server-side ipapi lookup failed:", err);
   }
 
+  // 3. Try ipinfo.io as final fallback
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`https://ipinfo.io/${ip}/json`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NetSpeed/1.0)" },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.loc) {
+        const [lat, lon] = data.loc.split(",").map(Number);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          return {
+            city: data.city || "Unknown City",
+            region: data.region || "Unknown Region",
+            countryCode: data.country || "",
+            latitude: lat,
+            longitude: lon,
+            org: data.org || "Edge Network Provider",
+          };
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Server-side ipinfo lookup failed:", err);
+  }
+
   return null;
 }
 
 export const GET: APIRoute = async ({ request, url }) => {
   const headers = request.headers;
   const paramIp = url.searchParams.get("ip");
+  const clientLatParam = url.searchParams.get("clientLat") || url.searchParams.get("lat");
+  const clientLonParam = url.searchParams.get("clientLon") || url.searchParams.get("lon");
+  const clientCityParam = url.searchParams.get("city");
+  const clientRegionParam = url.searchParams.get("region");
+  const clientCountryCodeParam = url.searchParams.get("countryCode") || url.searchParams.get("country");
 
   // 1. IP Detection (support client-provided query param as fallback/localhost override)
   const clientIp =
@@ -73,9 +108,34 @@ export const GET: APIRoute = async ({ request, url }) => {
     headers.get("x-forwarded-for")?.split(",")[0].trim() ||
     "127.0.0.1";
 
-  const isLocal = isLocalIp(clientIp);
+  const isLocal = isLocalHost(clientIp);
 
-  if (isLocal) {
+  // Parse coordinates if provided by client
+  let latitude = clientLatParam ? parseFloat(clientLatParam) : null;
+  let longitude = clientLonParam ? parseFloat(clientLonParam) : null;
+  let city = clientCityParam || "";
+  let region = clientRegionParam || "";
+  let countryCode = clientCountryCodeParam || "";
+
+  // If client provided precise coordinates, reverse geocode them to get correct city/region (if not already provided by client)
+  if ((!city || !region || !countryCode) && latitude !== null && longitude !== null && !isNaN(latitude) && !isNaN(longitude) && !(latitude === 0 && longitude === 0)) {
+    try {
+      const geoRes = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+      );
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        city = geoData.city || geoData.locality || "";
+        region = geoData.principalSubdivision || "";
+        countryCode = geoData.countryCode || "";
+      }
+    } catch (err) {
+      console.error("Reverse geocoding failed:", err);
+    }
+  }
+
+  // Handle local connection short-circuit (only if no coordinates were passed)
+  if (isLocal && (latitude === null || longitude === null)) {
     return new Response(
       JSON.stringify({
         isLocal: true,
@@ -101,42 +161,40 @@ export const GET: APIRoute = async ({ request, url }) => {
 
   // 2. Geolocation parsing from Edge headers (Vercel / Cloudflare) or request.cf object
   const cf = (request as any).cf;
-  let latitude =
-    headers.get("x-vercel-ip-latitude") ||
-    headers.get("cf-latitude") ||
-    cf?.latitude;
-  let longitude =
-    headers.get("x-vercel-ip-longitude") ||
-    headers.get("cf-longitude") ||
-    cf?.longitude;
-  let city =
-    headers.get("x-vercel-ip-city") ||
-    headers.get("cf-ipcity") ||
-    cf?.city;
-  let countryCode =
-    headers.get("x-vercel-ip-country") ||
-    headers.get("cf-ipcountry") ||
-    cf?.country;
-  let region =
-    headers.get("x-vercel-ip-country-region") ||
-    headers.get("cf-region") ||
-    cf?.region;
   const asn = headers.get("cf-asn") || cf?.asn?.toString() || "";
   let org =
     headers.get("cf-as-organization") ||
     cf?.asOrganization ||
     "Edge Network Provider";
 
-  // 3. Fallback to server-to-server lookup if edge coordinates are missing
-  if (!latitude || !longitude) {
+  // Fall back to request headers / serverless cf object for coordinates and city if not resolved yet
+  if (latitude === null || longitude === null) {
+    const headerLat = headers.get("x-vercel-ip-latitude") || headers.get("cf-latitude") || cf?.latitude;
+    const headerLon = headers.get("x-vercel-ip-longitude") || headers.get("cf-longitude") || cf?.longitude;
+    latitude = headerLat ? parseFloat(headerLat) : null;
+    longitude = headerLon ? parseFloat(headerLon) : null;
+  }
+
+  if (!city) {
+    city = headers.get("x-vercel-ip-city") || headers.get("cf-ipcity") || cf?.city || "";
+  }
+  if (!region) {
+    region = headers.get("x-vercel-ip-country-region") || headers.get("cf-region") || cf?.region || "";
+  }
+  if (!countryCode) {
+    countryCode = headers.get("x-vercel-ip-country") || headers.get("cf-ipcountry") || cf?.country || "";
+  }
+
+  // 3. Fallback to server-to-server lookup if coordinates are STILL missing
+  if (latitude === null || longitude === null) {
     const fallback = await fetchServerGeo(clientIp);
     if (fallback) {
-      latitude = fallback.latitude.toString();
-      longitude = fallback.longitude.toString();
-      city = fallback.city;
-      region = fallback.region;
-      countryCode = fallback.countryCode;
-      org = fallback.org;
+      latitude = fallback.latitude;
+      longitude = fallback.longitude;
+      if (!city) city = fallback.city;
+      if (!region) region = fallback.region;
+      if (!countryCode) countryCode = fallback.countryCode;
+      if (!org || org === "Edge Network Provider") org = fallback.org;
     }
   }
 
@@ -158,16 +216,16 @@ export const GET: APIRoute = async ({ request, url }) => {
 
   return new Response(
     JSON.stringify({
-      isLocal: false,
+      isLocal: isLocal,
       ip: clientIp,
       city: city || "Unknown City",
       region: region || "Unknown Region",
       country: countryName,
       countryCode: countryCode || "Unknown",
-      loc: latitude && longitude ? `${latitude},${longitude}` : undefined,
+      loc: latitude !== null && longitude !== null ? `${latitude},${longitude}` : undefined,
       org: asn ? `AS${asn} ${org}` : org,
-      latitude: latitude ? parseFloat(latitude) : undefined,
-      longitude: longitude ? parseFloat(longitude) : undefined,
+      latitude: latitude !== null ? latitude : undefined,
+      longitude: longitude !== null ? longitude : undefined,
     }),
     {
       status: 200,

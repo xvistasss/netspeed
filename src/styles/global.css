@@ -2,6 +2,25 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Self-hosted fonts — eliminates third-party render-blocking requests */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   --color-primary: #171717;
   --color-on-primary: #ffffff;
@@ -129,6 +148,12 @@
   transform-origin: center center;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .mesh-gradient {
+    animation: none;
+  }
+}
+
 @keyframes mesh-rotate {
   0% {
     transform: rotate(0deg);
@@ -146,7 +171,9 @@
   box-shadow:
     0px 1px 1px #00000005,
     0px 2px 2px #0000000a;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .vercel-card:hover {
@@ -154,15 +181,6 @@
     0px 2px 2px #0000000a,
     0px 8px 8px -8px #0000000a;
   border-color: var(--color-hairline-strong);
-}
-
-.vercel-card-lg {
-  background-color: var(--color-canvas);
-  border: 1px solid var(--color-hairline);
-  border-radius: 12px; /* rounded.lg */
-  box-shadow:
-    0px 2px 2px #0000000a,
-    0px 8px 16px -4px #0000000a;
 }
 
 /* Custom Scrollbar for Monospace fields */
