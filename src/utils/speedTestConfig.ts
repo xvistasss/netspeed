@@ -29,8 +29,10 @@ export const CONFIG = {
   UPLOAD_MEASURE_MS: 10_000,
   UPLOAD_PEAK_MS: 3_000,
 
-  // Upload chunk sizing — reduced max to minimize ArrayBuffer serialization overhead
-  UPLOAD_MIN_CHUNK: 64 * 1024,
+  // Upload chunk sizing — minimum 256KB ensures each request carries enough data
+  // for accurate throughput measurement. 64KB was too small: at high speeds the
+  // request completes in <1ms, making completion-based byte counting too coarse.
+  UPLOAD_MIN_CHUNK: 256 * 1024,
   UPLOAD_MAX_CHUNK: 2 * 1024 * 1024,
   UPLOAD_SPEED_ESTIMATE_INIT: 1_000_000,
 

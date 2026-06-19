@@ -260,6 +260,7 @@ async function runDownloadTest(
 
   // Track stable measurement start time (measurement phase starts at Phase 3)
   let measurementStartTime: number | null = null;
+  let measurementEndTime: number | null = null;
   let measurementPhaseStarted = false;
 
   // Background latency pinger under download stress (recursive timeout to avoid socket queueing)
@@ -523,6 +524,7 @@ async function runDownloadTest(
     phase3StartBytes = totalBytesDownloaded;
     measurementPhaseStarted = true;
     await runDownloadPhase(CONFIG.CHUNK_MEASURE, CONFIG.DOWNLOAD_MEASURE_MS);
+    measurementEndTime = performance.now();
     phase3EndBytes = totalBytesDownloaded;
   }
 
@@ -537,9 +539,11 @@ async function runDownloadTest(
   // Calculate final average speed using ONLY Phase 3 (measurement phase) data.
   // Phase 4 uses oversized chunks that don't represent steady-state throughput.
   let finalAvgSpeedBps = 0;
-  if (measurementPhaseStarted && measurementStartTime !== null) {
+  if (measurementPhaseStarted && measurementStartTime !== null && measurementEndTime !== null) {
     const phase3Bytes = phase3EndBytes - phase3StartBytes;
-    const phase3ElapsedSec = CONFIG.DOWNLOAD_MEASURE_MS / 1000;
+    // Use actual elapsed time, not CONFIG constant — phase may have been cut short
+    // by abort controller or total duration limit, making the CONFIG value inaccurate.
+    const phase3ElapsedSec = (measurementEndTime - measurementStartTime) / 1000;
     finalAvgSpeedBps = phase3ElapsedSec > 0.1 && phase3Bytes > 0
       ? (phase3Bytes * 8) / phase3ElapsedSec
       : 0;
@@ -621,8 +625,9 @@ async function runUploadTest(
 
   // Speed estimation for dynamic chunk sizing (per-stream to avoid race conditions)
 
-  // Track stable measurement start time
+  // Track stable measurement start/end timestamps for Phase 3
   let measurementStartTime: number | null = null;
+  let measurementEndTime: number | null = null;
 
   // Background latency pinger under upload load (recursive timeout to avoid socket queueing)
   let activePingTimeout: any = null;
@@ -768,7 +773,7 @@ async function runUploadTest(
       const runStream = async (): Promise<void> => {
         // Per-stream adaptive chunk sizing to avoid race conditions
         let streamSpeedEstimate = 1000 * 1000; // start with 1 Mbps estimate
-        let streamNextChunkSize = 64 * 1024; // start with a small, safe chunk size (64 KB)
+        let streamNextChunkSize = CONFIG.UPLOAD_MIN_CHUNK; // start at configured minimum
 
         while (
           !signal.aborted &&
@@ -851,8 +856,11 @@ async function runUploadTest(
                 loadedLatencies: requestPings,
               });
 
-              // Brief pause between uploads to avoid triggering rate limits
-              await sleep(30);
+              // Yield to event loop without artificial delay.
+              // The old 30ms sleep capped measured throughput at ~18 Mbps per 64KB chunk
+              // regardless of actual connection speed, making upload measurements
+              // significantly underestimate reality. Download uses setTimeout(0) for
+              // the same purpose — no reason upload should differ.
             }
           } catch (_err) {
             // Record failed request — set bytes to 0 since we can't confirm data was sent
@@ -919,6 +927,7 @@ async function runUploadTest(
     measurementStartTime = performance.now();
     phase3StartBytes = completedBytes;
     await runUploadPhase(10 * 1024 * 1024, CONFIG.UPLOAD_MEASURE_MS);
+    measurementEndTime = performance.now();
     phase3EndBytes = completedBytes;
   }
 
@@ -937,9 +946,11 @@ async function runUploadTest(
   // Calculate final average speed using ONLY Phase 3 (measurement phase) data.
   // Phase 4 uses oversized chunks that don't represent steady-state throughput.
   let finalAvgSpeedBps = 0;
-  if (measurementStartTime !== null) {
+  if (measurementStartTime !== null && measurementEndTime !== null) {
     const phase3Bytes = phase3EndBytes - phase3StartBytes;
-    const phase3ElapsedSec = CONFIG.UPLOAD_MEASURE_MS / 1000;
+    // Use actual elapsed time, not CONFIG constant — phase may have been cut short
+    // by abort controller or total duration limit, making the CONFIG value inaccurate.
+    const phase3ElapsedSec = (measurementEndTime - measurementStartTime) / 1000;
     finalAvgSpeedBps = phase3ElapsedSec > 0.1 && phase3Bytes > 0
       ? (phase3Bytes * 8) / phase3ElapsedSec
       : 0;
