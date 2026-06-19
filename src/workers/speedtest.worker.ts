@@ -6,6 +6,7 @@ let hostLatency = 0;
 
 import {
   sleep,
+  sleepWithAbort,
   isLocalHost,
   calculateMean,
   calculateJitter,
@@ -520,7 +521,7 @@ async function runDownloadTest(
   // Use multiple short waits to allow in-flight TCP segments to arrive,
   // preventing Phase 2 bytes from leaking into the Phase 3 measurement baseline.
   for (let w = 0; w < 5; w++) {
-    await sleep(50);
+    await sleepWithAbort(50, signal);
   }
 
   // Phase 3: main measurement — stable throughput
@@ -628,9 +629,7 @@ async function runUploadTest(
   // Track completed bytes from fully finished requests to prevent buffer bloat
   let completedBytes = 0;
 
-  // Speed estimation for dynamic chunk sizing
-  let currentSpeedEstimate = 1000 * 1000; // start with 1 Mbps estimate
-  let nextChunkSize = 64 * 1024; // start with a small, safe chunk size (64 KB)
+  // Speed estimation for dynamic chunk sizing (per-stream to avoid race conditions)
 
   // Track stable measurement start time
   let measurementStartTime: number | null = null;
@@ -779,127 +778,123 @@ async function runUploadTest(
       signal.addEventListener("abort", abortHandler);
 
       const runStream = async (): Promise<void> => {
-        if (
-          performance.now() - phaseStart >= phaseDuration ||
-          phaseAbortController.signal.aborted ||
-          isCancelled
+        // Per-stream adaptive chunk sizing to avoid race conditions
+        let streamSpeedEstimate = 1000 * 1000; // start with 1 Mbps estimate
+        let streamNextChunkSize = 64 * 1024; // start with a small, safe chunk size (64 KB)
+
+        while (
+          !signal.aborted &&
+          !isCancelled &&
+          !phaseAbortController.signal.aborted
         ) {
-          return;
-        }
+          const elapsedMs = performance.now() - phaseStart;
+          if (elapsedMs >= phaseDuration) break;
 
-        const currentChunkSize = nextChunkSize;
-        const uploadChunk = randomDataPool.subarray(0, currentChunkSize);
+          const currentChunkSize = streamNextChunkSize;
+          const uploadChunk = randomDataPool.subarray(0, currentChunkSize);
 
-        const url = useDirectCF
-          ? "https://speed.cloudflare.com/__up"
-          : region
-            ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
-            : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`;
+          const url = useDirectCF
+            ? "https://speed.cloudflare.com/__up"
+            : region
+              ? `${baseUrl}/upload?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&basePing=${basePing}&cb=${Date.now()}-${Math.random()}`
+              : `${baseUrl}/upload?cb=${Date.now()}-${Math.random()}`;
 
-        const fetchHeaders: Record<string, string> = useDirectCF
-          ? {
-            "Content-Type": "application/octet-stream",
-            Referer: "https://speed.cloudflare.com/",
-            Origin: "https://speed.cloudflare.com",
-            "Cache-Control": "no-store, no-cache",
-          }
-          : {
-            "Content-Type": "application/octet-stream",
-            "Cache-Control": "no-store, no-cache",
-          };
+          const fetchHeaders: Record<string, string> = useDirectCF
+            ? {
+              "Content-Type": "application/octet-stream",
+              Referer: "https://speed.cloudflare.com/",
+              Origin: "https://speed.cloudflare.com",
+              "Cache-Control": "no-store, no-cache",
+            }
+            : {
+              "Content-Type": "application/octet-stream",
+              "Cache-Control": "no-store, no-cache",
+            };
 
-        const chunkStart = performance.now();
-        const requestTimestamp = Date.now();
+          const chunkStart = performance.now();
+          const requestTimestamp = Date.now();
 
-        const fetchController = new AbortController();
-        activeFetchControllers.push(fetchController);
+          const fetchController = new AbortController();
+          activeFetchControllers.push(fetchController);
 
-        try {
-          if (firstByteTime === null) {
-            firstByteTime = chunkStart;
-          }
-
-          const response = await fetch(url, {
-            method: "POST",
-            headers: fetchHeaders,
-            body: uploadChunk,
-            signal: fetchController.signal,
-          });
-
-          // Measure upload completion when response headers arrive (fetch resolves),
-          // NOT after response.text(). This eliminates server processing time
-          // and response body download from the upload speed measurement.
-          const uploadCompleteTime = performance.now();
-
-          // Read response body in background to close the connection properly
-          // but don't let it affect the speed measurement
-          response.text().catch(() => {});
-
-          if (response.ok) {
-            completedBytes += currentChunkSize;
-
-            // Dynamically adjust chunk size based on measured speed
-            // Use targetDuration of 0.2s (200ms) for responsive chunk sizing
-            const chunkDuration = uploadCompleteTime - chunkStart;
-            if (chunkDuration > 0) {
-              const chunkSpeed = (currentChunkSize * 8) / (chunkDuration / 1000);
-              currentSpeedEstimate = currentSpeedEstimate * 0.6 + chunkSpeed * 0.4;
-              // Target ~200ms per chunk for smooth progress reporting
-              const targetDurationSec = 0.2;
-              nextChunkSize = Math.floor((currentSpeedEstimate * targetDurationSec) / 8);
-              nextChunkSize = Math.max(CONFIG.UPLOAD_MIN_CHUNK, Math.min(nextChunkSize, CONFIG.UPLOAD_MAX_CHUNK));
+          try {
+            if (firstByteTime === null) {
+              firstByteTime = chunkStart;
             }
 
-            // Record this completed request
-            const requestPings = pingLog
-              .filter((p) => p.time >= chunkStart && p.time <= performance.now())
-              .map((p) => p.latency);
+            const response = await fetch(url, {
+              method: "POST",
+              headers: fetchHeaders,
+              body: uploadChunk,
+              signal: fetchController.signal,
+            });
 
+            // Measure upload completion when response headers arrive (fetch resolves),
+            // NOT after response.text(). This eliminates server processing time
+            // and response body download from the upload speed measurement.
+            const uploadCompleteTime = performance.now();
+
+            // Read response body in background to close the connection properly
+            // but don't let it affect the speed measurement
+            response.text().catch(() => {});
+
+            if (response.ok) {
+              completedBytes += currentChunkSize;
+
+              // Dynamically adjust chunk size based on measured speed
+              // Use targetDuration of 0.2s (200ms) for responsive chunk sizing
+              const chunkDuration = uploadCompleteTime - chunkStart;
+              if (chunkDuration > 0) {
+                const chunkSpeed = (currentChunkSize * 8) / (chunkDuration / 1000);
+                streamSpeedEstimate = streamSpeedEstimate * 0.6 + chunkSpeed * 0.4;
+                // Target ~200ms per chunk for smooth progress reporting
+                const targetDurationSec = 0.2;
+                streamNextChunkSize = Math.floor((streamSpeedEstimate * targetDurationSec) / 8);
+                streamNextChunkSize = Math.max(CONFIG.UPLOAD_MIN_CHUNK, Math.min(streamNextChunkSize, CONFIG.UPLOAD_MAX_CHUNK));
+              }
+
+              // Record this completed request
+              const requestPings = pingLog
+                .filter((p) => p.time >= chunkStart && p.time <= performance.now())
+                .map((p) => p.latency);
+
+              uploadRequests.push({
+                time: requestTimestamp,
+                direction: "upload",
+                bytes: currentChunkSize,
+                payloadSize: currentChunkSize,
+                phaseSize: targetSize,
+                latency: 0,
+                bps: chunkDuration > 0 ? (currentChunkSize * 8) / (chunkDuration / 1000) : 0,
+                duration: chunkDuration,
+                serverTime: -1,
+                responseSize: 0,
+                loadedLatencies: requestPings,
+              });
+
+              // Brief pause between uploads to avoid triggering rate limits
+              await sleep(30);
+            }
+          } catch (_err) {
+            // Record failed request — set bytes to 0 since we can't confirm data was sent
+            const chunkEnd = performance.now();
+            const chunkDuration = chunkEnd - chunkStart;
             uploadRequests.push({
               time: requestTimestamp,
               direction: "upload",
-              bytes: currentChunkSize,
+              bytes: 0,
               payloadSize: currentChunkSize,
               phaseSize: targetSize,
               latency: 0,
-              bps: chunkDuration > 0 ? (currentChunkSize * 8) / (chunkDuration / 1000) : 0,
+              bps: 0,
               duration: chunkDuration,
               serverTime: -1,
               responseSize: 0,
-              loadedLatencies: requestPings,
+              loadedLatencies: [],
             });
-
-            // Brief pause between uploads to avoid triggering rate limits
-            await sleep(30);
-          }
-        } catch (_err) {
-          // Record failed request — use the actual chunk size as the payload
-          // since bytes were already sent before the error occurred
-          const chunkEnd = performance.now();
-          const chunkDuration = chunkEnd - chunkStart;
-          uploadRequests.push({
-            time: requestTimestamp,
-            direction: "upload",
-            bytes: currentChunkSize,
-            payloadSize: currentChunkSize,
-            phaseSize: targetSize,
-            latency: 0,
-            bps: 0,
-            duration: chunkDuration,
-            serverTime: -1,
-            responseSize: 0,
-            loadedLatencies: [],
-          });
-        } finally {
-          const idx = activeFetchControllers.indexOf(fetchController);
-          if (idx > -1) activeFetchControllers.splice(idx, 1);
-        }
-
-        // Continue stream if phase not over
-        if (!signal.aborted && !isCancelled && !phaseAbortController.signal.aborted) {
-          const elapsedMs = performance.now() - phaseStart;
-          if (elapsedMs < phaseDuration) {
-            await runStream();
+          } finally {
+            const idx = activeFetchControllers.indexOf(fetchController);
+            if (idx > -1) activeFetchControllers.splice(idx, 1);
           }
         }
       };
@@ -935,7 +930,7 @@ async function runUploadTest(
   // Use multiple short waits to allow in-flight TCP segments to complete,
   // preventing Phase 2 bytes from leaking into the Phase 3 measurement baseline.
   for (let w = 0; w < 5; w++) {
-    await sleep(50);
+    await sleepWithAbort(50, signal);
   }
 
   // Phase 3: main measurement - stable throughput
@@ -944,7 +939,7 @@ async function runUploadTest(
   if (!signal.aborted && !isCancelled) {
     measurementStartTime = performance.now();
     phase3StartBytes = completedBytes;
-    await runUploadPhase(10 * 1024 * 1024, 3500);
+    await runUploadPhase(10 * 1024 * 1024, CONFIG.UPLOAD_MEASURE_MS);
     phase3EndBytes = completedBytes;
   }
 
@@ -965,7 +960,7 @@ async function runUploadTest(
   let finalAvgSpeedBps = 0;
   if (measurementStartTime !== null) {
     const phase3Bytes = phase3EndBytes - phase3StartBytes;
-    const phase3ElapsedSec = 3.5; // UPLOAD_MEASURE_MS = 3500ms
+    const phase3ElapsedSec = CONFIG.UPLOAD_MEASURE_MS / 1000;
     finalAvgSpeedBps = phase3ElapsedSec > 0.1 && phase3Bytes > 0
       ? (phase3Bytes * 8) / phase3ElapsedSec
       : 0;

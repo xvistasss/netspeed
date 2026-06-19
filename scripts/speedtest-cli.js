@@ -219,6 +219,7 @@ async function main() {
   let totalDlBytes = 0;
   let measurementBytes = 0;
   let measurementStartTime = null;
+  let measurementPhaseActive = false;
   const allInstantaneousSpeeds = [];
 
   for (const phase of phases) {
@@ -226,6 +227,13 @@ async function main() {
 
     const phaseStart = performance.now();
     let phaseBytes = 0;
+
+    // Capture baseline BEFORE measurement phase starts
+    if (phase.name === "measure") {
+      measurementStartTime = performance.now();
+      measurementBytes = totalDlBytes;
+      measurementPhaseActive = true;
+    }
 
     while (performance.now() - phaseStart < phase.duration) {
       const start = performance.now();
@@ -246,7 +254,7 @@ async function main() {
         }
         reader.cancel().catch(() => {});
 
-        // Track instantaneous speed
+        // Track instantaneous speed using cumulative phase bytes
         const elapsed = (performance.now() - start) / 1000;
         if (elapsed > 0.05) {
           const instBps = (phaseBytes * 8) / elapsed;
@@ -256,11 +264,6 @@ async function main() {
         // Skip failed chunks
       }
       await sleep(0); // yield to event loop
-    }
-
-    if (phase.name === "measure") {
-      measurementStartTime = performance.now();
-      measurementBytes = totalDlBytes;
     }
 
     const phaseMbps = phaseBytes > 0 && phase.duration > 0
@@ -309,6 +312,12 @@ async function main() {
     let phaseBytes = 0;
     let nextChunkSize = CONFIG.UPLOAD_MIN_CHUNK;
 
+    // Capture baseline BEFORE measurement phase starts
+    if (phase.name === "measure") {
+      ulMeasurementStartTime = performance.now();
+      ulMeasurementBytes = totalUlBytes;
+    }
+
     while (performance.now() - phaseStart < phase.duration) {
       const chunkSize = Math.min(nextChunkSize, phase.size);
       const uploadData = crypto.randomBytes(chunkSize);
@@ -338,16 +347,17 @@ async function main() {
             nextChunkSize = Math.floor((chunkBps * 0.3) / 8);
             nextChunkSize = Math.max(CONFIG.UPLOAD_MIN_CHUNK, Math.min(nextChunkSize, CONFIG.UPLOAD_MAX_CHUNK));
           }
+
+          // Track instantaneous speed using cumulative phase bytes
+          if (elapsed > 0.05) {
+            const instBps = (phaseBytes * 8) / elapsed;
+            allUlInstantaneousSpeeds.push(instBps);
+          }
         }
       } catch (_) {
         // Skip failed chunks
       }
       await sleep(30); // brief pause between uploads
-    }
-
-    if (phase.name === "measure") {
-      ulMeasurementStartTime = performance.now();
-      ulMeasurementBytes = totalUlBytes;
     }
 
     const phaseMbps = phaseBytes > 0 && phase.duration > 0

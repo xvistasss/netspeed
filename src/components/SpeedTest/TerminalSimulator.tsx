@@ -67,8 +67,8 @@ export default function TerminalSimulator({
           type="text"
           value={cliInput}
           onChange={(e) => setCliInput(e.target.value)}
-          disabled={phase !== "idle" && phase !== "complete" && phase !== "error"}
-          placeholder={phase !== "idle" && phase !== "complete" && phase !== "error" ? "Test in progress..." : "Type 'run' or 'help'..."}
+          disabled={false}
+          placeholder={phase !== "idle" && phase !== "complete" && phase !== "error" ? "Type 'stop' to cancel..." : "Type 'run' or 'help'..."}
           className="flex-1 bg-transparent border-none outline-hidden text-[#fafafa] font-mono p-0 focus:ring-0 text-[11px]"
         />
       </form>

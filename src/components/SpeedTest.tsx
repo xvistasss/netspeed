@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Play,
   Square,
+  Loader2,
 } from "lucide-react";
 import InfoTooltip from "./SpeedTest/InfoTooltip";
 import QualityScores from "./SpeedTest/QualityScores";
@@ -18,7 +19,7 @@ import { formatSpeed } from "../utils/speedTestUtils";
 
 export default function SpeedTest() {
   const {
-    phase, statusMessage, activeTab, setActiveTab,
+    phase, statusMessage, isCancelling, isStarting, activeTab, setActiveTab,
     clientInfo, latencyStats, downloadStats, uploadStats, packetLoss,
     terminalLogs, activeProgressLine, cliInput, setCliInput, handleCliSubmit,
     dlLoadedLatency, dlLoadedJitter, ulLoadedLatency, ulLoadedJitter,
@@ -59,17 +60,35 @@ export default function SpeedTest() {
             <button
               onClick={startSpeedTest}
               type="button"
-              className="w-full h-[60px] sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
+              disabled={isCancelling || isStarting}
+              className="w-full h-[60px] sm:w-auto bg-primary text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <Play className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Start Speed Test
+              {isStarting ? (
+                <>
+                  <Loader2 className="w-4 h-4 fill-on-primary text-on-primary animate-spin" aria-hidden="true" /> Starting…
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Start Speed Test
+                </>
+              )}
             </button>
           ) : (
             <button
               onClick={cancelSpeedTest}
               type="button"
-              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none"
+              disabled={isCancelling}
+              className="w-full sm:w-auto bg-error text-on-primary font-medium text-sm rounded-full py-2.5 px-6 shadow-sm hover:opacity-90 active:scale-[0.97] hover:shadow-md transition-[opacity,transform,box-shadow] duration-200 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary flex items-center justify-center gap-2 cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
-              <Square className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Stop Test
+              {isCancelling ? (
+                <>
+                  <Loader2 className="w-4 h-4 fill-on-primary text-on-primary animate-spin" aria-hidden="true" /> Stopping…
+                </>
+              ) : (
+                <>
+                  <Square className="w-4 h-4 fill-on-primary text-on-primary" aria-hidden="true" /> Stop Test
+                </>
+              )}
             </button>
           )}
 

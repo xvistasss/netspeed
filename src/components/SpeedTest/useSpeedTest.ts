@@ -45,6 +45,8 @@ export interface TerminalLogEntry {
 export interface UseSpeedTestReturn {
   phase: TestPhase;
   statusMessage: string;
+  isCancelling: boolean;
+  isStarting: boolean;
   activeTab: "latency" | "packetLoss" | "download" | "upload";
   setActiveTab: (tab: "latency" | "packetLoss" | "download" | "upload") => void;
   clientInfo: ClientInfo | null;
@@ -123,6 +125,9 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [uploadReliable, setUploadReliable] = useState(true);
   const [completionTime, setCompletionTime] = useState<string>("");
   const [progressPercent, setProgressPercent] = useState(0);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const startDisabled = useRef(false);
 
   // Consolidated mutable refs — single object to avoid stale closures in worker callbacks
   const stateRef = useRef({
@@ -256,7 +261,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
             y: {
               beginAtZero: true,
               grid: { color: gridColor },
-              ticks: { color: textColor, font: { family: "JetBrains Mono", size: 10 }, callback: (val: string | number) => `${val} M` },
+              ticks: {
+                color: textColor,
+                font: { family: "JetBrains Mono", size: 10 },
+                callback: (val: string | number) => `${val} M`,
+                maxTicksLimit: 6,
+                padding: 4,
+              },
             },
           },
         },
@@ -299,7 +310,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
             y: {
               beginAtZero: true,
               grid: { color: gridColor },
-              ticks: { color: textColor, font: { family: "JetBrains Mono", size: 10 }, callback: (val: string | number) => `${val} M` },
+              ticks: {
+                color: textColor,
+                font: { family: "JetBrains Mono", size: 10 },
+                callback: (val: string | number) => `${val} M`,
+                maxTicksLimit: 6,
+                padding: 4,
+              },
             },
           },
         },
@@ -324,7 +341,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
     // Dynamic Y-axis scaling: set max to 1.3x the peak to prevent wasted space
     // while leaving headroom above the highest data point
     const currentMax = Math.max(...history.current, 0);
-    const dynamicMax = Math.max(10, currentMax * 1.3);
+    const rawMax = Math.max(10, currentMax * 1.3);
+    // Round up to a clean number so ticks don't produce fractional labels
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+    const dynamicMax = Math.ceil(rawMax / magnitude) * magnitude;
     if (chart.options.scales?.y) {
       (chart.options.scales.y as any).max = dynamicMax;
     }
@@ -336,24 +356,33 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const getPreciseCoords = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
     return new Promise((resolve) => {
       if (!("geolocation" in navigator)) { resolve(null); return; }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setTerminalLogs((prev) => [...prev, "[INFO] High-accuracy geolocation obtained from device."]);
-          resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-        },
-        (error) => {
-          if (error.code === error.PERMISSION_DENIED) { resolve(null); return; }
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setTerminalLogs((prev) => [...prev, "[INFO] Low-accuracy geolocation obtained from device."]);
-              resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
-            },
-            () => resolve(null),
-            { enableHighAccuracy: false, timeout: 4000, maximumAge: Infinity },
-          );
-        },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 300000 },
-      );
+
+      const attempt = (enableHighAccuracy: boolean, timeout: number, retries: number, delayMs: number) => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const label = enableHighAccuracy ? "High-accuracy" : "Low-accuracy";
+            setTerminalLogs((prev) => [...prev, `[INFO] ${label} geolocation obtained from device.`]);
+            resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+          },
+          (error) => {
+            if (error.code === error.PERMISSION_DENIED) { resolve(null); return; }
+            if (retries > 0 && enableHighAccuracy) {
+              // Retry with exponential backoff — the browser may need time
+              // to fully initialize the geolocation hardware after permission grant.
+              setTimeout(() => attempt(enableHighAccuracy, timeout, retries - 1, delayMs * 2), delayMs);
+            } else if (enableHighAccuracy) {
+              // Fall back to low-accuracy mode (uses network/IP-based location)
+              attempt(false, 4000, 0, 200);
+            } else {
+              resolve(null);
+            }
+          },
+          { enableHighAccuracy, timeout, maximumAge: enableHighAccuracy ? 300000 : Infinity },
+        );
+      };
+
+      // 3 retries with 500ms, 1000ms, 2000ms backoff for high-accuracy
+      attempt(true, 6000, 3, 500);
     });
   }, []);
 
@@ -396,31 +425,16 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   const detectClientLocation = useCallback(async () => {
     try {
-      let preGrantedCoords: { latitude: number; longitude: number } | null = null;
-      let permissionStatus: PermissionStatus | null = null;
-
-      if ("geolocation" in navigator && navigator.permissions) {
-        try {
-          permissionStatus = await navigator.permissions.query({ name: "geolocation" });
-          if (permissionStatus.state === "granted") {
-            preGrantedCoords = await getPreciseCoords();
-          }
-        } catch (e) { console.warn("Permissions API query failed:", e); }
-      }
-
       setStatusMessage("Detecting location…");
+
+      // IP-based detection only — no geolocation permission requested here.
+      // Precise browser geolocation is requested only when the user starts a test.
       let url = "/api/ip-geo";
-      if (preGrantedCoords) {
-        const { city, region, countryCode } = await reverseGeocode(preGrantedCoords.latitude, preGrantedCoords.longitude);
-        url = `/api/ip-geo?clientLat=${preGrantedCoords.latitude}&clientLon=${preGrantedCoords.longitude}`;
-        if (city) url += `&city=${encodeURIComponent(city)}`;
-        if (region) url += `&region=${encodeURIComponent(region)}`;
-        if (countryCode) url += `&countryCode=${encodeURIComponent(countryCode)}`;
-      }
       const geoRes = await fetch(url);
       let data = await geoRes.json();
 
-      if (data.isLocal && !preGrantedCoords) {
+      // On localhost, the server sees 127.0.0.1. Try to get the real public IP.
+      if (data.isLocal) {
         try {
           const ipRes = await fetch("https://api.ipify.org?format=json");
           if (ipRes.ok) {
@@ -433,7 +447,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
         } catch (e) { console.warn("Client-side public IP lookup failed:", e); }
       }
 
-      const initialData: ClientInfo = { ...data, isPrecise: !!preGrantedCoords };
+      const initialData: ClientInfo = { ...data, isPrecise: false };
 
       if ("connection" in navigator) {
         const conn = (navigator as any).connection;
@@ -460,20 +474,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
       setClientInfo(initialData);
       stateRef.current.clientInfo = initialData;
-      setStatusMessage(preGrantedCoords ? `Precise location loaded: ${initialData.city}, ${initialData.country}` : `Client IP detected: ${initialData.ip}`);
-
-      if (permissionStatus && permissionStatus.state === "prompt") {
-        const onPermissionChange = async () => {
-          if (permissionStatus!.state === "granted") {
-            permissionStatus!.removeEventListener("change", onPermissionChange);
-            appendLogs(["[INFO] Geolocation permission granted — fetching precise location…"]);
-            await upgradeToPreciseLocation();
-          } else if (permissionStatus!.state === "denied") {
-            permissionStatus!.removeEventListener("change", onPermissionChange);
-          }
-        };
-        permissionStatus.addEventListener("change", onPermissionChange);
-      }
+      setStatusMessage(`Client IP detected: ${initialData.ip}`);
     } catch (err) {
       const defaultData = { ip: "0.0.0.0", city: "Unknown", region: "Unknown", country: "Unknown", org: "Unknown", latitude: 0, longitude: 0, isLocal: false, isPrecise: false };
       console.error("Failed to locate client:", err);
@@ -481,7 +482,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setClientInfo(defaultData as any);
       stateRef.current.clientInfo = defaultData as any;
     }
-  }, [appendLogs, getPreciseCoords, reverseGeocode, upgradeToPreciseLocation]);
+  }, [appendLogs]);
 
   // --- Warmup ---
   const warmupServer = useCallback(async (): Promise<typeof OPTIMAL_SERVER> => {
@@ -507,8 +508,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   // --- Speed Test Orchestrator ---
   const startSpeedTest = useCallback(async () => {
+    if (startDisabled.current) return;
     if (phase !== "idle" && phase !== "complete" && phase !== "error") return;
+    startDisabled.current = true;
+    setTimeout(() => { startDisabled.current = false; }, 1000);
 
+    setIsCancelling(false);
+    setIsStarting(true);
     let currentClientInfo = stateRef.current.clientInfo;
     let clientLat = currentClientInfo?.latitude || 0;
     let clientLon = currentClientInfo?.longitude || 0;
@@ -565,6 +571,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     const edgeNode = await warmupServer();
     await initCharts();
+    setIsStarting(false);
     setPhase("ping");
     setStatusMessage("Pinging optimal server…");
     setProgressPercent(40);
@@ -793,12 +800,17 @@ export function useSpeedTest(): UseSpeedTestReturn {
         }
 
         case "CANCELLED":
+          if (workerRef.current) { workerRef.current.terminate(); workerRef.current = null; }
           setPhase("idle");
+          setIsCancelling(false);
           setStatusMessage("Speed test stopped by user.");
+          setProgressPercent(0);
+          setActiveProgressLine(null);
           setTerminalLogs((prev) => [...prev, "[ERROR] Speed test stopped by user.", "$"]);
           break;
 
         case "ERROR":
+          setIsStarting(false);
           setPhase("error");
           setStatusMessage(`Test failure: ${data.message}`);
           setTerminalLogs((prev) => [...prev, `[ERROR] Test failure: ${data.message}`, "$"]);
@@ -833,12 +845,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
   }, []);
 
   const cancelSpeedTest = useCallback(() => {
+    setIsCancelling(true);
     if (workerRef.current) {
       workerRef.current.postMessage({ type: "CANCEL" });
       return;
     }
     setPhase("idle");
     setStatusMessage("Test cancelled.");
+    setIsCancelling(false);
   }, []);
 
   const downloadTestResult = useCallback(() => {
@@ -868,20 +882,26 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setTerminalLogs([]);
       setActiveProgressLine(null);
     } else if (cmd === "help") {
-      appendLogs(["Available commands:", "  run, speedtest  - Start the network speed test", "  clear           - Clear the terminal screen", "  help            - Show this help message"]);
+      appendLogs(["Available commands:", "  run, speedtest  - Start the network speed test", "  stop, cancel    - Stop the running speed test", "  clear           - Clear the terminal screen", "  help            - Show this help message"]);
     } else if (cmd === "run" || cmd === "speedtest") {
       if (phase !== "idle" && phase !== "complete" && phase !== "error") {
         appendLogs(["Error: A speed test is already running."]);
       } else {
         startSpeedTest();
       }
+    } else if (cmd === "stop" || cmd === "cancel") {
+      if (phase === "idle" || phase === "complete" || phase === "error") {
+        appendLogs(["No speed test is currently running."]);
+      } else {
+        cancelSpeedTest();
+      }
     } else {
       appendLogs([`Unknown command: ${cmd}. Type 'help' for options.`]);
     }
-  }, [cliInput, phase, appendLogs, startSpeedTest]);
+  }, [cliInput, phase, appendLogs, startSpeedTest, cancelSpeedTest]);
 
   return {
-    phase, statusMessage, activeTab, setActiveTab,
+    phase, statusMessage, isCancelling, isStarting, activeTab, setActiveTab,
     clientInfo, latencyStats, downloadStats, uploadStats, packetLoss,
     terminalLogs, activeProgressLine, cliInput, setCliInput, handleCliSubmit,
     dlLoadedLatency, dlLoadedJitter, ulLoadedLatency, ulLoadedJitter,

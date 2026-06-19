@@ -16,6 +16,15 @@ export interface SpeedTestRequest {
 export const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
+// Abort-aware sleep — resolves early if the signal fires before the timer
+export const sleepWithAbort = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve) => {
+    if (signal?.aborted) { resolve(); return; }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => { clearTimeout(timer); resolve(); };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+
 export type TestPhase =
   | "idle"
   | "routing"
