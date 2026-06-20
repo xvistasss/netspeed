@@ -10,6 +10,7 @@ export interface SpeedTestRequest {
   serverTime: number;
   responseSize: number;
   loadedLatencies: number[];
+  error?: string;  // Error message if the request failed (e.g., "HTTP 502", "timeout", "cancelled")
 }
 
 // Helper to delay execution
@@ -83,7 +84,7 @@ export const calculateMean = (arr: number[]): number => {
 // that inflate the raw mean. Standard practice for latency measurement.
 export const calculateTrimmedMean = (arr: number[], trimPercent: number = 0.1): number => {
   if (arr.length === 0) return 0;
-  if (arr.length <= 3) return calculateMean(arr); // too few samples to trim
+  if (arr.length <= 5) return calculateMean(arr); // too few samples to trim meaningfully
   const sorted = [...arr].sort((a, b) => a - b);
   const trimCount = Math.max(1, Math.floor(sorted.length * trimPercent));
   const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
@@ -149,6 +150,35 @@ export const getAdaptiveStreamCount = (
   if (estimatedBps < slowThreshold) return slowCount;
   if (estimatedBps < mediumThreshold) return mediumCount;
   return fastCount;
+};
+
+// Adaptive upload stream count — more conservative than download because
+// mobile upload is typically 5-10x slower than download. Uses the actual
+// measured download speed as a reference, with stricter thresholds.
+export const getUploadStreamCount = (
+  downloadBps: number,
+  measuredUploadBps: number | null,
+): number => {
+  // If we have measured upload speed from warmup, use it directly
+  const estimate = measuredUploadBps && measuredUploadBps > 0
+    ? measuredUploadBps
+    : downloadBps * 0.2; // Upload is typically 20% of download on mobile
+
+  if (estimate <= 0) return 2;
+  if (estimate < 2_000_000) return 1;   // < 2 Mbps: single stream
+  if (estimate < 5_000_000) return 2;   // < 5 Mbps: 2 streams
+  if (estimate < 20_000_000) return 3;  // < 20 Mbps: 3 streams
+  if (estimate < 50_000_000) return 4;  // < 50 Mbps: 4 streams
+  return 6;                              // >= 50 Mbps: 6 streams
+};
+
+// Adaptive upload chunk minimum — scales down on slow connections to ensure
+// requests complete within the phase timeout window.
+export const getAdaptiveUploadMinChunk = (estimatedBps: number): number => {
+  if (estimatedBps <= 0) return 64 * 1024;
+  // Target ~500ms per chunk at minimum for smooth progress
+  const targetBytes = (estimatedBps * 0.5) / 8;
+  return Math.max(16 * 1024, Math.min(256 * 1024, Math.floor(targetBytes)));
 };
 
 // Convert bits to string helper (standard decimal base-10 network metrics)

@@ -13,6 +13,7 @@ import {
   calculateTrimmedMean,
   calculateMin,
   getAdaptiveStreamCount,
+  getUploadStreamCount,
 } from "../../utils/speedTestUtils";
 import { CONFIG } from "../../utils/speedTestConfig";
 
@@ -150,6 +151,11 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const downloadSpeedHistory = useRef<number[]>([]);
   const uploadSpeedHistory = useRef<number[]>([]);
   const autorunTriggered = useRef(false);
+  // Store dynamic warmup/ramp durations for progress calculation
+  const dlDynamicWarmupMs = useRef<number>(CONFIG.DOWNLOAD_WARMUP_MS);
+  const dlDynamicRampMs = useRef<number>(CONFIG.DOWNLOAD_RAMP_MS);
+  const ulDynamicWarmupMs = useRef<number>(CONFIG.UPLOAD_WARMUP_MS);
+  const ulDynamicRampMs = useRef<number>(CONFIG.UPLOAD_RAMP_MS);
 
   // Auto-scroll terminal
   useEffect(() => {
@@ -335,7 +341,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
     chart.data.datasets[0].data = history.current;
 
     const sorted = [...history.current].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
+    const p95Idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+    const p95 = sorted[p95Idx] || 0;
     chart.data.datasets[1].data = history.current.map(() => p95);
 
     // Dynamic Y-axis scaling: set max to 1.3x the peak to prevent wasted space
@@ -629,12 +636,23 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const jitter = data.jitter || 0;
           const loss = data.pingSent > 0 ? ((data.pingLost / data.pingSent) * 100).toFixed(1) : "0.0";
 
-          const estimatedBandwidthBps = avg > 0 ? 10_000_000 : 5_000_000;
+          // Use Network Information API downlink estimate if available,
+          // otherwise fall back to conservative 10 Mbps. Mobile networks
+          // often report accurate downlink values here (e.g., 1.5 Mbps for 4G).
+          const connDownlink = stateRef.current.clientInfo?.downlink;
+          const connDownlinkBps = connDownlink ? connDownlink * 1_000_000 : 0;
+          const estimatedBandwidthBps = connDownlinkBps > 0
+            ? connDownlinkBps
+            : (avg > 0 ? 10_000_000 : 5_000_000);
           const rttSec = avg / 1000;
           const bdpBytes = estimatedBandwidthBps * rttSec;
           const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000)));
           const dynamicRampMs = Math.min(CONFIG.DYNAMIC_RAMP_MAX_MS, Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / estimatedBandwidthBps) * 1000)));
           const adaptiveStreams = getAdaptiveStreamCount(estimatedBandwidthBps, CONFIG.PARALLEL_STREAMS_DEFAULT, CONFIG.BANDWIDTH_SLOW_THRESHOLD, CONFIG.BANDWIDTH_MEDIUM_THRESHOLD, CONFIG.PARALLEL_STREAMS_SLOW, CONFIG.PARALLEL_STREAMS_MEDIUM, CONFIG.PARALLEL_STREAMS_FAST);
+          const bandwidthSource = connDownlinkBps > 0 ? `Network Info API (${(connDownlinkBps / 1_000_000).toFixed(1)} Mbps)` : "conservative 10 Mbps default";
+          // Store for progress calculation
+          dlDynamicWarmupMs.current = dynamicWarmupMs;
+          dlDynamicRampMs.current = dynamicRampMs;
 
           setTerminalLogs((prev) => [
             ...prev,
@@ -642,7 +660,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
             `[INFO] BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB, warmup: ${dynamicWarmupMs}ms, ramp: ${dynamicRampMs}ms`,
-            `[INFO] Adaptive streams: ${adaptiveStreams} (conservative 10 Mbps estimate)`,
+            `[INFO] Adaptive streams: ${adaptiveStreams} (source: ${bandwidthSource})`,
             "",
             `$ speedtest --download --streams=${adaptiveStreams}`,
             `Starting download throughput test (${adaptiveStreams} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
@@ -661,11 +679,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
           updateThroughputChart("download", downloadMbps);
-          const dlPct = Math.min(100, Math.round((data.elapsedTime / 20) * 100));
+          // Calculate progress using actual expected duration, not hardcoded 20s
+          const totalExpectedSec = (dlDynamicWarmupMs.current + dlDynamicRampMs.current + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000;
+          const dlPct = Math.min(100, Math.round((data.elapsedTime / totalExpectedSec) * 100));
           const dlBarLen = Math.floor(dlPct / 5);
           const dlBar = "█".repeat(dlBarLen) + " ".repeat(20 - dlBarLen);
           setActiveProgressLine(`Download: ${downloadMbps.toFixed(1)} Mbps [${dlBar}] ${dlPct}% (${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB transferred)`);
-          setProgressPercent(Math.min(74, 50 + Math.round((data.elapsedTime / 20) * 25)));
+          setProgressPercent(Math.min(74, 50 + Math.round((data.elapsedTime / totalExpectedSec) * 25)));
           if (data.loadedLatencies) {
             const stats = { sent: data.loadedPingSent || 0, lost: data.loadedPingLost || 0, latencies: data.loadedLatencies || [] };
             stateRef.current.dlLoadedPingStats = stats;
@@ -700,16 +720,21 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const reliabilityNote = data.reliable === false ? " [UNRELIABLE - insufficient data]" : "";
           const pings = stateRef.current.unloadedPingStats.latencies || [];
           const calculatedAvgPing = pings.length > 0 ? calculateTrimmedMean(pings) : 20;
-          // Use a conservative 10 Mbps default for BDP estimation.
-          // navigator.connection.downlink is unreliable and the actual bandwidth
-          // is now known from the download test, but we use the same conservative
-          // default for consistency with the upload warmup calibration.
-          const estimatedBandwidthBps = calculatedAvgPing > 0 ? 10_000_000 : 5_000_000;
+          // Use the ACTUAL measured download speed for upload BDP estimation.
+          // The old hardcoded 10 Mbps estimate caused mobile networks (1-5 Mbps)
+          // to use too many streams and wrong warmup durations.
+          const measuredDlBps = stateRef.current.downloadStats.avg > 0
+            ? stateRef.current.downloadStats.avg
+            : (calculatedAvgPing > 0 ? 10_000_000 : 5_000_000);
           const rttSec = calculatedAvgPing / 1000;
-          const bdpBytes = estimatedBandwidthBps * rttSec;
-          const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000)));
-          const dynamicRampMs = Math.min(CONFIG.DYNAMIC_RAMP_MAX_MS, Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / estimatedBandwidthBps) * 1000)));
-          const adaptiveStreams = getAdaptiveStreamCount(estimatedBandwidthBps, CONFIG.PARALLEL_STREAMS_DEFAULT, CONFIG.BANDWIDTH_SLOW_THRESHOLD, CONFIG.BANDWIDTH_MEDIUM_THRESHOLD, CONFIG.PARALLEL_STREAMS_SLOW, CONFIG.PARALLEL_STREAMS_MEDIUM, CONFIG.PARALLEL_STREAMS_FAST);
+          const bdpBytes = measuredDlBps * rttSec;
+          const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / measuredDlBps) * 1000)));
+          const dynamicRampMs = Math.min(CONFIG.DYNAMIC_RAMP_MAX_MS, Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / measuredDlBps) * 1000)));
+          // Use upload-specific stream count (more conservative than download)
+          const adaptiveStreams = getUploadStreamCount(measuredDlBps, null);
+          // Store for progress calculation
+          ulDynamicWarmupMs.current = dynamicWarmupMs;
+          ulDynamicRampMs.current = dynamicRampMs;
 
           setTerminalLogs((prev) => [
             ...prev,
@@ -717,6 +742,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
             `[OK] Download test finished.`,
             "",
             `$ speedtest --upload --streams=${adaptiveStreams}`,
+            `[INFO] Upload BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB based on ${finalDlMbps.toFixed(1)} Mbps measured download`,
             `Starting upload throughput test (${adaptiveStreams} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.UPLOAD_MEASURE_MS + CONFIG.UPLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
           ]);
           setActiveProgressLine(null);
@@ -733,11 +759,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
           updateThroughputChart("upload", uploadMbps);
-          const ulPct = Math.min(100, Math.round((data.elapsedTime / 20) * 100));
+          // Calculate progress using actual expected duration, not hardcoded 20s
+          const totalExpectedUlSec = (ulDynamicWarmupMs.current + ulDynamicRampMs.current + CONFIG.UPLOAD_MEASURE_MS + CONFIG.UPLOAD_PEAK_MS) / 1000;
+          const ulPct = Math.min(100, Math.round((data.elapsedTime / totalExpectedUlSec) * 100));
           const ulBarLen = Math.floor(ulPct / 5);
           const ulBar = "█".repeat(ulBarLen) + " ".repeat(20 - ulBarLen);
           setActiveProgressLine(`Upload: ${uploadMbps.toFixed(1)} Mbps [${ulBar}] ${ulPct}% (${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB transferred)`);
-          setProgressPercent(Math.min(99, 75 + Math.round((data.elapsedTime / 20) * 20)));
+          setProgressPercent(Math.min(99, 75 + Math.round((data.elapsedTime / totalExpectedUlSec) * 20)));
           if (data.loadedLatencies) {
             const stats = { sent: data.loadedPingSent || 0, lost: data.loadedPingLost || 0, latencies: data.loadedLatencies || [] };
             stateRef.current.ulLoadedPingStats = stats;

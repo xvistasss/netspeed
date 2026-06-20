@@ -29,12 +29,20 @@ export const CONFIG = {
   UPLOAD_MEASURE_MS: 10_000,
   UPLOAD_PEAK_MS: 3_000,
 
-  // Upload chunk sizing — minimum 256KB ensures each request carries enough data
-  // for accurate throughput measurement. 64KB was too small: at high speeds the
-  // request completes in <1ms, making completion-based byte counting too coarse.
-  UPLOAD_MIN_CHUNK: 256 * 1024,
+  // Upload chunk sizing — adaptive minimum scales down on slow connections.
+  // 256KB was too large for mobile: at 500 Kbps upload, each chunk takes ~4s,
+  // causing phase timeouts before any request completes, leaving bins empty.
+  UPLOAD_MIN_CHUNK: 64 * 1024,
   UPLOAD_MAX_CHUNK: 2 * 1024 * 1024,
   UPLOAD_SPEED_ESTIMATE_INIT: 1_000_000,
+  // Minimum upload speed threshold (bps) below which we use ultra-conservative settings
+  UPLOAD_SLOW_THRESHOLD: 2_000_000,  // < 2 Mbps
+  UPLOAD_SLOW_STREAMS: 2,
+  UPLOAD_SLOW_MEASURE_MS: 15_000,  // Extended measurement for slow connections
+
+  // Per-fetch timeout — prevents hanging requests on congested mobile networks
+  // where carrier-grade NAT can silently drop connections
+  UPLOAD_FETCH_TIMEOUT_MS: 30_000,
 
   // ── Parallelism ──
   PARALLEL_STREAMS_DEFAULT: 6,

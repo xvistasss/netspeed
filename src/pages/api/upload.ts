@@ -36,10 +36,9 @@ function sleep(ms: number): Promise<void> {
  * - POST https://speed.cloudflare.com/__up
  * - Requires Referer and Origin headers for Cloudflare to accept the request
  *
- * Uses streaming proxy to avoid buffering the entire request body in memory.
- * On Cloudflare Workers (128MB memory limit), buffering 25MB per concurrent
- * request could exhaust memory. Instead, we count bytes while streaming and
- * forward the original request body stream directly to Cloudflare.
+ * Forwards the raw request body stream directly to Cloudflare without buffering.
+ * The client measures upload speed as time from request start to response headers
+ * arriving — the same method fast.com and speed.cloudflare.com use.
  */
 export const POST: APIRoute = async ({ request, url }) => {
   try {
@@ -52,31 +51,9 @@ export const POST: APIRoute = async ({ request, url }) => {
       );
     }
 
-    // Extract region/serverId from query params for observability logging
     const regionParam = url.searchParams.get("region");
     const serverIdParam = url.searchParams.get("serverId");
 
-    // Stream the request body: count bytes while forwarding to Cloudflare.
-    // We tee the stream so we can count bytes on one branch while
-    // the other branch sends data to Cloudflare in real-time.
-    const [countStream, proxyStream] = uploadBody.tee();
-
-    // Count bytes from the counting stream (reads and discards)
-    let totalBytesReceived = 0;
-    const countPromise = (async () => {
-      const reader = countStream.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) totalBytesReceived += value.length;
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    })();
-
-    // Proxy the stream to Cloudflare with retry for transient 429 rate limiting
     const cfUrl = new URL(CF_SPEED_TEST_ENDPOINT);
     if (regionParam) cfUrl.searchParams.set("region", regionParam);
     if (serverIdParam) cfUrl.searchParams.set("serverId", serverIdParam);
@@ -84,30 +61,34 @@ export const POST: APIRoute = async ({ request, url }) => {
     let lastError: any;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        // Re-tee for retries since the stream may have been consumed
         let bodyToSend: ReadableStream;
         if (attempt === 0) {
-          bodyToSend = proxyStream;
+          bodyToSend = uploadBody;
         } else {
-          // On retry, we need a fresh stream — but the original was consumed.
-          // This is a fundamental limitation of streaming: we can only retry
-          // if we buffered. For the retry case, we accept the memory tradeoff.
-          // In practice, 429 retries are rare and the body is small on retry.
           const [retryCount, retryProxy] = uploadBody.tee();
-          void retryCount.cancel(); // discard count branch on retry
+          void retryCount.cancel();
           bodyToSend = retryProxy;
         }
 
-        const cfResponse = await fetch(cfUrl.toString(), {
-          method: "POST",
-          body: bodyToSend,
-          headers: {
-            Referer: "https://speed.cloudflare.com/",
-            Origin: "https://speed.cloudflare.com",
-            "Cache-Control": "no-store, no-cache",
-            "Content-Type": "application/octet-stream",
-          },
-        });
+        const upstreamController = new AbortController();
+        const upstreamTimeout = setTimeout(() => upstreamController.abort(), 25000);
+
+        let cfResponse: Response;
+        try {
+          cfResponse = await fetch(cfUrl.toString(), {
+            method: "POST",
+            body: bodyToSend,
+            headers: {
+              Referer: "https://speed.cloudflare.com/",
+              Origin: "https://speed.cloudflare.com",
+              "Cache-Control": "no-store, no-cache",
+              "Content-Type": "application/octet-stream",
+            },
+            signal: upstreamController.signal,
+          });
+        } finally {
+          clearTimeout(upstreamTimeout);
+        }
 
         if (cfResponse.status === 429) {
           const retryAfter = parseRetryAfter(
@@ -130,16 +111,10 @@ export const POST: APIRoute = async ({ request, url }) => {
           );
         }
 
-        // Read response to ensure completion
-        await cfResponse.text();
-
-        // Wait for byte counting to finish
-        await countPromise;
-
-        return new Response(
-          JSON.stringify({ success: true, bytesReceived: totalBytesReceived }),
-          { status: 200, headers: corsHeaders },
-        );
+        return new Response(cfResponse.body, {
+          status: 200,
+          headers: corsHeaders,
+        });
       } catch (err: any) {
         lastError = err;
         if (err.message?.includes("429") && attempt < MAX_RETRIES) {
