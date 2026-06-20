@@ -36,8 +36,26 @@ import { version } from "../../package.json";
       </nav>
     </div>
 
-    <!-- Right: Theme Toggle -->
+    <!-- Right: Terminal Toggle + Theme Toggle -->
     <div class="flex items-center gap-1.5 md:gap-3 shrink-0">
+      <button
+        id="header-terminal-toggle"
+        class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
+        title="Toggle Terminal"
+        aria-label="Toggle terminal panel"
+      >
+        <svg
+          class="w-3.5 h-3.5 md:w-4 md:h-4 fill-none stroke-current"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          ></path>
+        </svg>
+      </button>
       <button
         id="header-theme-toggle"
         class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"

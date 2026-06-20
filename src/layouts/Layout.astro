@@ -55,10 +55,12 @@ const {
 
     <!-- Inline theme initialization via cookie — synchronous, no FOUC -->
     <script is:inline>
-      (function() {
+      (function () {
         var match = document.cookie.match(/(?:^|; )theme=(dark|light)/);
         var savedTheme = match ? match[1] : null;
-        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var prefersDark = window.matchMedia(
+          "(prefers-color-scheme: dark)",
+        ).matches;
         if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
           document.documentElement.classList.add("dark");
         } else {
@@ -77,11 +79,13 @@ const {
       Skip to content
     </a>
     <!-- Mesh gradient overlay — homepage only for GPU savings -->
-    {showMeshGradient && (
-      <div class="mesh-gradient-container">
-        <div class="mesh-gradient"></div>
-      </div>
-    )}
+    {
+      showMeshGradient && (
+        <div class="mesh-gradient-container">
+          <div class="mesh-gradient" />
+        </div>
+      )
+    }
     <div class="relative z-10 flex flex-col min-h-screen">
       <Header showServerStatus={showServerStatus} />
       <main id="main-content" class="flex-1">
@@ -122,6 +126,46 @@ const {
 
       setupThemeToggle();
       document.addEventListener("astro:after-swap", setupThemeToggle);
+
+      const setupTerminalToggle = () => {
+        const terminalToggle = document.getElementById(
+          "header-terminal-toggle",
+        );
+        if (terminalToggle) {
+          // Seed localStorage on first visit so script and React agree on the default
+          if (localStorage.getItem("terminal-open") === null) {
+            localStorage.setItem("terminal-open", "false");
+          }
+
+          const isOpen = localStorage.getItem("terminal-open") === "true";
+          terminalToggle.classList.toggle("bg-canvas-soft-2", isOpen);
+          terminalToggle.classList.toggle("text-ink", isOpen);
+          terminalToggle.classList.toggle("border-primary", isOpen);
+          terminalToggle.classList.toggle("text-primary", isOpen);
+
+          terminalToggle.addEventListener("click", () => {
+            const currentlyOpen =
+              localStorage.getItem("terminal-open") === "true";
+            const nextOpen = !currentlyOpen;
+            localStorage.setItem("terminal-open", String(nextOpen));
+
+            // Update button visual state
+            terminalToggle.classList.toggle("bg-canvas-soft-2", nextOpen);
+            terminalToggle.classList.toggle("text-ink", nextOpen);
+            terminalToggle.classList.toggle("border-primary", nextOpen);
+            terminalToggle.classList.toggle("text-primary", nextOpen);
+
+            window.dispatchEvent(
+              new CustomEvent("toggle-terminal", {
+                detail: { open: nextOpen },
+              }),
+            );
+          });
+        }
+      };
+
+      setupTerminalToggle();
+      document.addEventListener("astro:after-swap", setupTerminalToggle);
     </script>
   </body>
 </html>

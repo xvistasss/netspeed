@@ -27,6 +27,7 @@ export default function SpeedTest() {
     downloadRequests, uploadRequests, downloadReliable, uploadReliable,
     completionTime, progressPercent,
     startSpeedTest, cancelSpeedTest, downloadTestResult,
+    isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
   } = useSpeedTest();
 
@@ -135,9 +136,9 @@ export default function SpeedTest() {
       ) : null}
 
       {/* Side-by-side Layout: Dashboard + Terminal */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <div className={isTerminalOpen ? "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" : "flex flex-col gap-8"}>
         {/* Left Column - Web UI Dashboard */}
-        <div className="lg:col-span-8 flex flex-col gap-8">
+        <div className={isTerminalOpen ? "lg:col-span-8 flex flex-col gap-8" : "flex flex-col gap-8"}>
           {/* Main Dashboard Grid */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
             {/* Download & Upload */}
@@ -316,15 +317,17 @@ export default function SpeedTest() {
         </div>
 
         {/* Right Column - Terminal Simulator */}
-        <TerminalSimulator
-          terminalLogs={terminalLogs}
-          activeProgressLine={activeProgressLine}
-          cliInput={cliInput}
-          setCliInput={setCliInput}
-          handleCliSubmit={handleCliSubmit}
-          phase={phase}
-          terminalBodyRef={terminalBodyRef}
-        />
+        {isTerminalOpen && (
+          <TerminalSimulator
+            terminalLogs={terminalLogs}
+            activeProgressLine={activeProgressLine}
+            cliInput={cliInput}
+            setCliInput={setCliInput}
+            handleCliSubmit={handleCliSubmit}
+            phase={phase}
+            terminalBodyRef={terminalBodyRef}
+          />
+        )}
       </div>
     </div>
   );

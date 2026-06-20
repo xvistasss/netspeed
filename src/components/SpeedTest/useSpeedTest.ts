@@ -76,6 +76,7 @@ export interface UseSpeedTestReturn {
   startSpeedTest: () => Promise<void>;
   cancelSpeedTest: () => void;
   downloadTestResult: () => void;
+  isTerminalOpen: boolean;
   terminalBodyRef: React.RefObject<HTMLDivElement | null>;
   downloadChartRef: React.RefObject<HTMLCanvasElement | null>;
   uploadChartRef: React.RefObject<HTMLCanvasElement | null>;
@@ -128,6 +129,12 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [progressPercent, setProgressPercent] = useState(0);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("terminal-open") === "true";
+    }
+    return false;
+  });
   const startDisabled = useRef(false);
 
   // Consolidated mutable refs — single object to avoid stale closures in worker callbacks
@@ -174,10 +181,16 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setTheme(customEvent.detail.theme);
     };
     window.addEventListener("theme-changed", handleThemeChange);
+    const handleTerminalToggle = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setIsTerminalOpen(customEvent.detail.open);
+    };
+    window.addEventListener("toggle-terminal", handleTerminalToggle);
     return () => {
       if (workerRef.current) workerRef.current.terminate();
       destroyCharts();
       window.removeEventListener("theme-changed", handleThemeChange);
+      window.removeEventListener("toggle-terminal", handleTerminalToggle);
     };
   }, []);
 
@@ -937,6 +950,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     downloadRequests, uploadRequests, downloadReliable, uploadReliable,
     completionTime, progressPercent,
     startSpeedTest, cancelSpeedTest, downloadTestResult,
+    isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
   };
 }
