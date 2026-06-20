@@ -53,11 +53,10 @@ const {
     />
     <!-- Fonts are self-hosted via @font-face in global.css -->
 
-    <!-- Inline theme initialization via cookie — synchronous, no FOUC -->
+    <!-- Inline theme initialization via localStorage — synchronous, no FOUC -->
     <script is:inline>
       (function () {
-        var match = document.cookie.match(/(?:^|; )theme=(dark|light)/);
-        var savedTheme = match ? match[1] : null;
+        var savedTheme = localStorage.getItem("theme");
         var prefersDark = window.matchMedia(
           "(prefers-color-scheme: dark)",
         ).matches;
@@ -109,10 +108,9 @@ const {
               document.documentElement.classList.remove("dark");
             }
 
-            // Persist in both localStorage and cookie (cookie enables synchronous FOUC prevention)
+            // Persist in localStorage - enables synchronous FOUC prevention
             const themeValue = nextDark ? "dark" : "light";
             localStorage.setItem("theme", themeValue);
-            document.cookie = `theme=${themeValue};path=/;max-age=31536000;samesite=lax`;
 
             // Broadcast change event to React
             window.dispatchEvent(
