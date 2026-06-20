@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useId } from "react";
+import { createPortal } from "react-dom";
 
 interface InfoTooltipProps {
   content: string;
@@ -85,7 +86,9 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
       if (
         containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
+        !containerRef.current.contains(e.target as Node) &&
+        tooltipRef.current &&
+        !tooltipRef.current.contains(e.target as Node)
       ) {
         setVisible(false);
       }
@@ -119,7 +122,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
   return (
     <div
       ref={containerRef}
-      className="relative inline-flex items-center ml-1 z-20 group"
+      className="relative inline-flex items-center ml-1 group"
     >
       <button
         onMouseEnter={() => setVisible(true)}
@@ -135,21 +138,23 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       >
         i
       </button>
-      {visible && (
-        <div
-          ref={tooltipRef}
-          id={tooltipId}
-          role="tooltip"
-          style={{
-            position: "fixed",
-            left: pos.x,
-            top: pos.y,
-          }}
-          className="w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-50 transition-opacity duration-150 leading-relaxed font-sans text-left"
-        >
-          {content}
-        </div>
-      )}
+      {visible &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            id={tooltipId}
+            role="tooltip"
+            style={{
+              position: "fixed",
+              left: pos.x,
+              top: pos.y,
+            }}
+            className="w-64 bg-primary text-on-primary text-xs p-3 rounded-md shadow-lg border border-primary/20 z-[9999] transition-opacity duration-150 leading-relaxed font-sans text-left"
+          >
+            {content}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
