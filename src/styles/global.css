@@ -39,6 +39,21 @@
   --color-error-soft: #f7d4d6;
   --color-warning: #f5a623;
   --color-warning-soft: #ffefcf;
+
+  --color-terminal-bg: #fafafa;
+  --color-terminal-header-bg: #f5f5f5;
+  --color-terminal-header-border: #ebebeb;
+  --color-terminal-text: #171717;
+  --color-terminal-text-cmd: #29bc9b;
+  --color-terminal-text-ok: #0070f3;
+  --color-terminal-text-probe: #888888;
+  --color-terminal-text-error: #ee0000;
+  --color-terminal-text-progress: #4d4d4d;
+  --color-terminal-input-bg: #ffffff;
+  --color-terminal-input-border: #ebebeb;
+  --color-terminal-prompt: #29bc9b;
+  --color-terminal-input-text: #171717;
+  --color-terminal-title: #888888;
 }
 
 .dark {
@@ -59,6 +74,21 @@
   --color-error-soft: #2c0d0e;
   --color-warning: #f5a623;
   --color-warning-soft: #2b1d0c;
+
+  --color-terminal-bg: #0a0a0a;
+  --color-terminal-header-bg: #171717;
+  --color-terminal-header-border: #222222;
+  --color-terminal-text: #fafafa;
+  --color-terminal-text-cmd: #50e3c2;
+  --color-terminal-text-ok: #3291ff;
+  --color-terminal-text-probe: #888888;
+  --color-terminal-text-error: #ff1a1a;
+  --color-terminal-text-progress: #e2e8f0;
+  --color-terminal-input-bg: #0c0c0c;
+  --color-terminal-input-border: #222222;
+  --color-terminal-prompt: #00dfd8;
+  --color-terminal-input-text: #fafafa;
+  --color-terminal-title: #888888;
 }
 
 @theme {
@@ -79,6 +109,21 @@
   --color-error-soft: var(--color-error-soft);
   --color-warning: var(--color-warning);
   --color-warning-soft: var(--color-warning-soft);
+
+  --color-terminal-bg: var(--color-terminal-bg);
+  --color-terminal-header-bg: var(--color-terminal-header-bg);
+  --color-terminal-header-border: var(--color-terminal-header-border);
+  --color-terminal-text: var(--color-terminal-text);
+  --color-terminal-text-cmd: var(--color-terminal-text-cmd);
+  --color-terminal-text-ok: var(--color-terminal-text-ok);
+  --color-terminal-text-probe: var(--color-terminal-text-probe);
+  --color-terminal-text-error: var(--color-terminal-text-error);
+  --color-terminal-text-progress: var(--color-terminal-text-progress);
+  --color-terminal-input-bg: var(--color-terminal-input-bg);
+  --color-terminal-input-border: var(--color-terminal-input-border);
+  --color-terminal-prompt: var(--color-terminal-prompt);
+  --color-terminal-input-text: var(--color-terminal-input-text);
+  --color-terminal-title: var(--color-terminal-title);
 
   --color-gradient-dev-start: #007cf0;
   --color-gradient-dev-end: #00dfd8;
