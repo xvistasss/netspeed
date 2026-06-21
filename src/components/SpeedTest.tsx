@@ -37,7 +37,7 @@ export default function SpeedTest() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-8 flex-1">
       {/* Hero Section */}
-      <header className="flex flex-col gap-2 mt-4 md:mt-8 border-b border-hairline pb-6">
+      <div className="flex flex-col gap-2 mt-4 md:mt-8 border-b border-hairline pb-6">
         <span className="font-mono text-xs uppercase tracking-wider text-mute">
           Network Speed Engine
         </span>
@@ -111,7 +111,7 @@ export default function SpeedTest() {
         {completionTime && (
           <span className="text-[11px] text-mute">Measured at {completionTime}</span>
         )}
-      </header>
+      </div>
 
       {/* Progress Bar */}
       {isTestRunning && (

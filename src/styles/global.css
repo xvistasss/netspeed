@@ -138,6 +138,7 @@
 }
 
 @layer base {
+
   html,
   body {
     margin: 0;
@@ -167,10 +168,6 @@
   pointer-events: none;
   opacity: 0.65;
   transition: opacity 0.2s ease;
-}
-
-.dark .mesh-gradient-container {
-  opacity: 0.3;
 }
 
 .mesh-gradient {
@@ -203,6 +200,7 @@
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -212,7 +210,8 @@
 .vercel-card {
   background-color: var(--color-canvas);
   border: 1px solid var(--color-hairline);
-  border-radius: 8px; /* rounded.md */
+  border-radius: 8px;
+  /* rounded.md */
   box-shadow:
     0px 1px 1px #00000005,
     0px 2px 2px #0000000a;
@@ -233,13 +232,16 @@
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--color-canvas-soft);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--color-hairline-strong);
   border-radius: 3px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-body);
 }
@@ -248,8 +250,11 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 /* Hide scrollbar for IE, Edge and Firefox */
 .no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
