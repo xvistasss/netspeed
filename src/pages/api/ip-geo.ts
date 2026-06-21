@@ -130,7 +130,7 @@ export const GET: APIRoute = async ({ request, url }) => {
         countryCode = geoData.countryCode || "";
       }
     } catch (err) {
-      console.error("Reverse geocoding failed:", err);
+      console.error("Reverse geocoding failed: [coordinates redacted for privacy]");
     }
   }
 
@@ -222,10 +222,10 @@ export const GET: APIRoute = async ({ request, url }) => {
       region: region || "Unknown Region",
       country: countryName,
       countryCode: countryCode || "Unknown",
-      loc: latitude !== null && longitude !== null ? `${latitude},${longitude}` : undefined,
       org: asn ? `AS${asn} ${org}` : org,
-      latitude: latitude !== null ? latitude : undefined,
-      longitude: longitude !== null ? longitude : undefined,
+      // Don't return raw GPS coordinates for privacy
+      latitude: undefined,
+      longitude: undefined,
     }),
     {
       status: 200,

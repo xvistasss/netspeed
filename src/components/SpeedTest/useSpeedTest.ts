@@ -12,10 +12,12 @@ import {
   isLocalHost,
   calculateTrimmedMean,
   calculateMin,
-  getAdaptiveStreamCount,
+  calculateMax,
   getUploadStreamCount,
+  measureWebRTCSTUN,
 } from "../../utils/speedTestUtils";
 import { CONFIG } from "../../utils/speedTestConfig";
+import { selectNearestEdge, describeServerSelection, type ServerSelectionResult } from "../../utils/serverSelection";
 
 // Lazy-loaded Chart.js module — only loaded when first test starts
 let ChartJSModule: typeof import("chart.js") | null = null;
@@ -59,7 +61,7 @@ export interface UseSpeedTestReturn {
   activeProgressLine: string | null;
   cliInput: string;
   setCliInput: (v: string) => void;
-  handleCliSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  handleCliSubmit: (e: React.SubmitEvent) => void;
   dlLoadedLatency: number;
   dlLoadedJitter: number;
   ulLoadedLatency: number;
@@ -69,8 +71,6 @@ export interface UseSpeedTestReturn {
   ulLoadedPingStats: DetailPingStats;
   downloadRequests: SpeedTestRequest[];
   uploadRequests: SpeedTestRequest[];
-  downloadReliable: boolean;
-  uploadReliable: boolean;
   completionTime: string;
   progressPercent: number;
   startSpeedTest: () => Promise<void>;
@@ -80,9 +80,14 @@ export interface UseSpeedTestReturn {
   terminalBodyRef: React.RefObject<HTMLDivElement | null>;
   downloadChartRef: React.RefObject<HTMLCanvasElement | null>;
   uploadChartRef: React.RefObject<HTMLCanvasElement | null>;
+  icmpEstimate: number;
+  webrtcLatency: number | null;
 }
 
-const OPTIMAL_SERVER = { id: "cloudflare-optimal", name: "Cloudflare Optimal Server", region: "auto" };
+// Dynamic server selection — resolved per-test based on client geolocation.
+// Cloudflare's Anycast DNS routes to the nearest edge automatically, but we
+// identify WHICH edge the client is hitting for transparency and BDP estimation.
+let CURRENT_EDGE: ServerSelectionResult | null = null;
 
 export function useSpeedTest(): UseSpeedTestReturn {
   const [phase, setPhase] = useState<TestPhase>("idle");
@@ -94,6 +99,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [latencyStats, setLatencyStats] = useState<LatencyStats>({
     current: 0, avg: 0, jitter: 0, min: Infinity, max: 0, latencies: [],
   });
+  const [icmpEstimate, setIcmpEstimate] = useState<number>(0);
+  const [webrtcLatency, setWebrtcLatency] = useState<number | null>(null);
   const [downloadStats, setDownloadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
   const [uploadStats, setUploadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
   const [packetLoss, setPacketLoss] = useState<number>(0);
@@ -123,8 +130,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [ulLoadedPingStats, setUlLoadedPingStats] = useState<DetailPingStats>({ sent: 0, lost: 0, latencies: [] });
   const [downloadRequests, setDownloadRequests] = useState<SpeedTestRequest[]>([]);
   const [uploadRequests, setUploadRequests] = useState<SpeedTestRequest[]>([]);
-  const [downloadReliable, setDownloadReliable] = useState(true);
-  const [uploadReliable, setUploadReliable] = useState(true);
   const [completionTime, setCompletionTime] = useState<string>("");
   const [progressPercent, setProgressPercent] = useState(0);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -157,6 +162,9 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const uploadChartInstance = useRef<any | null>(null);
   const downloadSpeedHistory = useRef<number[]>([]);
   const uploadSpeedHistory = useRef<number[]>([]);
+  const lastChartUpdate = useRef<number>(0);
+  const pendingChartUpdate = useRef<{ type: "download" | "upload"; mbps: number } | null>(null);
+  const lastTerminalLogTime = useRef<number>(0);
   const autorunTriggered = useRef(false);
   // Store dynamic warmup/ramp durations for progress calculation
   const dlDynamicWarmupMs = useRef<number>(CONFIG.DOWNLOAD_WARMUP_MS);
@@ -343,16 +351,31 @@ export function useSpeedTest(): UseSpeedTestReturn {
     }
   }, [theme, destroyCharts]);
 
+  const CHART_THROTTLE_MS = 250;
+
   const updateThroughputChart = useCallback((type: "download" | "upload", mbps: number) => {
     const chart = type === "download" ? downloadChartInstance.current : uploadChartInstance.current;
     const history = type === "download" ? downloadSpeedHistory : uploadSpeedHistory;
     if (!chart) return;
 
+    // Always record the data point
     history.current.push(mbps);
     if (history.current.length > CONFIG.CHART_MAX_POINTS) history.current.shift();
+
+    // Throttle the expensive Chart.js render to every 250ms
+    const now = performance.now();
+    if (now - lastChartUpdate.current < CHART_THROTTLE_MS) {
+      // Store pending update; the timer will pick it up
+      pendingChartUpdate.current = { type, mbps };
+      return;
+    }
+    lastChartUpdate.current = now;
+    pendingChartUpdate.current = null;
+
     chart.data.labels = history.current.map(() => "");
     chart.data.datasets[0].data = history.current;
 
+    // Compute p95 without creating a full sorted copy — use partial sort
     const sorted = [...history.current].sort((a, b) => a - b);
     const p95Idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
     const p95 = sorted[p95Idx] || 0;
@@ -360,7 +383,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     // Dynamic Y-axis scaling: set max to 1.3x the peak to prevent wasted space
     // while leaving headroom above the highest data point
-    const currentMax = Math.max(...history.current, 0);
+    let currentMax = 0;
+    for (const v of history.current) { if (v > currentMax) currentMax = v; }
     const rawMax = Math.max(10, currentMax * 1.3);
     // Round up to a clean number so ticks don't produce fractional labels
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
@@ -370,6 +394,40 @@ export function useSpeedTest(): UseSpeedTestReturn {
     }
 
     chart.update("none");
+  }, []);
+
+  // Flush any pending chart update after the throttle window expires
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const pending = pendingChartUpdate.current;
+      if (pending) {
+        pendingChartUpdate.current = null;
+        lastChartUpdate.current = performance.now();
+        const chart = pending.type === "download" ? downloadChartInstance.current : uploadChartInstance.current;
+        const history = pending.type === "download" ? downloadSpeedHistory : uploadSpeedHistory;
+        if (!chart || history.current.length === 0) return;
+
+        chart.data.labels = history.current.map(() => "");
+        chart.data.datasets[0].data = history.current;
+
+        const sorted = [...history.current].sort((a, b) => a - b);
+        const p95Idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
+        const p95 = sorted[p95Idx] || 0;
+        chart.data.datasets[1].data = history.current.map(() => p95);
+
+        let currentMax = 0;
+        for (const v of history.current) { if (v > currentMax) currentMax = v; }
+        const rawMax = Math.max(10, currentMax * 1.3);
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+        const dynamicMax = Math.ceil(rawMax / magnitude) * magnitude;
+        if (chart.options.scales?.y) {
+          (chart.options.scales.y as any).max = dynamicMax;
+        }
+
+        chart.update("none");
+      }
+    }, CHART_THROTTLE_MS);
+    return () => clearInterval(interval);
   }, []);
 
   // --- Geolocation ---
@@ -409,14 +467,22 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const reverseGeocode = useCallback(async (lat: number, lon: number) => {
     let city = "", region = "", countryCode = "";
     try {
-      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeout);
       if (res.ok) {
         const bdcData = await res.json();
         city = bdcData.city || bdcData.locality || "";
         region = bdcData.principalSubdivision || "";
         countryCode = bdcData.countryCode || "";
       }
-    } catch (e) { console.warn("Reverse geocoding failed:", e); }
+    } catch {
+      // Reverse geocoding is non-critical — proceed without city data
+    }
     return { city, region, countryCode };
   }, []);
 
@@ -490,6 +556,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
             initialData.rtt ? `[INFO] Network RTT: ${initialData.rtt} ms` : "",
           ].filter(Boolean));
         }
+      } else {
+        // Firefox/Safari: Network Information API not available.
+        // Use heuristic detection from connection timing.
+        appendLogs([
+          "[INFO] Network Information API unavailable (Firefox/Safari)",
+          "[INFO] Using heuristic bandwidth estimation from warmup timing",
+        ]);
       }
 
       setClientInfo(initialData);
@@ -505,10 +578,25 @@ export function useSpeedTest(): UseSpeedTestReturn {
   }, [appendLogs]);
 
   // --- Warmup ---
-  const warmupServer = useCallback(async (): Promise<typeof OPTIMAL_SERVER> => {
+  const warmupServer = useCallback(async (): Promise<{ id: string; name: string; region: string }> => {
     setPhase("routing");
     setProgressPercent(15);
-    setStatusMessage("Selecting optimal server…");
+    setStatusMessage("Selecting optimal edge server...");
+
+    // Resolve nearest Cloudflare edge from client geolocation
+    const clientInfo = stateRef.current.clientInfo;
+    if (clientInfo?.latitude && clientInfo?.longitude) {
+      CURRENT_EDGE = selectNearestEdge(clientInfo.latitude, clientInfo.longitude);
+      appendLogs([
+        `[INFO] ${describeServerSelection(CURRENT_EDGE)}`,
+        `[INFO] Top edges: ${CURRENT_EDGE.allEdges.map((e) => `${e.city} (${e.distanceKm}km)`).join(", ")}`,
+      ]);
+    } else {
+      // Fallback: use Cloudflare Anycast auto-routing (no geolocation available)
+      CURRENT_EDGE = null;
+      appendLogs(["[INFO] Geolocation unavailable — using Cloudflare Anycast auto-routing"]);
+    }
+
     const origin = window.location.origin;
     let hostLatency = 0;
     try {
@@ -519,12 +607,31 @@ export function useSpeedTest(): UseSpeedTestReturn {
       hostLatency = performance.now() - startWarmup;
     } catch (_) { hostLatency = 0; }
     if (isLocalHost(window.location.hostname)) hostLatency = Math.max(1.5, hostLatency);
-    setTerminalLogs((prev) => [...prev, `[OK] Connected to optimal server (warmup: ${hostLatency.toFixed(1)}ms)`]);
-    setStatusMessage(`Optimal server ready (${hostLatency.toFixed(1)}ms warmup)`);
+
+    // Measure WebRTC STUN latency in parallel (UDP-based, closer to ICMP)
+    const edgeLabel = CURRENT_EDGE
+      ? `${CURRENT_EDGE.edge.city}, ${CURRENT_EDGE.edge.country} (${CURRENT_EDGE.edge.id})`
+      : "Cloudflare Anycast (auto)";
+    setTerminalLogs((prev) => [...prev, `[OK] Connected to ${edgeLabel} (warmup: ${hostLatency.toFixed(1)}ms)`, `[INFO] Measuring UDP latency via WebRTC STUN...`]);
+
+    const webRtcLatency = await measureWebRTCSTUN();
+    if (webRtcLatency !== null) {
+      setWebrtcLatency(webRtcLatency);
+      appendLogs([`[OK] WebRTC STUN latency: ${webRtcLatency.toFixed(1)}ms (UDP)`]);
+    } else {
+      appendLogs(["[INFO] WebRTC STUN unavailable — using HTTP-derived estimate"]);
+    }
+
+    setStatusMessage(`Edge server ready: ${edgeLabel} (${hostLatency.toFixed(1)}ms warmup)`);
     setProgressPercent(30);
     await sleep(200);
-    return OPTIMAL_SERVER;
-  }, []);
+
+    return {
+      id: CURRENT_EDGE?.edge.id || "cloudflare-anycast",
+      name: CURRENT_EDGE ? `${CURRENT_EDGE.edge.city} (${CURRENT_EDGE.edge.id})` : "Cloudflare Anycast",
+      region: CURRENT_EDGE?.edge.id || "auto",
+    };
+  }, [appendLogs]);
 
   // --- Speed Test Orchestrator ---
   const startSpeedTest = useCallback(async () => {
@@ -541,7 +648,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     // Trigger browser geolocation if not precise
     if ("geolocation" in navigator && (!currentClientInfo || !currentClientInfo.isPrecise)) {
-      setStatusMessage("Requesting browser geolocation for optimal server selection...");
+      setStatusMessage("Requesting browser geolocation for edge server selection...");
       appendLogs(["[INFO] Requesting browser geolocation for high accuracy routing..."]);
       const upgraded = await upgradeToPreciseLocation();
       if (upgraded) {
@@ -576,8 +683,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setPacketLoss(0);
     setProgressPercent(0);
     setCompletionTime("");
-    setDownloadReliable(true);
-    setUploadReliable(true);
 
     setTerminalLogs([
       `Welcome to Net-Speed CLI v${__APP_VERSION__}`,
@@ -585,7 +690,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
       `$ speedtest`,
       `Client IP: ${currentClientInfo?.ip || "Detecting..."} (${currentClientInfo?.org || "Detecting..."})`,
       `Location: ${currentClientInfo?.city || "Detecting..."}, ${currentClientInfo?.region || ""}, ${currentClientInfo?.country || ""}`,
-      "Selecting optimal server (Anycast BGP routing)...",
+      "Resolving nearest Cloudflare edge (Anycast DNS routing)...",
     ]);
     setActiveProgressLine(null);
 
@@ -593,12 +698,12 @@ export function useSpeedTest(): UseSpeedTestReturn {
     await initCharts();
     setIsStarting(false);
     setPhase("ping");
-    setStatusMessage("Pinging optimal server…");
+    setStatusMessage("Pinging edge server...");
     setProgressPercent(40);
 
     setTerminalLogs((prev) => [
       ...prev, "",
-      `$ ping -c 15 ${edgeNode.id}`,
+      `$ ping -c 15 ${edgeNode.name}`,
       `PING ${edgeNode.name} 56(84) bytes of data.`,
     ]);
 
@@ -624,13 +729,18 @@ export function useSpeedTest(): UseSpeedTestReturn {
             avg: calculateTrimmedMean(data.latencies),
             jitter: data.jitter,
             min: calculateMin(data.latencies),
-            max: Math.max(...data.latencies),
+            max: calculateMax(data.latencies),
             latencies: data.latencies,
           };
           setLatencyStats(newLatencyStats);
           stateRef.current.latencyStats = newLatencyStats;
           setProgressPercent(40 + Math.round((data.iteration / data.totalIterations) * 10));
-          setTerminalLogs((prev) => [...prev, `64 bytes from ${edgeNode.id}: icmp_seq=${data.iteration} time=${data.latency.toFixed(1)} ms`]);
+          // Throttle terminal logs during ping — only append every 200ms to reduce main-thread work
+          const now = performance.now();
+          if (now - lastTerminalLogTime.current >= 200 || data.iteration === data.totalIterations) {
+            lastTerminalLogTime.current = now;
+            setTerminalLogs((prev) => [...prev, `64 bytes from ${edgeNode.name}: seq=${data.iteration} time=${data.latency.toFixed(1)} ms`]);
+          }
           break;
         }
 
@@ -642,10 +752,17 @@ export function useSpeedTest(): UseSpeedTestReturn {
           setPhase("download");
           setStatusMessage("Measuring download throughput (concurrent streams)…");
 
+          // Store ICMP estimate — prefer WebRTC STUN (UDP), fallback to HTTP-derived
+          const httpDerivedIcmp = data.avgIcmpEquivalent > 0 ? data.avgIcmpEquivalent : 0;
+          const finalIcmpEstimate = webrtcLatency !== null && webrtcLatency > 0
+            ? webrtcLatency
+            : httpDerivedIcmp;
+          if (finalIcmpEstimate > 0) setIcmpEstimate(finalIcmpEstimate);
+
           const pings = data.latencies || [];
           const min = pings.length > 0 ? calculateMin(pings) : 0;
           const avg = pings.length > 0 ? calculateTrimmedMean(pings) : 0;
-          const max = pings.length > 0 ? Math.max(...pings) : 0;
+          const max = pings.length > 0 ? calculateMax(pings) : 0;
           const jitter = data.jitter || 0;
           const loss = data.pingSent > 0 ? ((data.pingLost / data.pingSent) * 100).toFixed(1) : "0.0";
 
@@ -661,26 +778,23 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const bdpBytes = estimatedBandwidthBps * rttSec;
           const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000)));
           const dynamicRampMs = Math.min(CONFIG.DYNAMIC_RAMP_MAX_MS, Math.max(CONFIG.DYNAMIC_RAMP_MIN_MS, Math.ceil((bdpBytes * 4 / estimatedBandwidthBps) * 1000)));
-          const adaptiveStreams = getAdaptiveStreamCount(estimatedBandwidthBps, CONFIG.PARALLEL_STREAMS_DEFAULT, CONFIG.BANDWIDTH_SLOW_THRESHOLD, CONFIG.BANDWIDTH_MEDIUM_THRESHOLD, CONFIG.PARALLEL_STREAMS_SLOW, CONFIG.PARALLEL_STREAMS_MEDIUM, CONFIG.PARALLEL_STREAMS_FAST);
-          const bandwidthSource = connDownlinkBps > 0 ? `Network Info API (${(connDownlinkBps / 1_000_000).toFixed(1)} Mbps)` : "conservative 10 Mbps default";
           // Store for progress calculation
           dlDynamicWarmupMs.current = dynamicWarmupMs;
           dlDynamicRampMs.current = dynamicRampMs;
 
           setTerminalLogs((prev) => [
             ...prev,
-            `--- ${edgeNode.id} ping statistics ---`,
+            `--- ${edgeNode.name} ping statistics ---`,
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
             `[INFO] BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB, warmup: ${dynamicWarmupMs}ms, ramp: ${dynamicRampMs}ms`,
-            `[INFO] Adaptive streams: ${adaptiveStreams} (source: ${bandwidthSource})`,
             "",
-            `$ speedtest --download --streams=${adaptiveStreams}`,
-            `Starting download throughput test (${adaptiveStreams} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
+            `$ speedtest --download --single-connection`,
+            `Starting download throughput test (single connection, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
           ]);
 
           const calculatedAvgPing = avg > 0 ? avg : 20;
-          workerRef.current?.postMessage({ type: "START_DOWNLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, parallelStreams: adaptiveStreams, dynamicWarmupMs, dynamicRampMs });
+          workerRef.current?.postMessage({ type: "START_DOWNLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, dynamicWarmupMs, dynamicRampMs });
           break;
         }
 
@@ -718,7 +832,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const newDownloadStats = { current: 0, avg: data.averageSpeed, peak: data.peakSpeed };
           setDownloadStats(newDownloadStats);
           stateRef.current.downloadStats = newDownloadStats;
-          if (data.reliable === false) setDownloadReliable(false);
           setProgressPercent(75);
           setPhase("upload");
           setStatusMessage("Measuring upload throughput (concurrent streams)…");
@@ -798,7 +911,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const newUploadStats = { current: 0, avg: data.averageSpeed, peak: data.peakSpeed };
           setUploadStats(newUploadStats);
           stateRef.current.uploadStats = newUploadStats;
-          if (data.reliable === false) setUploadReliable(false);
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
           if (data.requests) {
@@ -813,18 +925,30 @@ export function useSpeedTest(): UseSpeedTestReturn {
             `Upload: ${finalUlMbps.toFixed(1)} Mbps${reliabilityNote} [████████████████████] 100% (Total: ${(data.totalBytes / (1024 * 1024)).toFixed(1)} MB)`,
             `[OK] Upload test finished.`,
             "",
-            `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${edgeNode.id}`,
-            `Running dedicated packet loss test (${CONFIG.PACKET_LOSS_PINGS} pings)...`,
+            `[INFO] Cooling down for 2 seconds before packet loss test...`,
           ]);
           setActiveProgressLine(null);
-          setPhase("packetLoss");
-          setStatusMessage("Measuring packet loss...");
-          workerRef.current?.postMessage({ type: "START_PACKET_LOSS", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
+          // Add 2 second cooldown before packet loss test to let network recover from congestion
+          setTimeout(() => {
+            setTerminalLogs((prev) => [
+              ...prev,
+              `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${edgeNode.name}`,
+              `Running dedicated packet loss test (${CONFIG.PACKET_LOSS_PINGS} pings)...`,
+            ]);
+            setPhase("packetLoss");
+            setStatusMessage("Measuring packet loss...");
+            workerRef.current?.postMessage({ type: "START_PACKET_LOSS", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
+          }, 2000);
           break;
         }
 
         case "PACKET_LOSS_PROGRESS": {
-          setTerminalLogs((prev) => [...prev, `64 bytes from ${edgeNode.id}: icmp_seq=${data.iteration} loss=${data.lost}/${data.sent}`]);
+          // Throttle terminal logs during packet loss test
+          const now = performance.now();
+          if (now - lastTerminalLogTime.current >= 200 || data.iteration === data.totalIterations) {
+            lastTerminalLogTime.current = now;
+            setTerminalLogs((prev) => [...prev, `64 bytes from ${edgeNode.name}: icmp_seq=${data.iteration} loss=${data.lost}/${data.sent}`]);
+          }
           break;
         }
 
@@ -832,7 +956,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
           setPacketLoss(parseFloat(data.lossPercent.toFixed(1)));
           setTerminalLogs((prev) => [
             ...prev,
-            `--- ${edgeNode.id} packet loss statistics ---`,
+            `--- ${edgeNode.name} packet loss statistics ---`,
             `${data.sent} pings transmitted, ${data.sent - data.lost} received, ${data.lossPercent.toFixed(1)}% packet loss`,
             "",
           ]);
@@ -869,11 +993,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
     const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     setCompletionTime(timeStr);
     setPacketLoss(realLossPercent);
+    const edgeLabel = CURRENT_EDGE
+      ? `${CURRENT_EDGE.edge.city}, ${CURRENT_EDGE.edge.country} (${CURRENT_EDGE.edge.id})`
+      : "Cloudflare Anycast";
     setTerminalLogs((prev) => [
       ...prev,
       "--------------------------------------------------",
       `Speedtest execution finished at ${timeStr}`,
-      `Server: ${OPTIMAL_SERVER.name}`,
+      `Edge Server: ${edgeLabel}`,
       `  Download Speed: ${(stateRef.current.downloadStats.avg / 1000000).toFixed(1)} Mbps`,
       `  Upload Speed: ${(stateRef.current.uploadStats.avg / 1000000).toFixed(1)} Mbps`,
       `  Latency (unloaded): ${stateRef.current.latencyStats.avg.toFixed(1)} ms`,
@@ -913,7 +1040,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     URL.revokeObjectURL(url);
   }, []);
 
-  const handleCliSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
+  const handleCliSubmit = useCallback((e: React.SubmitEvent) => {
     e.preventDefault();
     const cmd = cliInput.trim().toLowerCase();
     if (!cmd) return;
@@ -947,10 +1074,11 @@ export function useSpeedTest(): UseSpeedTestReturn {
     terminalLogs, activeProgressLine, cliInput, setCliInput, handleCliSubmit,
     dlLoadedLatency, dlLoadedJitter, ulLoadedLatency, ulLoadedJitter,
     unloadedPingStats, dlLoadedPingStats, ulLoadedPingStats,
-    downloadRequests, uploadRequests, downloadReliable, uploadReliable,
+    downloadRequests, uploadRequests,
     completionTime, progressPercent,
     startSpeedTest, cancelSpeedTest, downloadTestResult,
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
+    icmpEstimate, webrtcLatency,
   };
 }

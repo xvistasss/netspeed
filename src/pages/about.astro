@@ -40,16 +40,16 @@ import Layout from "../layouts/Layout.astro";
             >
               Methodology 01
             </span>
-            <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+              <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Zero payload caching
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
               Traditional speed test applications fetch static files that can
               easily be cached by local internet service providers (ISPs) or
-              content delivery networks (CDNs). NetSpeed generates random,
-              completely uncompressible binary data blocks dynamically at the
-              request window, forcing your ISP to handle raw, unoptimized data
-              transit.
+              content delivery networks (CDNs). NetSpeed leverages Cloudflare's
+              edge network to serve non-compressible binary payloads directly
+              from the nearest data center, forcing your ISP to handle raw,
+              unoptimized data transit.
             </p>
           </div>
         </div>
@@ -61,15 +61,15 @@ import Layout from "../layouts/Layout.astro";
             >
               Methodology 02
             </span>
-            <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+              <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Concurrent socket piping
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              Using local Javascript Web Workers, we initiate up to six
-              concurrent download and upload sockets. This parallel pipe design
-              stresses your connection capacity, allowing us to accurately
-              measure the peak saturation performance and load-balanced
-              capabilities of your interface.
+              Using Web Workers, we initiate six concurrent download connections
+              and adaptive upload streams. This parallel pipe design stresses
+              your connection capacity, allowing us to accurately measure the
+              peak saturation performance and load-balanced capabilities of your
+              network interface.
             </p>
           </div>
         </div>
@@ -101,15 +101,16 @@ import Layout from "../layouts/Layout.astro";
             >
               Methodology 04
             </span>
-            <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+              <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
               Optimal server selection
             </h2>
             <p class="text-xs md:text-sm text-body leading-relaxed mt-2">
-              We communicate with servers positioned directly at major routing
-              exchanges. By performing a pre-test routing handshake, we select
-              the optimal node using high-precision geographical distance
-              telemetry, ensuring your latency is not skewed by unnecessary
-              cross-country hops.
+              NetSpeed identifies which Cloudflare edge datacenter is serving
+              your request. Cloudflare's Anycast BGP routing automatically
+              connects you to the nearest edge based on real-time network
+              topology. We display the selected edge and estimated distance for
+              transparency, ensuring you know exactly where your measurements
+              are being taken.
             </p>
           </div>
         </div>

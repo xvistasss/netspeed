@@ -9,27 +9,38 @@ interface QualityScoresProps {
   latencyAvg: number; // ms
   latencyJitter: number; // ms
   packetLossPercent?: number; // %
+  useCase?: "gaming" | "streaming" | "general";
 }
 
 // Compute a 0-100 network quality score from raw metrics.
 // Components: download (30), upload (30), latency (20), jitter (10), packet loss (10).
+// Supports useCase parameter for tailored scoring (gaming/streaming/general)
 function computeQualityScore(
   dlMbps: number,
   ulMbps: number,
   latencyMs: number,
   jitterMs: number,
   lossPct: number,
+  useCase: "gaming" | "streaming" | "general" = "general",
 ): { total: number; grade: string; gradeColor: string; dlScore: number; ulScore: number; latScore: number; jitScore: number; lossScore: number } {
-  // Download: 100 Mbps = perfect (30 pts)
-  const dlScore = Math.min(30, (dlMbps / 100) * 30);
-  // Upload: 50 Mbps = perfect (30 pts)
-  const ulScore = Math.min(30, (ulMbps / 50) * 30);
-  // Latency: 0ms = 20 pts, 200ms+ = 0
-  const latScore = Math.max(0, 20 * (1 - latencyMs / 200));
-  // Jitter: 0ms = 10 pts, 50ms+ = 0
-  const jitScore = Math.max(0, 10 * (1 - jitterMs / 50));
-  // Packet loss: 0% = 10 pts, 5%+ = 0
-  const lossScore = Math.max(0, 10 * (1 - lossPct / 5));
+  // Weight adjustments based on use case
+  let dlWeight = 30, ulWeight = 30, latWeight = 20, jitWeight = 10, lossWeight = 10;
+  if (useCase === "gaming") {
+    dlWeight = 15; ulWeight = 10; latWeight = 40; jitWeight = 25; lossWeight = 10;
+  } else if (useCase === "streaming") {
+    dlWeight = 50; ulWeight = 10; latWeight = 15; jitWeight = 10; lossWeight = 15;
+  }
+
+  // Download: 100 Mbps = perfect
+  const dlScore = Math.min(dlWeight, (dlMbps / 100) * dlWeight);
+  // Upload: 50 Mbps = perfect
+  const ulScore = Math.min(ulWeight, (ulMbps / 50) * ulWeight);
+  // Latency: 0ms = full score, 200ms+ = 0
+  const latScore = Math.max(0, latWeight * (1 - latencyMs / 200));
+  // Jitter: 0ms = full score, 50ms+ = 0
+  const jitScore = Math.max(0, jitWeight * (1 - jitterMs / 50));
+  // Packet loss: 0% = full score, 5%+ = 0
+  const lossScore = Math.max(0, lossWeight * (1 - lossPct / 5));
 
   const total = Math.round(dlScore + ulScore + latScore + jitScore + lossScore);
 
@@ -112,13 +123,14 @@ export default function QualityScores({
   latencyAvg,
   latencyJitter,
   packetLossPercent = 0,
+  useCase = "general",
 }: QualityScoresProps) {
   const dlMbps = downloadAvg / 1_000_000;
   const ulMbps = uploadAvg / 1_000_000;
   const hasData = phase !== "idle" && phase !== "routing";
 
   const score = hasData
-    ? computeQualityScore(dlMbps, ulMbps, latencyAvg, latencyJitter, packetLossPercent)
+    ? computeQualityScore(dlMbps, ulMbps, latencyAvg, latencyJitter, packetLossPercent, useCase)
     : null;
 
   const categories = hasData
@@ -139,14 +151,13 @@ export default function QualityScores({
     <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs">
       <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-4 pb-2 border-b border-hairline">
         <span>NETWORK QUALITY SCORE</span>
-        <InfoTooltip content="Composite – score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical <25." />
+        <InfoTooltip content="Composite score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical below 25." />
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-8">
         {/* Circular gauge */}
         <div className="relative flex-shrink-0">
           <svg width="130" height="130" viewBox="0 0 120 120" role="img" aria-label={score ? `Network quality score: ${score.total} out of 100. Grade: ${score.grade}` : "Network quality score"}>
-            {/* Background track */}
             <circle
               cx="60"
               cy="60"
@@ -155,7 +166,6 @@ export default function QualityScores({
               stroke="var(--color-hairline)"
               strokeWidth="8"
             />
-            {/* Score arc */}
             <circle
               cx="60"
               cy="60"
@@ -182,7 +192,6 @@ export default function QualityScores({
 
         {/* Category breakdown + grade */}
         <div className="flex flex-col gap-4 flex-1 w-full">
-          {/* Grade badge */}
           {score && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono text-mute uppercase tracking-wider">Grade:</span>
@@ -193,9 +202,7 @@ export default function QualityScores({
           {/* Category ratings */}
           <div className="grid grid-cols-3 gap-4 text-center divide-x divide-hairline">
             <div className="px-2 flex flex-col gap-1">
-              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
-                Streaming
-              </span>
+              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">Streaming</span>
               <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.streaming.color}`}>
                 {categories.streaming.icon === "check" && <Check className="w-3.5 h-3.5" />}
                 {categories.streaming.icon === "minus" && <Minus className="w-3.5 h-3.5" />}
@@ -204,9 +211,7 @@ export default function QualityScores({
               </span>
             </div>
             <div className="px-2 flex flex-col gap-1">
-              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
-                Gaming
-              </span>
+              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">Gaming</span>
               <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.gaming.color}`}>
                 {categories.gaming.icon === "check" && <Check className="w-3.5 h-3.5" />}
                 {categories.gaming.icon === "minus" && <Minus className="w-3.5 h-3.5" />}
@@ -215,9 +220,7 @@ export default function QualityScores({
               </span>
             </div>
             <div className="px-2 flex flex-col gap-1">
-              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">
-                Video Chat
-              </span>
+              <span className="text-[10px] font-mono text-mute uppercase tracking-wider">Video Chat</span>
               <span className={`text-sm font-bold transition-colors duration-150 flex items-center justify-center gap-1 ${categories.chatting.color}`}>
                 {categories.chatting.icon === "check" && <Check className="w-3.5 h-3.5" />}
                 {categories.chatting.icon === "minus" && <Minus className="w-3.5 h-3.5" />}

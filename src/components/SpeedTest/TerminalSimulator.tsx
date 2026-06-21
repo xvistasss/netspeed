@@ -5,7 +5,7 @@ interface TerminalSimulatorProps {
   activeProgressLine: string | null;
   cliInput: string;
   setCliInput: (v: string) => void;
-  handleCliSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  handleCliSubmit: (e: React.SubmitEvent) => void;
   phase: string;
   terminalBodyRef: RefObject<HTMLDivElement | null>;
 }
@@ -20,7 +20,7 @@ export default function TerminalSimulator({
   terminalBodyRef,
 }: TerminalSimulatorProps) {
   return (
-    <div className="lg:col-span-4 w-full flex flex-1 flex-col bg-[#0a0a0a] rounded-lg border border-hairline overflow-hidden shadow-md lg:sticky lg:top-20">
+    <div className="lg:col-span-4 w-full flex flex-col bg-[#0a0a0a] rounded-lg border border-hairline overflow-hidden shadow-md lg:sticky lg:top-20">
       {/* macOS window header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#222222] bg-[#171717] select-none">
         <div className="flex items-center gap-1.5">
@@ -28,30 +28,30 @@ export default function TerminalSimulator({
           <span className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e] opacity-80" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#27c93f] opacity-80" />
         </div>
-        <span className="text-[10px] font-mono text-mute tracking-wider uppercase">speedtest-cli --terminal</span>
+        <span className="text-[10px] font-mono text-[#888888] tracking-wider uppercase">speedtest-cli</span>
         <div className="w-10" />
       </div>
 
       {/* Terminal output stream body */}
       <div
         ref={terminalBodyRef}
-        className="h-full max-h-[calc(100vh-200px)] overflow-y-scroll p-4 flex flex-col gap-1.5 text-left font-mono text-[11px] leading-relaxed text-[#fafafa]"
+        className="h-full max-h-[calc(100vh-200px)] overflow-y-auto p-4 flex flex-col gap-1.5 text-left font-mono text-[11px] leading-relaxed text-[#fafafa]"
       >
         {terminalLogs.map((log, index) => {
-          let style: React.CSSProperties = { color: "#fafafa" };
-          if (log.startsWith("$")) style = { color: "#50e3c2", fontWeight: "bold" };
-          else if (log.includes("[OK]")) style = { color: "#0070f3", fontWeight: "500" };
-          else if (log.includes("[PROBE]")) style = { color: "#888888" };
-          else if (log.includes("[ERROR]") || log.startsWith("Error:")) style = { color: "#ee0000" };
+          let className = "text-[#fafafa]";
+          if (log.startsWith("$")) className = "text-[#50e3c2] font-bold";
+          else if (log.includes("[OK]")) className = "text-[#3291ff] font-medium";
+          else if (log.includes("[PROBE]")) className = "text-[#888888]";
+          else if (log.includes("[ERROR]") || log.startsWith("Error:")) className = "text-[#ff1a1a]";
 
           return (
-            <div key={index} style={style} className="whitespace-pre-wrap">
+            <div key={index} className={`whitespace-pre-wrap ${className}`}>
               {log}
             </div>
           );
         })}
         {activeProgressLine && (
-          <div style={{ color: "#e2e8f0" }} className="animate-pulse whitespace-pre-wrap">
+          <div className="text-[#e2e8f0] animate-pulse whitespace-pre-wrap">
             {activeProgressLine}
           </div>
         )}
@@ -62,14 +62,15 @@ export default function TerminalSimulator({
         onSubmit={handleCliSubmit}
         className="flex items-center gap-1.5 px-4 py-3 border-t border-[#222222]/80 bg-[#0c0c0c] text-[11px] font-mono text-[#00dfd8]"
       >
-        <span>$</span>
+        <span aria-hidden="true">$</span>
+        <label className="sr-only">Terminal command input</label>
         <input
           type="text"
           value={cliInput}
           onChange={(e) => setCliInput(e.target.value)}
-          disabled={false}
           placeholder={phase !== "idle" && phase !== "complete" && phase !== "error" ? "Type 'stop' to cancel..." : "Type 'run' or 'help'..."}
           className="flex-1 bg-transparent border-none outline-hidden text-[#fafafa] font-mono p-0 focus:ring-0 text-[11px]"
+          aria-label="Terminal command input"
         />
       </form>
     </div>

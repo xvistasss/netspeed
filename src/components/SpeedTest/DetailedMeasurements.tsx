@@ -5,11 +5,12 @@ import {
   calculateMedian,
   calculateMin,
   calculateMax,
-  calculateJitter,
+  calculateJitterMASD,
   calculateStdDev,
   calculatePercentile,
 } from "../../utils/speedTestUtils";
 import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
+import InfoTooltip from "./InfoTooltip";
 
 interface DetailedMeasurementsProps {
   activeTab: "latency" | "packetLoss" | "download" | "upload";
@@ -68,7 +69,7 @@ export default function DetailedMeasurements({
                     role="tab"
                     aria-selected={isActive}
                     aria-controls={`panel-${tab}`}
-                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono select-none cursor-pointer transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary ${
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-mono select-none cursor-pointer transition-[color,background-color,box-shadow] duration-150 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                       isActive
                         ? "bg-primary text-on-primary font-semibold shadow-xs"
                         : "text-mute hover:text-ink"
@@ -112,7 +113,10 @@ export default function DetailedMeasurements({
                   MAX (MS)
                 </th>
                 <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
-                  JITTER (MS)
+                  <span className="flex items-center gap-1">
+                    JITTER (MASD)
+                    <InfoTooltip content="MASD (Mean Absolute Successive Differences) measures the average absolute difference between consecutive latency samples. This is more robust to outliers than RFC 3550 RMS jitter, making it suitable for browser-based measurements where GC pauses can cause spikes." />
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -155,7 +159,7 @@ export default function DetailedMeasurements({
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {unloadedPingStats.latencies.length > 0
-                    ? calculateJitter(unloadedPingStats.latencies).toFixed(1)
+                    ? calculateJitterMASD(unloadedPingStats.latencies).toFixed(1)
                     : "\u2014"}
                 </td>
               </tr>
@@ -197,7 +201,7 @@ export default function DetailedMeasurements({
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {dlLoadedPingStats.latencies.length > 0
-                    ? calculateJitter(dlLoadedPingStats.latencies).toFixed(1)
+                    ? calculateJitterMASD(dlLoadedPingStats.latencies).toFixed(1)
                     : "\u2014"}
                 </td>
               </tr>
@@ -239,7 +243,7 @@ export default function DetailedMeasurements({
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {ulLoadedPingStats.latencies.length > 0
-                    ? calculateJitter(ulLoadedPingStats.latencies).toFixed(1)
+                    ? calculateJitterMASD(ulLoadedPingStats.latencies).toFixed(1)
                     : "\u2014"}
                 </td>
               </tr>
@@ -359,11 +363,11 @@ export default function DetailedMeasurements({
                 const bins = [
                   {
                     name: "100 kB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize <= 200 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize <= 500 * 1024,
                   },
                   {
                     name: "1 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize > 200 * 1024 && r.phaseSize <= 5 * 1024 * 1024,
+                    filter: (r: SpeedTestRequest) => r.phaseSize > 500 * 1024 && r.phaseSize <= 5 * 1024 * 1024,
                   },
                   {
                     name: "10 MB",

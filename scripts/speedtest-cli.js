@@ -21,7 +21,7 @@ const MUTE = '\x1b[90m';
 // Configuration matching the web UI
 const CONFIG = {
   PING_ITERATIONS: 15,
-  PING_INTERVAL_MS: 60,
+  PING_INTERVAL_MS: 80,
   DOWNLOAD_WARMUP_MS: 1500,
   DOWNLOAD_RAMP_MS: 2500,
   DOWNLOAD_MEASURE_MS: 10000,
@@ -36,9 +36,9 @@ const CONFIG = {
   UPLOAD_PEAK_MS: 3000,
   UPLOAD_MIN_CHUNK: 64 * 1024,
   UPLOAD_MAX_CHUNK: 2 * 1024 * 1024,
-  PARALLEL_STREAMS: 6,
+  PARALLEL_STREAMS: 1,
   PACKET_LOSS_PINGS: 50,
-  PACKET_LOSS_INTERVAL_MS: 100,
+  PACKET_LOSS_INTERVAL_MS: 150,
 };
 
 function sleep(ms) {
@@ -47,7 +47,12 @@ function sleep(ms) {
 
 function calculateTrimmedMean(arr, trimPercent = 0.1) {
   if (arr.length === 0) return 0;
-  if (arr.length <= 3) return arr.reduce((a, b) => a + b, 0) / arr.length;
+  if (arr.length <= 10) {
+    // Use median for small samples (more robust)
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
   const sorted = [...arr].sort((a, b) => a - b);
   const trimCount = Math.max(1, Math.floor(sorted.length * trimPercent));
   const trimmed = sorted.slice(trimCount, sorted.length - trimCount);
@@ -57,11 +62,12 @@ function calculateTrimmedMean(arr, trimPercent = 0.1) {
 
 function calculateJitter(arr) {
   if (arr.length <= 1) return 0;
-  let sumDiffs = 0;
+  let sumSquaredDiffs = 0;
   for (let i = 1; i < arr.length; i++) {
-    sumDiffs += Math.abs(arr[i] - arr[i - 1]);
+    const diff = arr[i] - arr[i - 1];
+    sumSquaredDiffs += diff * diff;
   }
-  return sumDiffs / (arr.length - 1);
+  return Math.sqrt(sumSquaredDiffs / (arr.length - 1));
 }
 
 function formatMbps(bps) {
@@ -91,6 +97,10 @@ async function main() {
     clientInfo = await res.json();
     console.log(`   IP:      ${GREEN}${clientInfo.ip}${RESET} (${clientInfo.org || 'Unknown ISP'})`);
     console.log(`   Loc:     ${GREEN}${clientInfo.city}, ${clientInfo.region}, ${clientInfo.country}${RESET}`);
+    
+    // Detect IPv4 vs IPv6
+    const ipVersion = clientInfo.ip.includes(':') ? 'IPv6' : 'IPv4';
+    console.log(`   Network: ${GREEN}${ipVersion}${RESET}`);
   } catch (err) {
     console.log(`   ${YELLOW}IP/Geolocation detection failed. Using defaults.${RESET}`);
     clientInfo = { latitude: 0, longitude: 0, ip: '127.0.0.1', org: 'Local Loopback' };
@@ -223,7 +233,6 @@ async function main() {
   let totalDlBytes = 0;
   let measurementBytes = 0;
   let measurementStartTime = null;
-  let measurementPhaseActive = false;
   const allInstantaneousSpeeds = [];
 
   for (const phase of phases) {
@@ -242,7 +251,7 @@ async function main() {
     while (performance.now() - phaseStart < phase.duration) {
       const start = performance.now();
       try {
-        const url = `${BASE_URL}/api/download?size=${phase.size}&region=${best.region}&serverId=${best.id}&clientLat=${clat}&clientLon=${clon}&basePing=${avgPing}&cb=${Date.now()}-${Math.random()}`;
+        const url = `https://speed.cloudflare.com/__down?bytes=${phase.size}&region=${best.region}&serverId=${best.id}&cb=${Date.now()}-${Math.random()}`;
         const res = await fetch(url, {
           headers: { "Cache-Control": "no-store, no-cache" },
         });
@@ -328,7 +337,7 @@ async function main() {
 
       const start = performance.now();
       try {
-        const url = `${BASE_URL}/api/upload?region=${best.region}&serverId=${best.id}&clientLat=${clat}&clientLon=${clon}&basePing=${avgPing}&cb=${Date.now()}-${Math.random()}`;
+        const url = `https://speed.cloudflare.com/__up?bytes=${chunkSize}&region=${best.region}&serverId=${best.id}&cb=${Date.now()}-${Math.random()}`;
         const res = await fetch(url, {
           method: 'POST',
           body: uploadData,

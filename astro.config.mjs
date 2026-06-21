@@ -18,7 +18,7 @@ export default defineConfig({
   adapter: cloudflare(),
 
   security: {
-    checkOrigin: false
+    checkOrigin: true
   },
 
   vite: {

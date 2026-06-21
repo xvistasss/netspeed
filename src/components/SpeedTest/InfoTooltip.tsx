@@ -46,22 +46,17 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       const spaceBelow = vh - triggerRect.bottom - gap;
 
       let y: number;
-      let pos: "top" | "bottom";
 
       if (spaceAbove >= tooltipH + margin) {
         y = triggerRect.top - gap - tooltipH;
-        pos = "top";
       } else if (spaceBelow >= tooltipH + margin) {
         y = triggerRect.bottom + gap;
-        pos = "bottom";
       } else if (spaceBelow >= spaceAbove) {
         y = triggerRect.bottom + gap;
-        pos = "bottom";
         // Clamp so bottom edge stays in viewport
         if (y + tooltipH > vh - margin) y = vh - margin - tooltipH;
       } else {
         y = triggerRect.top - gap - tooltipH;
-        pos = "top";
         // Clamp so top edge stays below the header
         if (y < headerH + margin) y = headerH + margin;
       }
@@ -131,7 +126,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
         onBlur={() => setVisible(false)}
         onClick={() => setVisible(!visible)}
         type="button"
-        className="w-4 h-4 rounded-full border border-hairline-strong text-mute flex items-center justify-center text-[10px] font-mono hover:bg-canvas-soft-2 hover:text-ink focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-primary transition-[color,background-color,border-color] duration-150 cursor-pointer select-none"
+        className="w-4 h-4 rounded-full border border-hairline-strong text-mute flex items-center justify-center text-[10px] font-mono hover:bg-canvas-soft-2 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 transition-[color,background-color,border-color] duration-150 cursor-pointer select-none"
         aria-label="More information"
         aria-describedby={tooltipId}
         aria-expanded={visible}
