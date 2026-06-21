@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { DetailPingStats, SpeedTestRequest } from "../../utils/speedTestUtils";
+import type { DetailPingStats, SpeedTestRequest } from "../utils/speedTestUtils";
 import {
   calculateMean,
   calculateMedian,
@@ -8,7 +8,7 @@ import {
   calculateJitterMASD,
   calculateStdDev,
   calculatePercentile,
-} from "../../utils/speedTestUtils";
+} from "../utils/speedTestUtils";
 import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 import InfoTooltip from "./InfoTooltip";
 

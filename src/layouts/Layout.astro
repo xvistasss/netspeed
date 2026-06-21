@@ -1,18 +1,16 @@
 ---
 import "../styles/global.css";
-import Header from "../components/Header.astro";
-import Footer from "../components/Footer.astro";
+import Header from "./Header.astro";
+import Footer from "./Footer.astro";
 
 interface Props {
   title?: string;
   description?: string;
-  showServerStatus?: boolean;
   showMeshGradient?: boolean;
 }
 const {
   title = "Network Speed Test — NetSpeed Professional Internet Speed Test",
   description = "Run a highly accurate network speed test tool to check your internet download, upload, and latency speeds via optimal server selection. Clean, ads-free, and professional.",
-  showServerStatus = false,
   showMeshGradient = false,
 } = Astro.props;
 ---
@@ -86,7 +84,7 @@ const {
       )
     }
     <div class="relative z-10 flex flex-col min-h-screen">
-      <Header showServerStatus={showServerStatus} />
+      <Header />
       <main id="main-content" class="flex-1">
         <slot />
       </main>

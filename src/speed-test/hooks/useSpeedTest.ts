@@ -6,7 +6,7 @@ import type {
   ClientInfo,
   DetailPingStats,
   SpeedTestRequest,
-} from "../../utils/speedTestUtils";
+} from "../utils/speedTestUtils";
 import {
   sleep,
   isLocalHost,
@@ -15,9 +15,9 @@ import {
   calculateMax,
   getUploadStreamCount,
   measureWebRTCSTUN,
-} from "../../utils/speedTestUtils";
-import { CONFIG } from "../../utils/speedTestConfig";
-import { selectNearestEdge, describeServerSelection, type ServerSelectionResult } from "../../utils/serverSelection";
+} from "../utils/speedTestUtils";
+import { CONFIG } from "../utils/speedTestConfig";
+import { selectNearestEdge, describeServerSelection, type ServerSelectionResult } from "../utils/serverSelection";
 
 // Lazy-loaded Chart.js module — only loaded when first test starts
 let ChartJSModule: typeof import("chart.js") | null = null;
@@ -767,7 +767,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     const region = edgeNode.region;
 
     workerRef.current = new Worker(
-      new URL("../../workers/speedtest.worker.ts", import.meta.url),
+      new URL("../worker/speedtest.worker.ts", import.meta.url),
       { type: "module" },
     );
 

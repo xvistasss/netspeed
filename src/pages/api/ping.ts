@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { checkRateLimit, getClientIP, createRateLimitHeaders } from "../../utils/rateLimiter";
+import { checkRateLimit, getClientIP, createRateLimitHeaders } from "./rateLimiter";
 
 // Optimized CORS headers for ping endpoint.
 // Minimal headers to reduce response size and latency.

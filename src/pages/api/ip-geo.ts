@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { isLocalHost } from "../../utils/speedTestUtils";
-import { CONFIG } from "../../utils/speedTestConfig";
+import { isLocalHost } from "../../speed-test/utils/speedTestUtils";
+import { CONFIG } from "../../speed-test/utils/speedTestConfig";
 
 // Response headers that prevent ALL caching layers from storing the result.
 const NO_CACHE_HEADERS: Record<string, string> = {
@@ -28,7 +28,7 @@ async function fetchRealPublicIp(): Promise<string | null> {
       const data = await res.json();
       if (data?.ip) return data.ip;
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // 2. api.bigdatacloud.net — fallback
   try {
@@ -43,7 +43,7 @@ async function fetchRealPublicIp(): Promise<string | null> {
       const data = await res.json();
       if (data?.ip) return data.ip;
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // 3. ifconfig.me — plain text IP
   try {
@@ -58,7 +58,7 @@ async function fetchRealPublicIp(): Promise<string | null> {
       const text = (await res.text()).trim();
       if (/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return text;
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // 4. icanhazip.com — plain text IP
   try {
@@ -73,7 +73,7 @@ async function fetchRealPublicIp(): Promise<string | null> {
       const text = (await res.text()).trim();
       if (/^\d{1,3}(\.\d{1,3}){3}$/.test(text)) return text;
     }
-  } catch (_) {}
+  } catch (_) { }
 
   return null;
 }
@@ -271,10 +271,6 @@ export const GET: APIRoute = async ({ request, url }) => {
     cf?.asOrganization ||
     "Edge Network Provider";
 
-  if (org !== "Edge Network Provider") {
-    console.log(`[ip-geo] ISP from Cloudflare edge: ${org} (ASN: ${asn || "N/A"}, IP: ${clientIp})`);
-  }
-
   // Fall back to request headers / serverless cf object for coordinates and city if not resolved yet
   if (latitude === null || longitude === null) {
     const headerLat = headers.get("x-vercel-ip-latitude") || headers.get("cf-latitude") || cf?.latitude;
@@ -323,9 +319,6 @@ export const GET: APIRoute = async ({ request, url }) => {
     if (!city || city === "Unknown City") city = geoFallback.city;
     if (!region || region === "Unknown Region") region = geoFallback.region;
     if (!countryCode || countryCode === "Unknown") countryCode = geoFallback.countryCode;
-    if (org !== prevOrg) {
-      console.log(`[ip-geo] ISP corrected: "${prevOrg}" → "${org}" (IP: ${clientIp})`);
-    }
   }
 
   // Translate 2-letter country code into full English country name

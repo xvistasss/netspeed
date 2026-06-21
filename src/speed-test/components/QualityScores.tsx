@@ -1,5 +1,5 @@
 import InfoTooltip from "./InfoTooltip";
-import type { TestPhase } from "../../utils/speedTestUtils";
+import type { TestPhase } from "../utils/speedTestUtils";
 import { Check, Minus, X } from "lucide-react";
 
 interface QualityScoresProps {

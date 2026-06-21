@@ -9,12 +9,12 @@ import {
   Square,
   Loader2,
 } from "lucide-react";
-import InfoTooltip from "./SpeedTest/InfoTooltip";
-import QualityScores from "./SpeedTest/QualityScores";
-import DetailedMeasurements from "./SpeedTest/DetailedMeasurements";
-import TechnicalLogs from "./SpeedTest/TechnicalLogs";
-import TerminalSimulator from "./SpeedTest/TerminalSimulator";
-import { useSpeedTest } from "./SpeedTest/useSpeedTest";
+import InfoTooltip from "./InfoTooltip";
+import QualityScores from "./QualityScores";
+import DetailedMeasurements from "./DetailedMeasurements";
+import TechnicalLogs from "./TechnicalLogs";
+import TerminalSimulator from "./TerminalSimulator";
+import { useSpeedTest } from "../hooks/useSpeedTest";
 import { formatSpeed } from "../utils/speedTestUtils";
 
 export default function SpeedTest() {
