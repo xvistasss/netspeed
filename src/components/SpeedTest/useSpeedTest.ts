@@ -194,11 +194,39 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setIsTerminalOpen(customEvent.detail.open);
     };
     window.addEventListener("toggle-terminal", handleTerminalToggle);
+
+    // Re-detect location when network changes (e.g., WiFi → cellular, VPN on/off).
+    // The Network Information API fires "change" when the device switches networks.
+    // Without this, the ISP/org info stays stale after a network switch.
+    const conn = (navigator as any).connection;
+    let networkChangeHandler: (() => void) | null = null;
+    if (conn && typeof conn.addEventListener === "function") {
+      networkChangeHandler = () => {
+        detectClientLocation();
+      };
+      conn.addEventListener("change", networkChangeHandler);
+    }
+
+    // Re-detect location when user returns to tab (visibilitychange).
+    // This catches network switches that happened while the tab was hidden —
+    // the browser won't fire "change" if the effective connection type didn't
+    // change (e.g., switching from one WiFi to another).
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        detectClientLocation();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       if (workerRef.current) workerRef.current.terminate();
       destroyCharts();
       window.removeEventListener("theme-changed", handleThemeChange);
       window.removeEventListener("toggle-terminal", handleTerminalToggle);
+      if (conn && networkChangeHandler && typeof conn.removeEventListener === "function") {
+        conn.removeEventListener("change", networkChangeHandler);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -471,7 +499,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
       const timeout = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
-        { signal: controller.signal }
+        { signal: controller.signal, cache: "no-store" }
       );
       clearTimeout(timeout);
       if (res.ok) {
@@ -495,10 +523,22 @@ export function useSpeedTest(): UseSpeedTestReturn {
     if (region) url += `&region=${encodeURIComponent(region)}`;
     if (countryCode) url += `&countryCode=${encodeURIComponent(countryCode)}`;
     try {
-      const geoRes = await fetch(url);
+      const geoRes = await fetch(url, { cache: "no-store" });
       if (geoRes.ok) {
         const data = await geoRes.json();
-        const preciseData: ClientInfo = { ...data, isPrecise: true };
+        // Only update location fields — preserve existing ip, org, isLocal, and
+        // connection info that were already correctly resolved by detectClientLocation.
+        const existing = stateRef.current.clientInfo;
+        if (!existing) return null;
+        const preciseData: ClientInfo = {
+          ...existing,
+          city: data.city || existing.city,
+          region: data.region || existing.region,
+          country: data.country || existing.country,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          isPrecise: true,
+        };
         setClientInfo(preciseData);
         stateRef.current.clientInfo = preciseData;
         setStatusMessage(`Precise location loaded: ${preciseData.city}, ${preciseData.country}`);
@@ -511,29 +551,38 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   const detectClientLocation = useCallback(async () => {
     try {
-      setStatusMessage("Detecting location…");
-
-      // IP-based detection only — no geolocation permission requested here.
-      // Precise browser geolocation is requested only when the user starts a test.
-      let url = "/api/ip-geo";
-      const geoRes = await fetch(url);
-      let data = await geoRes.json();
-
-      // On localhost, the server sees 127.0.0.1. Try to get the real public IP.
-      if (data.isLocal) {
-        try {
-          const ipRes = await fetch("https://api.ipify.org?format=json");
-          if (ipRes.ok) {
-            const ipData = await ipRes.json();
-            if (ipData?.ip) {
-              const upgradeRes = await fetch(`/api/ip-geo?ip=${ipData.ip}`);
-              if (upgradeRes.ok) data = await upgradeRes.json();
-            }
-          }
-        } catch (e) { console.warn("Client-side public IP lookup failed:", e); }
+      // Skip status message if precise location already obtained — avoids UI flicker
+      // on network change / tab visibility change re-detections.
+      const alreadyPrecise = stateRef.current.clientInfo?.isPrecise;
+      if (!alreadyPrecise) {
+        setStatusMessage("Detecting location…");
       }
 
-      const initialData: ClientInfo = { ...data, isPrecise: false };
+      // "cache: no-store" prevents the browser fetch cache from storing
+      // responses. This is a request-level hint — no custom headers needed.
+      //
+      // NOTE: Do NOT add Cache-Control as a *request* header to external APIs
+      // (ipify, bigdatacloud, etc.). Custom headers trigger a CORS preflight
+      // OPTIONS request, and most public APIs don't handle that. Only our own
+      // /api/* endpoints set Cache-Control as a *response* header.
+      const noCacheOptions: RequestInit = { cache: "no-store" };
+
+      // Single fetch — the server determines the real IP from cf-connecting-ip
+      // in production, or falls back to the ip query param on localhost.
+      let data: any;
+      const geoRes = await fetch("/api/ip-geo", noCacheOptions);
+      if (geoRes.ok) data = await geoRes.json();
+      if (!data) {
+        data = { isLocal: false, ip: "Unknown", city: "Unknown", region: "Unknown", country: "Unknown", org: "Unknown", latitude: 0, longitude: 0 };
+      }
+
+      // Preserve precise location if already obtained — only update IP/org/connection info.
+      // Without this guard, every re-detection (network change, tab focus, test start)
+      // would overwrite precise city/region with approximate IP-based data.
+      const existing = stateRef.current.clientInfo;
+      const initialData: ClientInfo = existing?.isPrecise
+        ? { ...data, isPrecise: true, city: existing.city, region: existing.region, country: existing.country, latitude: existing.latitude, longitude: existing.longitude }
+        : { ...data, isPrecise: false };
 
       if ("connection" in navigator) {
         const conn = (navigator as any).connection;
@@ -557,8 +606,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
           ].filter(Boolean));
         }
       } else {
-        // Firefox/Safari: Network Information API not available.
-        // Use heuristic detection from connection timing.
         appendLogs([
           "[INFO] Network Information API unavailable (Firefox/Safari)",
           "[INFO] Using heuristic bandwidth estimation from warmup timing",
@@ -584,9 +631,9 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setStatusMessage("Selecting optimal edge server...");
 
     // Resolve nearest Cloudflare edge from client geolocation
-    const clientInfo = stateRef.current.clientInfo;
-    if (clientInfo?.latitude && clientInfo?.longitude) {
-      CURRENT_EDGE = selectNearestEdge(clientInfo.latitude, clientInfo.longitude);
+    const currentClient = stateRef.current.clientInfo;
+    if (currentClient?.latitude && currentClient?.longitude) {
+      CURRENT_EDGE = selectNearestEdge(currentClient.latitude, currentClient.longitude);
       appendLogs([
         `[INFO] ${describeServerSelection(CURRENT_EDGE)}`,
         `[INFO] Top edges: ${CURRENT_EDGE.allEdges.map((e) => `${e.city} (${e.distanceKm}km)`).join(", ")}`,
@@ -603,7 +650,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
       const warmupUrl = `${origin}/api/ping?warmup=true&cb=${Date.now()}`;
       const startWarmup = performance.now();
       const res = await fetch(warmupUrl, { cache: "no-store" });
-      await res.text();
+      // Handle both empty body (204) and text body responses
+      if (res.status !== 204) {
+        await res.text();
+      }
       hostLatency = performance.now() - startWarmup;
     } catch (_) { hostLatency = 0; }
     if (isLocalHost(window.location.hostname)) hostLatency = Math.max(1.5, hostLatency);
@@ -642,6 +692,11 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     setIsCancelling(false);
     setIsStarting(true);
+
+    // Re-detect location at the start of each test to ensure fresh ISP info,
+    // even if the user switched networks between tests without reloading.
+    await detectClientLocation();
+
     let currentClientInfo = stateRef.current.clientInfo;
     let clientLat = currentClientInfo?.latitude || 0;
     let clientLon = currentClientInfo?.longitude || 0;
@@ -984,7 +1039,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     };
 
     workerRef.current.postMessage({ type: "START_PING", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
-  }, [phase, appendLogs, getPreciseCoords, upgradeToPreciseLocation, warmupServer, initCharts, updateThroughputChart]);
+  }, [phase, appendLogs, getPreciseCoords, upgradeToPreciseLocation, warmupServer, initCharts, updateThroughputChart, detectClientLocation]);
 
   const runPacketLossCheck = useCallback((realLossPercent: number) => {
     setPhase("complete");

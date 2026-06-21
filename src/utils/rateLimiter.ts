@@ -1,5 +1,11 @@
-// Simple in-memory rate limiter for API endpoints
-// Uses sliding window algorithm to limit requests per IP
+// Rate limiter for API endpoints
+// NOTE: In Cloudflare Workers, in-memory state is per-isolate and NOT shared
+// across requests. This rate limiter uses a best-effort approach with generous
+// limits to avoid false positives. For strict rate limiting, use Cloudflare's
+// built-in rate limiting or Durable Objects.
+//
+// Strategy: Use generous limits that work across Worker instances.
+// The rate limiter is mainly a safety net against abuse, not a strict limiter.
 
 interface RateLimitEntry {
   count: number;
@@ -14,17 +20,28 @@ interface RateLimiterConfig {
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
 // Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetTime) {
-      rateLimitStore.delete(key);
+// NOTE: This only cleans the current isolate's memory. Other isolates
+// will have their own cleanup cycles.
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitStore.entries()) {
+      if (now > entry.resetTime) {
+        rateLimitStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  }, 5 * 60 * 1000);
+}
 
 /**
- * Check if a request is allowed under the rate limit
+ * Check if a request is allowed under the rate limit.
+ *
+ * IMPORTANT: In Cloudflare Workers, this is per-isolate, not global.
+ * Each Worker isolate has its own rateLimitStore. This means:
+ * - A user hitting different isolates may get separate rate limit buckets
+ * - The rate limit is best-effort, not strict
+ * - For strict limits, use Cloudflare's built-in rate limiting rules
+ *
  * @param identifier - Unique identifier (e.g., IP address)
  * @param config - Rate limit configuration
  * @returns { allowed: boolean, remaining: number, resetTime: number }
@@ -65,6 +82,27 @@ export function checkRateLimit(
     remaining: config.maxRequests - entry.count,
     resetTime: entry.resetTime,
   };
+}
+
+/**
+ * Create a rate limit response with appropriate headers.
+ * Returns a Response object ready to send to the client.
+ */
+export function createRateLimitResponse(
+  rateLimit: { allowed: boolean; remaining: number; resetTime: number },
+  corsHeaders: Record<string, string>
+): Response | null {
+  if (rateLimit.allowed) return null;
+
+  const retryAfter = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+  return new Response("Rate limit exceeded", {
+    status: 429,
+    headers: {
+      ...corsHeaders,
+      ...Object.fromEntries(createRateLimitHeaders(rateLimit.remaining, rateLimit.resetTime)),
+      "Retry-After": retryAfter.toString(),
+    },
+  });
 }
 
 /**

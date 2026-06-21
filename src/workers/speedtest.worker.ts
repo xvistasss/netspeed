@@ -182,7 +182,11 @@ async function runPingTest(
         cache: "no-store",
         signal,
       });
-      await res.text();
+      // Handle both empty body (204) and text body responses
+      // Don't await text() for 204 responses to save time
+      if (res.status !== 204) {
+        await res.text();
+      }
       warmupLatencies.push(performance.now() - startWarmup);
     }
     hostLatency = warmupLatencies.reduce((a, b) => a + b, 0) / warmupLatencies.length;
@@ -196,61 +200,80 @@ async function runPingTest(
     if (isCancelled || signal.aborted) break;
 
     pingSent++;
-    const start = performance.now();
-    try {
-      const url = buildPingUrl(`ping-${i}`);
-      const response = await fetch(url, {
-        method: "GET",
-        cache: "no-store",
-        signal,
-      });
+    let measurementCompleted = false;
+    
+    // Retry logic: try up to 2 times for each ping measurement
+    // This helps with transient network issues on Cloudflare Workers
+    for (let retry = 0; retry < 2 && !measurementCompleted; retry++) {
+      const start = performance.now();
+      try {
+        const url = buildPingUrl(`ping-${i}${retry > 0 ? `-retry${retry}` : ''}`);
+        const response = await fetch(url, {
+          method: "GET",
+          cache: "no-store",
+          signal,
+        });
 
-      if (!response.ok) {
-        throw new Error("Ping request failed");
+        if (!response.ok) {
+          throw new Error("Ping request failed");
+        }
+
+        // Handle both empty body (204) and text body responses
+        // Don't await text() for 204 responses to save time
+        if (response.status !== 204) {
+          await response.text();
+        }
+
+        const end = performance.now();
+        let latency = end - start;
+        if (isLocalHost(baseUrl)) {
+          latency = Math.max(1.5, latency);
+        }
+        latencies.push(latency);
+
+        jitter = calculateJitter(latencies);
+
+        // Estimate ICMP equivalent: HTTP_RTT - TLS overhead (~1.5ms) - HTTP framing (~0.5ms)
+        const avgIcmpEquivalent = latencies.length > 0
+          ? Math.max(0, calculateMean(latencies) - 2.0)
+          : 0;
+
+        // Stream progress
+        self.postMessage({
+          type: "PING_PROGRESS",
+          iteration: i + 1,
+          totalIterations: iterations,
+          latency,
+          jitter,
+          latencies: [...latencies],
+          pingSent,
+          pingLost,
+          avgIcmpEquivalent,
+        });
+
+        measurementCompleted = true;
+      } catch (err) {
+        if (signal.aborted) throw err;
+        
+        // Only count as lost if all retries fail
+        if (retry === 1) {
+          pingLost++;
+          self.postMessage({
+            type: "PING_FAILED_ITERATION",
+            iteration: i + 1,
+            pingSent,
+            pingLost,
+          });
+        } else {
+          // Brief delay before retry to avoid hammering the server
+          await sleep(20);
+        }
       }
-
-      await response.text(); // Fully read response body
-
-      const end = performance.now();
-      let latency = end - start;
-      if (isLocalHost(baseUrl)) {
-        latency = Math.max(1.5, latency);
-      }
-      latencies.push(latency);
-
-      jitter = calculateJitter(latencies);
-
-      // Estimate ICMP equivalent: HTTP_RTT - TLS overhead (~1.5ms) - HTTP framing (~0.5ms)
-      const avgIcmpEquivalent = latencies.length > 0
-        ? Math.max(0, calculateMean(latencies) - 2.0)
-        : 0;
-
-      // Stream progress
-      self.postMessage({
-        type: "PING_PROGRESS",
-        iteration: i + 1,
-        totalIterations: iterations,
-        latency,
-        jitter,
-        latencies: [...latencies],
-        pingSent,
-        pingLost,
-        avgIcmpEquivalent,
-      });
-
-      // 80ms interval — prevents HTTP/2 stream queueing while keeping
-      // the test responsive. 60ms was too aggressive on congested links.
-      await sleep(80);
-    } catch (err) {
-      if (signal.aborted) throw err;
-      pingLost++;
-      self.postMessage({
-        type: "PING_FAILED_ITERATION",
-        iteration: i + 1,
-        pingSent,
-        pingLost,
-      });
     }
+
+    // 80ms interval — prevents HTTP/2 stream queueing while keeping
+    // the test responsive. 60ms was too aggressive on congested links.
+    await sleep(80);
   }
 
   const avgIcmpEquivalent = latencies.length > 0
@@ -356,7 +379,10 @@ async function runDownloadTest(
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`;
       const res = await fetch(url, { signal: testSignal, cache: "no-store" });
       if (res.ok) {
-        await res.text();
+        // Handle both empty body (204) and text body responses
+        if (res.status !== 204) {
+          await res.text();
+        }
         let lat = performance.now() - pingStart;
         if (isLocalHost(baseUrl)) {
           lat = Math.max(1.5, lat);
@@ -764,7 +790,10 @@ async function runUploadTest(
         : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`;
       const res = await fetch(url, { signal, cache: "no-store" });
       if (res.ok) {
-        await res.text();
+        // Handle both empty body (204) and text body responses
+        if (res.status !== 204) {
+          await res.text();
+        }
         let lat = performance.now() - pingStart;
         if (isLocalHost(baseUrl)) {
           lat = Math.max(1.5, lat);
@@ -1181,7 +1210,10 @@ async function runPacketLossTest(
       cache: "no-store",
       signal,
     });
-    await warmupRes.text();
+    // Handle both empty body (204) and text body responses
+    if (warmupRes.status !== 204) {
+      await warmupRes.text();
+    }
   } catch (_) {
     // Warmup failure doesn't invalidate the test
   }
@@ -1200,7 +1232,10 @@ async function runPacketLossTest(
       });
 
       if (res.ok) {
-        await res.text();
+        // Handle both empty body (204) and text body responses
+        if (res.status !== 204) {
+          await res.text();
+        }
       } else if (res.status === 429) {
         // Rate limiting — don't count as packet loss, but note it
         serverErrors++;
