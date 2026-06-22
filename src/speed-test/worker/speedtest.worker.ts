@@ -2,14 +2,17 @@
 
 let activeAbortController: AbortController | null = null;
 let isCancelled = false;
-let hostLatency = 0;
 
 import {
   sleep,
   sleepWithAbort,
-  isLocalHost,
   calculateMean,
-  calculateJitter,
+  calculateJitterRMS,
+  calculateFilteredJitter,
+  calculateTrimmedMean,
+  buildDirectLatencyUrl,
+  getLoadedPingInterval,
+  getPacketLossInterval,
 } from "../utils/speedTestUtils";
 import { CONFIG } from "../utils/speedTestConfig";
 
@@ -35,7 +38,7 @@ self.onmessage = async (e: MessageEvent) => {
 
   try {
     if (type === "START_PING") {
-      const { baseUrl, region, serverId, clientLat, clientLon } = e.data;
+      const { baseUrl, region, serverId, clientLat, clientLon, networkType } = e.data;
       await runPingTest(
         baseUrl,
         region,
@@ -43,6 +46,7 @@ self.onmessage = async (e: MessageEvent) => {
         clientLat,
         clientLon,
         activeAbortController.signal,
+        networkType,
       );
     } else if (type === "START_DOWNLOAD") {
       const {
@@ -54,6 +58,7 @@ self.onmessage = async (e: MessageEvent) => {
         basePing,
         dynamicWarmupMs,
         dynamicRampMs,
+        networkType,
       } = e.data;
       await runDownloadTest(
         baseUrl,
@@ -66,6 +71,7 @@ self.onmessage = async (e: MessageEvent) => {
         dynamicWarmupMs || CONFIG.DOWNLOAD_WARMUP_MS,
         dynamicRampMs || CONFIG.DOWNLOAD_RAMP_MS,
         activeAbortController.signal,
+        networkType,
       );
     } else if (type === "START_UPLOAD") {
       const {
@@ -79,6 +85,7 @@ self.onmessage = async (e: MessageEvent) => {
         downloadSpeed,
         dynamicWarmupMs,
         dynamicRampMs,
+        networkType,
       } = e.data;
       await runUploadTest(
         baseUrl,
@@ -92,9 +99,10 @@ self.onmessage = async (e: MessageEvent) => {
         dynamicWarmupMs || CONFIG.UPLOAD_WARMUP_MS,
         dynamicRampMs || CONFIG.UPLOAD_RAMP_MS,
         activeAbortController.signal,
+        networkType,
       );
     } else if (type === "START_PACKET_LOSS") {
-      const { baseUrl, region, serverId, clientLat, clientLon } = e.data;
+      const { baseUrl, region, serverId, clientLat, clientLon, networkType } = e.data;
       await runPacketLossTest(
         baseUrl,
         region,
@@ -102,6 +110,7 @@ self.onmessage = async (e: MessageEvent) => {
         clientLat,
         clientLon,
         activeAbortController.signal,
+        networkType,
       );
     }
   } catch (error: any) {
@@ -132,20 +141,24 @@ self.onmessage = async (e: MessageEvent) => {
 /**
  * 1. Ping & Jitter Test Engine
  *
- * Measures HTTP-level RTT (not ICMP). The browser's HTTP/2 connection pool
- * eliminates repeated TCP/TLS handshakes after the first request, so
- * steady-state pings approximate wire latency + HTTP framing overhead (~1-3ms).
+ * Measures HTTP-level RTT directly against speed.cloudflare.com (__down?bytes=1).
+ * Uses the same Cloudflare edge infrastructure as download/upload tests, ensuring:
+ *   - No Worker cold-start overhead or execution noise
+ *   - Loaded latency shares the HTTP/2 connection pool with data streams
+ *   - Consistent endpoint across all measurement phases
  *
- * Connection warming: 2 rapid requests establish the HTTP/2 connection before
- * measurement begins, ensuring the TCP slow-start and TLS state are settled.
+ * The browser's HTTP/2 connection pool eliminates repeated TCP/TLS handshakes
+ * after the first request, so steady-state pings approximate wire latency +
+ * HTTP framing overhead (~1-3ms).
  */
 async function runPingTest(
-  baseUrl: string,
-  region: string | undefined,
-  serverId: string | undefined,
-  clientLat: number,
-  clientLon: number,
+  _baseUrl: string,
+  _region: string | undefined,
+  _serverId: string | undefined,
+  _clientLat: number,
+  _clientLon: number,
   signal: AbortSignal,
+  _networkType?: string,
 ) {
   const iterations = CONFIG.PING_ITERATIONS;
   const latencies: number[] = [];
@@ -153,47 +166,31 @@ async function runPingTest(
   let pingSent = 0;
   let pingLost = 0;
 
-  const buildPingUrl = (suffix: string) => {
-    const params = new URLSearchParams({
-      cb: `${Date.now()}-${suffix}`,
-    });
-    if (region) params.set("region", region);
-    if (serverId) params.set("serverId", serverId);
-    if (clientLat) params.set("clientLat", String(clientLat));
-    if (clientLon) params.set("clientLon", String(clientLon));
-    return `${baseUrl}/ping?${params.toString()}`;
-  };
-
   // 1. Connection Warm-up — 4 rapid requests to establish HTTP/2 connection.
   // The first request pays the TCP + TLS + HTTP/2 negotiation cost.
   // The second confirms the connection is alive. Third and fourth stabilize.
+  // We measure warmup latencies to calibrate the HTTP→ICMP overhead offset.
   const warmupLatencies: number[] = [];
   try {
-    const warmupUrls = [
-      buildPingUrl("warmup-0"),
-      buildPingUrl("warmup-1"),
-      buildPingUrl("warmup-2"),
-      buildPingUrl("warmup-3"),
-    ];
-    for (const warmupUrl of warmupUrls) {
+    for (let w = 0; w < 4; w++) {
       const startWarmup = performance.now();
-      const res = await fetch(warmupUrl, {
+      const res = await fetch(buildDirectLatencyUrl(`warmup-${w}-${Date.now()}`), {
         method: "GET",
         cache: "no-store",
         signal,
       });
-      // Handle both empty body (204) and text body responses
-      // Don't await text() for 204 responses to save time
       if (res.status !== 204) {
         await res.text();
       }
       warmupLatencies.push(performance.now() - startWarmup);
     }
-    hostLatency = warmupLatencies.reduce((a, b) => a + b, 0) / warmupLatencies.length;
   } catch (_) {
-    // Warmup failures are ignored — no artificial latency floor.
-    hostLatency = 0;
+    // Warmup failures are ignored — measurement will proceed without connection priming.
   }
+
+  // ICMP estimation uses fixed offsets (3ms WiFi, 5ms cellular) when WebRTC is
+  // unavailable. The overhead is constant additive (~2-6ms), NOT proportional to RTT,
+  // so a fixed offset is more accurate than a proportional heuristic.
 
   // 2. Real latency measurements
   for (let i = 0; i < iterations; i++) {
@@ -203,12 +200,11 @@ async function runPingTest(
     let measurementCompleted = false;
     
     // Retry logic: try up to 2 times for each ping measurement
-    // This helps with transient network issues on Cloudflare Workers
     for (let retry = 0; retry < 2 && !measurementCompleted; retry++) {
       const start = performance.now();
       try {
-        const url = buildPingUrl(`ping-${i}${retry > 0 ? `-retry${retry}` : ''}`);
-        const response = await fetch(url, {
+        const suffix = `ping-${i}${retry > 0 ? `-retry${retry}` : ""}-${Date.now()}`;
+        const response = await fetch(buildDirectLatencyUrl(suffix), {
           method: "GET",
           cache: "no-store",
           signal,
@@ -218,25 +214,20 @@ async function runPingTest(
           throw new Error("Ping request failed");
         }
 
-        // Handle both empty body (204) and text body responses
-        // Don't await text() for 204 responses to save time
         if (response.status !== 204) {
           await response.text();
         }
 
-        const end = performance.now();
-        let latency = end - start;
-        if (isLocalHost(baseUrl)) {
-          latency = Math.max(1.5, latency);
-        }
+        const latency = performance.now() - start;
         latencies.push(latency);
 
-        jitter = calculateJitter(latencies);
+        // Use filtered jitter — removes outliers (GC pauses, OS hiccups)
+        // before calculating RFC 3550 RMS jitter
+        jitter = calculateFilteredJitter(latencies, CONFIG.JITTER_OUTLIER_SIGMA);
 
-        // Estimate ICMP equivalent: HTTP_RTT - TLS overhead (~1.5ms) - HTTP framing (~0.5ms)
-        const avgIcmpEquivalent = latencies.length > 0
-          ? Math.max(0, calculateMean(latencies) - 2.0)
-          : 0;
+        // ICMP estimate is now computed by the main thread using network-type-aware logic
+        // Pass raw average here; the main thread applies the appropriate factor
+        const avgIcmpEquivalent = 0;
 
         // Stream progress
         self.postMessage({
@@ -272,21 +263,20 @@ async function runPingTest(
     }
 
     // 80ms interval — prevents HTTP/2 stream queueing while keeping
-    // the test responsive. 60ms was too aggressive on congested links.
+    // the test responsive.
     await sleep(80);
   }
 
-  const avgIcmpEquivalent = latencies.length > 0
-    ? Math.max(0, calculateMean(latencies) - 2.0)
-    : 0;
+  // Final jitter with outlier filtering
+  const finalJitter = calculateFilteredJitter(latencies, CONFIG.JITTER_OUTLIER_SIGMA);
 
   self.postMessage({
     type: "PING_COMPLETE",
     latencies,
-    jitter,
+    jitter: finalJitter,
     pingSent,
     pingLost,
-    avgIcmpEquivalent,
+    avgIcmpEquivalent: 0,
   });
 }
 
@@ -313,6 +303,7 @@ async function runDownloadTest(
   dynamicWarmupMs: number,
   dynamicRampMs: number,
   _signal: AbortSignal,
+  _networkType?: string,
 ) {
   const startTime = performance.now();
   let totalBytesDownloaded = 0;
@@ -325,6 +316,7 @@ async function runDownloadTest(
   const loadedLatencies: number[] = [];
   let loadedJitter = 0;
   let loadedAvg = 0;
+  let loadedIcmpEstimate = 0;
   let dlPingSent = 0;
   let dlPingLost = 0;
 
@@ -360,48 +352,62 @@ async function runDownloadTest(
   let peakStartBytes = 0;
   let peakEndBytes = 0;
 
-  // Background latency pinger under download stress
-  // NOTE: This measures HTTP-level RTT on the SAME TCP connection as data streams.
-  // HTTP/2 multiplexing means pings share the TCP connection with download streams,
-  // which is intentional — it measures how latency degrades when the connection is saturated.
-  // This is different from ICMP ping (which uses a separate network path) and is
-  // the most realistic measure of latency during actual usage.
+  // Background latency pinger under download stress.
+  // Fire-and-forget pattern: send pings without awaiting response, so scheduling
+  // is decoupled from connection pool starvation. This ensures consistent ping
+  // counts even when 6 download streams saturate the HTTP/2 pool.
+  // Adaptive interval: shorter on WiFi/fiber, longer on cellular to avoid self-congestion.
+  const loadedPingInterval = getLoadedPingInterval(_networkType);
   let activePingTimeout: any = null;
-  const runPingLoop = async () => {
-    const elapsed = performance.now() - startTime;
-    if (testSignal.aborted || elapsed >= totalTestMs) return;
+  let nextPingTargetTime = startTime;
+  const activePingControllers: AbortController[] = [];
+
+  const scheduleNextPing = () => {
+    if (!testSignal.aborted && performance.now() - startTime < totalTestMs) {
+      nextPingTargetTime += loadedPingInterval;
+      const delay = Math.max(0, nextPingTargetTime - performance.now());
+      activePingTimeout = setTimeout(runPingLoop, delay);
+    }
+  };
+
+  const runPingLoop = () => {
+    if (testSignal.aborted || performance.now() - startTime >= totalTestMs) return;
 
     dlPingSent++;
     const pingStart = performance.now();
-    try {
-      const url = region
-        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`
-        : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-dl-${Date.now()}`;
-      const res = await fetch(url, { signal: testSignal, cache: "no-store" });
-      if (res.ok) {
-        // Handle both empty body (204) and text body responses
-        if (res.status !== 204) {
-          await res.text();
+
+    // Per-ping abort controller with 3s timeout to prevent stuck fetches
+    const pingCtrl = new AbortController();
+    activePingControllers.push(pingCtrl);
+    const pingTimeout = setTimeout(() => pingCtrl.abort(), 3000);
+
+    fetch(buildDirectLatencyUrl(`loaded-dl-${Date.now()}`), { signal: pingCtrl.signal, cache: "no-store" })
+      .then((res) => {
+        if (res.ok) {
+          return res.status === 204 ? null : res.text().then(() => null);
         }
-        let lat = performance.now() - pingStart;
-        if (isLocalHost(baseUrl)) {
-          lat = Math.max(1.5, lat);
-        }
+        dlPingLost++;
+      })
+      .then(() => {
+        const lat = performance.now() - pingStart;
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
         loadedAvg = calculateMean(loadedLatencies);
-        loadedJitter = calculateJitter(loadedLatencies);
-      } else {
-        dlPingLost++;
-      }
-    } catch (_) {
-      dlPingLost++;
-    }
+        loadedJitter = calculateFilteredJitter(loadedLatencies, CONFIG.JITTER_OUTLIER_SIGMA);
+        const offset = _networkType === "cellular" || _networkType?.startsWith("cellular-") ? CONFIG.ICMP_OVERHEAD_FIXED_CELLULAR_MS : CONFIG.ICMP_OVERHEAD_FIXED_WIFI_MS;
+        loadedIcmpEstimate = Math.max(0, loadedAvg - offset);
+      })
+      .catch(() => {
+        if (!pingCtrl.signal.aborted) dlPingLost++;
+      })
+      .finally(() => {
+        clearTimeout(pingTimeout);
+        const idx = activePingControllers.indexOf(pingCtrl);
+        if (idx !== -1) activePingControllers.splice(idx, 1);
+      });
 
-    if (!testSignal.aborted && performance.now() - startTime < totalTestMs) {
-      activePingTimeout = setTimeout(runPingLoop, CONFIG.LOADED_PING_INTERVAL_MS);
-    }
+    scheduleNextPing();
   };
 
   runPingLoop();
@@ -439,11 +445,11 @@ async function runDownloadTest(
       ? (totalBytesDownloaded * 8) / elapsedSinceStart
       : 0;
 
-    // Collect instantaneous speeds ONLY during measurement phase (Phase 3)
-    // Exclude first 10% of measurement phase for peak calculation to avoid ramp artifacts
+    // Collect instantaneous speeds during measurement phase (Phase 3) AND peak phase (Phase 4)
+    // Excluding first 10% of measurement phase to avoid ramp artifacts
     const measureWindowStart = rampEndMs + (measureEndMs - rampEndMs) * 0.1;
-    const inMeasurement = elapsedMs >= measureWindowStart && elapsedMs < measureEndMs;
-    if (inMeasurement && instSpeedBps > 0) {
+    const inMeasurementOrPeak = elapsedMs >= measureWindowStart && elapsedMs < peakEndMs;
+    if (inMeasurementOrPeak && instSpeedBps > 0) {
       allInstantaneousSpeeds.push(instSpeedBps);
     }
 
@@ -503,7 +509,7 @@ async function runDownloadTest(
 
       try {
         // Direct to Cloudflare — no Worker proxy
-        const url = `https://speed.cloudflare.com/__down?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
+        const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
 
         const response = await fetch(url, {
           method: "GET",
@@ -625,6 +631,9 @@ async function runDownloadTest(
 
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
+  // Abort any in-flight loaded latency pings
+  for (const ctrl of activePingControllers) ctrl.abort();
+  activePingControllers.length = 0;
 
   // Synthesize per-phase request entries from streaming data.
   // The streaming architecture creates N raw entries (one per stream, all with
@@ -707,6 +716,7 @@ async function runDownloadTest(
     peakSpeed: finalPeakSpeed,
     loadedLatency: loadedAvg,
     loadedJitter: loadedJitter,
+    loadedIcmpEstimate,
     loadedLatencies: loadedLatencies,
     loadedPingSent: dlPingSent,
     loadedPingLost: dlPingLost,
@@ -731,6 +741,7 @@ async function runUploadTest(
   dynamicWarmupMs: number,
   dynamicRampMs: number,
   signal: AbortSignal,
+  _networkType?: string,
 ) {
   const startTime = performance.now();
   let totalBytesUploaded = 0;
@@ -740,6 +751,7 @@ async function runUploadTest(
   const loadedLatencies: number[] = [];
   let loadedJitter = 0;
   let loadedAvg = 0;
+  let loadedIcmpEstimate = 0;
   let ulPingSent = 0;
   let ulPingLost = 0;
 
@@ -762,6 +774,7 @@ async function runUploadTest(
   let measurementStartTime: number | null = null;
   let measurementEndTime: number | null = null;
   let measurementPhaseStarted = false;
+  let peakPhaseActive = false;
 
   // Adaptive upload chunk sizing — scale minimum chunk based on download speed.
   // On slow mobile connections (500 Kbps), 256KB chunks take ~4s each, causing
@@ -777,42 +790,60 @@ async function runUploadTest(
     ? CONFIG.UPLOAD_DURATION_MS + (effectiveMeasureMs - CONFIG.UPLOAD_MEASURE_MS)
     : CONFIG.UPLOAD_DURATION_MS;
 
-  // Background latency pinger under upload load (recursive timeout to avoid socket queueing)
+  // Background latency pinger under upload load — fire-and-forget pattern.
+  // Send pings without awaiting response to decouple scheduling from connection
+  // pool contention, ensuring consistent ping counts.
+  const loadedPingInterval = getLoadedPingInterval(_networkType);
   let activePingTimeout: any = null;
-  const runPingLoop = async () => {
+  let nextUploadPingTargetTime = startTime;
+  const activePingControllers: AbortController[] = [];
+
+  const scheduleNextPing = () => {
+    if (!signal.aborted && performance.now() - startTime < durationMs) {
+      nextUploadPingTargetTime += loadedPingInterval;
+      const delay = Math.max(0, nextUploadPingTargetTime - performance.now());
+      activePingTimeout = setTimeout(runPingLoop, delay);
+    }
+  };
+
+  const runPingLoop = () => {
     if (signal.aborted || performance.now() - startTime >= durationMs) return;
 
     ulPingSent++;
     const pingStart = performance.now();
-    try {
-      const url = region
-        ? `${baseUrl}/ping?region=${region}&serverId=${serverId || ""}&clientLat=${clientLat}&clientLon=${clientLon}&hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`
-        : `${baseUrl}/ping?hostLatency=${hostLatency}&cb=loaded-ul-${Date.now()}`;
-      const res = await fetch(url, { signal, cache: "no-store" });
-      if (res.ok) {
-        // Handle both empty body (204) and text body responses
-        if (res.status !== 204) {
-          await res.text();
+
+    // Per-ping abort controller with 3s timeout to prevent stuck fetches
+    const pingCtrl = new AbortController();
+    activePingControllers.push(pingCtrl);
+    const pingTimeout = setTimeout(() => pingCtrl.abort(), 3000);
+
+    fetch(buildDirectLatencyUrl(`loaded-ul-${Date.now()}`), { signal: pingCtrl.signal, cache: "no-store" })
+      .then((res) => {
+        if (res.ok) {
+          return res.status === 204 ? null : res.text().then(() => null);
         }
-        let lat = performance.now() - pingStart;
-        if (isLocalHost(baseUrl)) {
-          lat = Math.max(1.5, lat);
-        }
+        ulPingLost++;
+      })
+      .then(() => {
+        const lat = performance.now() - pingStart;
         loadedLatencies.push(lat);
         pingLog.push({ time: pingStart, latency: lat });
 
         loadedAvg = calculateMean(loadedLatencies);
-        loadedJitter = calculateJitter(loadedLatencies);
-      } else {
-        ulPingLost++;
-      }
-    } catch (_) {
-      ulPingLost++;
-    }
+        loadedJitter = calculateFilteredJitter(loadedLatencies, CONFIG.JITTER_OUTLIER_SIGMA);
+        const offset = _networkType === "cellular" || _networkType?.startsWith("cellular-") ? CONFIG.ICMP_OVERHEAD_FIXED_CELLULAR_MS : CONFIG.ICMP_OVERHEAD_FIXED_WIFI_MS;
+        loadedIcmpEstimate = Math.max(0, loadedAvg - offset);
+      })
+      .catch(() => {
+        if (!pingCtrl.signal.aborted) ulPingLost++;
+      })
+      .finally(() => {
+        clearTimeout(pingTimeout);
+        const idx = activePingControllers.indexOf(pingCtrl);
+        if (idx !== -1) activePingControllers.splice(idx, 1);
+      });
 
-    if (!signal.aborted && performance.now() - startTime < durationMs) {
-      activePingTimeout = setTimeout(runPingLoop, CONFIG.LOADED_PING_INTERVAL_MS);
-    }
+    scheduleNextPing();
   };
 
   runPingLoop();
@@ -858,9 +889,8 @@ async function runUploadTest(
         ? (totalBytesUploaded * 8) / elapsedSinceStart
         : 0;
 
-    // Collect instantaneous speeds ONLY during measurement phase (Phase 3).
-    // Including warmup/ramp/peak phases skews the 95th percentile calculation.
-    if (measurementPhaseStarted && instSpeedBps > 0) {
+    // Collect instantaneous speeds during measurement phase (Phase 3) AND peak phase (Phase 4).
+    if ((measurementPhaseStarted || peakPhaseActive) && instSpeedBps > 0) {
       allInstantaneousSpeeds.push(instSpeedBps);
     }
 
@@ -938,7 +968,7 @@ async function runUploadTest(
           // Content-Encoding: gzip applies to responses, not requests.
           // We use random printable ASCII text (not "0".repeat) so the payload
           // is truly non-compressible, matching our website's claim.
-          const url = `https://speed.cloudflare.com/__up?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
+          const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__up?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
 
           const chunkStart = performance.now();
           const requestTimestamp = Date.now();
@@ -979,12 +1009,18 @@ async function runUploadTest(
 
               // Dynamically adjust chunk size based on measured speed.
               // Target ~500ms per chunk for accurate sizing on slow connections.
+              // Dampening: limit change to ±30% per iteration to prevent oscillation
+              // on variable-bandwidth networks (cellular handovers, congestion spikes).
               const chunkDuration = uploadCompleteTime - chunkStart;
               if (chunkDuration > 0) {
                 const chunkSpeed = (currentChunkSize * 8) / (chunkDuration / 1000);
                 streamSpeedEstimate = streamSpeedEstimate * 0.3 + chunkSpeed * 0.7;
                 const targetDurationSec = 0.5;
-                streamNextChunkSize = Math.floor((streamSpeedEstimate * targetDurationSec) / 8);
+                const rawNextChunk = Math.floor((streamSpeedEstimate * targetDurationSec) / 8);
+                // Apply ±30% dampening to prevent oscillation
+                const minDampened = Math.floor(streamNextChunkSize * 0.7);
+                const maxDampened = Math.floor(streamNextChunkSize * 1.3);
+                streamNextChunkSize = Math.max(minDampened, Math.min(maxDampened, rawNextChunk));
                 streamNextChunkSize = Math.max(adaptiveMinChunk, Math.min(streamNextChunkSize, CONFIG.UPLOAD_MAX_CHUNK));
               }
 
@@ -1075,15 +1111,16 @@ async function runUploadTest(
   }
 
   // Synchronization barrier: wait for in-flight TCP data to drain completely.
-  // Event-based: wait until no new bytes arrive for 150ms, ensuring Phase 2
+  // Event-based: wait until no new bytes arrive, ensuring Phase 2
   // data doesn't leak into Phase 3's measurement baseline.
+  // Increased from 150ms to 250ms for slow connections where data drains slowly.
   {
     let lastByteCount = completedBytes;
     let stableMs = 0;
-    while (stableMs < 150 && !signal.aborted && !isCancelled) {
-      await sleepWithAbort(50, signal);
+    while (stableMs < CONFIG.SYNC_BARRIER_STABLE_MS && !signal.aborted && !isCancelled) {
+      await sleepWithAbort(CONFIG.SYNC_BARRIER_POLL_MS, signal);
       if (completedBytes === lastByteCount) {
-        stableMs += 50;
+        stableMs += CONFIG.SYNC_BARRIER_POLL_MS;
       } else {
         lastByteCount = completedBytes;
         stableMs = 0;
@@ -1108,12 +1145,17 @@ async function runUploadTest(
 
   // Phase 4: peak measurement - max throughput
   if (!signal.aborted && !isCancelled) {
+    peakPhaseActive = true;
     await runUploadPhase(25 * 1024 * 1024, CONFIG.UPLOAD_PEAK_MS);
+    peakPhaseActive = false;
   }
 
   // Clean up
   clearInterval(progressInterval);
   clearTimeout(activePingTimeout);
+  // Abort any in-flight loaded latency pings
+  for (const ctrl of activePingControllers) ctrl.abort();
+  activePingControllers.length = 0;
 
   // Use completedBytes directly
   totalBytesUploaded = completedBytes;
@@ -1155,6 +1197,7 @@ async function runUploadTest(
     peakSpeed: finalPeakSpeed,
     loadedLatency: loadedAvg,
     loadedJitter: loadedJitter,
+    loadedIcmpEstimate,
     loadedLatencies: loadedLatencies,
     loadedPingSent: ulPingSent,
     loadedPingLost: ulPingLost,
@@ -1166,51 +1209,32 @@ async function runUploadTest(
 /**
  * 4. Dedicated Packet Loss Test Engine
  *
- * Sends N rapid pings to measure actual packet loss.
- *
- * NOTE: This measures HTTP-level loss (fetch failures), not ICMP-level loss.
- * HTTP failures can be caused by:
- *   - True network packet loss (timeout, connection reset)
- *   - Server overload / rate limiting (429, 500+)
- *   - TCP connection resets
- *   - TLS session errors
- *
- * For accurate ICMP-level loss measurement, a native client is required.
- * This test provides a reasonable approximation for browser-based testing.
+ * Sends N rapid pings to speed.cloudflare.com/__down?bytes=1 to measure
+ * real network-level packet loss. Failures indicate genuine connectivity
+ * issues (timeout, connection reset, DNS failure), not Worker execution errors.
  */
 async function runPacketLossTest(
-  baseUrl: string,
-  region: string | undefined,
-  serverId: string | undefined,
-  clientLat: number,
-  clientLon: number,
+  _baseUrl: string,
+  _region: string | undefined,
+  _serverId: string | undefined,
+  _clientLat: number,
+  _clientLon: number,
   signal: AbortSignal,
+  _networkType?: string,
 ) {
   const totalPings = CONFIG.PACKET_LOSS_PINGS;
-  const intervalMs = CONFIG.PACKET_LOSS_INTERVAL_MS;
+  // Adaptive interval: shorter on cellular to detect burst loss patterns
+  const intervalMs = getPacketLossInterval(_networkType);
   let sent = 0;
   let lost = 0;
-  let serverErrors = 0;
-
-  const buildPingUrl = (suffix: string) => {
-    const params = new URLSearchParams({
-      cb: `pl-${Date.now()}-${suffix}`,
-    });
-    if (region) params.set("region", region);
-    if (serverId) params.set("serverId", serverId);
-    if (clientLat) params.set("clientLat", String(clientLat));
-    if (clientLon) params.set("clientLon", String(clientLon));
-    return `${baseUrl}/ping?${params.toString()}`;
-  };
 
   // 1. Warm-up — establish connection before loss measurement
   try {
-    const warmupRes = await fetch(buildPingUrl("pl-warmup"), {
+    const warmupRes = await fetch(buildDirectLatencyUrl(`pl-warmup-${Date.now()}`), {
       method: "GET",
       cache: "no-store",
       signal,
     });
-    // Handle both empty body (204) and text body responses
     if (warmupRes.status !== 204) {
       await warmupRes.text();
     }
@@ -1224,33 +1248,22 @@ async function runPacketLossTest(
 
     sent++;
     try {
-      const url = buildPingUrl(`pl-${i}`);
-      const res = await fetch(url, {
+      const res = await fetch(buildDirectLatencyUrl(`pl-${i}-${Date.now()}`), {
         method: "GET",
         cache: "no-store",
         signal,
       });
 
       if (res.ok) {
-        // Handle both empty body (204) and text body responses
         if (res.status !== 204) {
           await res.text();
         }
-      } else if (res.status === 429) {
-        // Rate limiting — don't count as packet loss, but note it
-        serverErrors++;
-        sent--; // Don't count this as a sent ping
-      } else if (res.status >= 500) {
-        // Server error — might be temporary, count as loss
-        lost++;
       } else {
-        // Other client errors (4xx) — don't count as loss
-        serverErrors++;
-        sent--;
+        // Any non-OK response from speed.cloudflare.com indicates a real issue
+        lost++;
       }
     } catch (err: any) {
       // Network-level errors (timeout, connection reset, DNS failure)
-      // These indicate true packet loss
       if (err.name === "AbortError" || isCancelled) {
         break;
       }
@@ -1273,19 +1286,12 @@ async function runPacketLossTest(
 
   const lossPercent = sent > 0 ? (lost / sent) * 100 : 0;
 
-  // Categorize loss types for detailed breakdown
-  const lossBreakdown = {
-    timeout: 0,
-    reset: 0,
-    serverError: serverErrors,
-  };
-
   self.postMessage({
     type: "PACKET_LOSS_COMPLETE",
     sent,
     lost,
     lossPercent,
-    serverErrors,
-    lossBreakdown,
+    serverErrors: 0,
+    lossBreakdown: { timeout: 0, reset: 0, serverError: 0 },
   });
 }

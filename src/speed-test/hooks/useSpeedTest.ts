@@ -9,12 +9,13 @@ import type {
 } from "../utils/speedTestUtils";
 import {
   sleep,
-  isLocalHost,
+  buildDirectLatencyUrl,
   calculateTrimmedMean,
   calculateMin,
   calculateMax,
   getUploadStreamCount,
   measureWebRTCSTUN,
+  calculateICMPEstimate,
 } from "../utils/speedTestUtils";
 import { CONFIG } from "../utils/speedTestConfig";
 import { selectNearestEdge, describeServerSelection, type ServerSelectionResult } from "../utils/serverSelection";
@@ -171,6 +172,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const dlDynamicRampMs = useRef<number>(CONFIG.DOWNLOAD_RAMP_MS);
   const ulDynamicWarmupMs = useRef<number>(CONFIG.UPLOAD_WARMUP_MS);
   const ulDynamicRampMs = useRef<number>(CONFIG.UPLOAD_RAMP_MS);
+  const dlLoadedIcmpEstimate = useRef<number>(0);
+  const ulLoadedIcmpEstimate = useRef<number>(0);
 
   // Auto-scroll terminal
   useEffect(() => {
@@ -644,35 +647,31 @@ export function useSpeedTest(): UseSpeedTestReturn {
       appendLogs(["[INFO] Geolocation unavailable — using Cloudflare Anycast auto-routing"]);
     }
 
-    const origin = window.location.origin;
-    let hostLatency = 0;
+    let warmupMs = 0;
     try {
-      const warmupUrl = `${origin}/api/ping?warmup=true&cb=${Date.now()}`;
       const startWarmup = performance.now();
-      const res = await fetch(warmupUrl, { cache: "no-store" });
-      // Handle both empty body (204) and text body responses
+      const res = await fetch(buildDirectLatencyUrl(`warmup-${Date.now()}`), { cache: "no-store" });
       if (res.status !== 204) {
         await res.text();
       }
-      hostLatency = performance.now() - startWarmup;
-    } catch (_) { hostLatency = 0; }
-    if (isLocalHost(window.location.hostname)) hostLatency = Math.max(1.5, hostLatency);
+      warmupMs = performance.now() - startWarmup;
+    } catch (_) { warmupMs = 0; }
 
     // Measure WebRTC STUN latency in parallel (UDP-based, closer to ICMP)
     const edgeLabel = CURRENT_EDGE
       ? `${CURRENT_EDGE.edge.city}, ${CURRENT_EDGE.edge.country} (${CURRENT_EDGE.edge.id})`
       : "Cloudflare Anycast (auto)";
-    setTerminalLogs((prev) => [...prev, `[OK] Connected to ${edgeLabel} (warmup: ${hostLatency.toFixed(1)}ms)`, `[INFO] Measuring UDP latency via WebRTC STUN...`]);
+    setTerminalLogs((prev) => [...prev, `[OK] Connected to ${edgeLabel} (warmup: ${warmupMs.toFixed(1)}ms)`, `[INFO] Measuring UDP latency via WebRTC data channel...`]);
 
     const webRtcLatency = await measureWebRTCSTUN();
     if (webRtcLatency !== null) {
       setWebrtcLatency(webRtcLatency);
-      appendLogs([`[OK] WebRTC STUN latency: ${webRtcLatency.toFixed(1)}ms (UDP)`]);
+      appendLogs([`[OK] WebRTC UDP RTT: ${webRtcLatency.toFixed(1)}ms`]);
     } else {
-      appendLogs(["[INFO] WebRTC STUN unavailable — using HTTP-derived estimate"]);
+      appendLogs(["[INFO] WebRTC unavailable — using HTTP-derived ICMP estimate"]);
     }
 
-    setStatusMessage(`Edge server ready: ${edgeLabel} (${hostLatency.toFixed(1)}ms warmup)`);
+    setStatusMessage(`Edge server ready: ${edgeLabel} (${warmupMs.toFixed(1)}ms warmup)`);
     setProgressPercent(30);
     await sleep(200);
 
@@ -807,13 +806,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
           setPhase("download");
           setStatusMessage("Measuring download throughput (concurrent streams)…");
 
-          // Store ICMP estimate — prefer WebRTC STUN (UDP), fallback to HTTP-derived
-          const httpDerivedIcmp = data.avgIcmpEquivalent > 0 ? data.avgIcmpEquivalent : 0;
-          const finalIcmpEstimate = webrtcLatency !== null && webrtcLatency > 0
-            ? webrtcLatency
-            : httpDerivedIcmp;
-          if (finalIcmpEstimate > 0) setIcmpEstimate(finalIcmpEstimate);
-
           const pings = data.latencies || [];
           const min = pings.length > 0 ? calculateMin(pings) : 0;
           const avg = pings.length > 0 ? calculateTrimmedMean(pings) : 0;
@@ -821,14 +813,17 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const jitter = data.jitter || 0;
           const loss = data.pingSent > 0 ? ((data.pingLost / data.pingSent) * 100).toFixed(1) : "0.0";
 
-          // Use Network Information API downlink estimate if available,
-          // otherwise fall back to conservative 10 Mbps. Mobile networks
-          // often report accurate downlink values here (e.g., 1.5 Mbps for 4G).
+          // Store ICMP estimate — 2-tier: WebRTC UDP RTT preferred, fixed offset fallback
+          const networkType = stateRef.current.clientInfo?.connectionType || stateRef.current.clientInfo?.effectiveType;
+          const finalIcmpEstimate = calculateICMPEstimate(avg, webrtcLatency, networkType);
+          if (finalIcmpEstimate > 0) setIcmpEstimate(finalIcmpEstimate);
+
+          // Use Network Information API downlink estimate if available.
           const connDownlink = stateRef.current.clientInfo?.downlink;
           const connDownlinkBps = connDownlink ? connDownlink * 1_000_000 : 0;
           const estimatedBandwidthBps = connDownlinkBps > 0
             ? connDownlinkBps
-            : (avg > 0 ? 10_000_000 : 5_000_000);
+            : (avg > 0 ? 50_000_000 : 10_000_000);
           const rttSec = avg / 1000;
           const bdpBytes = estimatedBandwidthBps * rttSec;
           const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / estimatedBandwidthBps) * 1000)));
@@ -842,14 +837,15 @@ export function useSpeedTest(): UseSpeedTestReturn {
             `--- ${edgeNode.name} ping statistics ---`,
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
+            `[INFO] ICMP estimate: ${webrtcLatency ? `${webrtcLatency.toFixed(1)}ms (WebRTC UDP)` : `~${finalIcmpEstimate.toFixed(1)}ms (HTTP - ${(networkType === "cellular" || networkType?.startsWith("cellular-")) ? "5" : "3"}ms offset)`}`,
             `[INFO] BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB, warmup: ${dynamicWarmupMs}ms, ramp: ${dynamicRampMs}ms`,
             "",
-            `$ speedtest --download --single-connection`,
-            `Starting download throughput test (single connection, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
+            `$ speedtest --download --parallel=${CONFIG.PARALLEL_STREAMS_DEFAULT}`,
+            `Starting download throughput test (${CONFIG.PARALLEL_STREAMS_DEFAULT} streams, ~${((dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS + CONFIG.DOWNLOAD_PEAK_MS) / 1000).toFixed(0)}s window)...`,
           ]);
 
           const calculatedAvgPing = avg > 0 ? avg : 20;
-          workerRef.current?.postMessage({ type: "START_DOWNLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, dynamicWarmupMs, dynamicRampMs });
+          workerRef.current?.postMessage({ type: "START_DOWNLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, dynamicWarmupMs, dynamicRampMs, networkType });
           break;
         }
 
@@ -892,6 +888,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
           setStatusMessage("Measuring upload throughput (concurrent streams)…");
           if (data.loadedLatency > 0) setDlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setDlLoadedJitter(data.loadedJitter);
+          if (data.loadedIcmpEstimate > 0) dlLoadedIcmpEstimate.current = data.loadedIcmpEstimate;
           if (data.requests) {
             stateRef.current.downloadRequests = data.requests;
             setDownloadRequests(data.requests);
@@ -902,11 +899,9 @@ export function useSpeedTest(): UseSpeedTestReturn {
           const pings = stateRef.current.unloadedPingStats.latencies || [];
           const calculatedAvgPing = pings.length > 0 ? calculateTrimmedMean(pings) : 20;
           // Use the ACTUAL measured download speed for upload BDP estimation.
-          // The old hardcoded 10 Mbps estimate caused mobile networks (1-5 Mbps)
-          // to use too many streams and wrong warmup durations.
           const measuredDlBps = stateRef.current.downloadStats.avg > 0
             ? stateRef.current.downloadStats.avg
-            : (calculatedAvgPing > 0 ? 10_000_000 : 5_000_000);
+            : (calculatedAvgPing > 0 ? 50_000_000 : 10_000_000);
           const rttSec = calculatedAvgPing / 1000;
           const bdpBytes = measuredDlBps * rttSec;
           const dynamicWarmupMs = Math.min(CONFIG.DYNAMIC_WARMUP_MAX_MS, Math.max(CONFIG.DYNAMIC_WARMUP_MIN_MS, Math.ceil((bdpBytes * 2 / measuredDlBps) * 1000)));
@@ -928,7 +923,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
           ]);
           setActiveProgressLine(null);
 
-          workerRef.current?.postMessage({ type: "START_UPLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, parallelStreams: adaptiveStreams, downloadSpeed: stateRef.current.downloadStats.avg, dynamicWarmupMs, dynamicRampMs });
+          const uploadNetworkType = stateRef.current.clientInfo?.connectionType || stateRef.current.clientInfo?.effectiveType;
+          workerRef.current?.postMessage({ type: "START_UPLOAD", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, basePing: calculatedAvgPing, parallelStreams: adaptiveStreams, downloadSpeed: stateRef.current.downloadStats.avg, dynamicWarmupMs, dynamicRampMs, networkType: uploadNetworkType });
           break;
         }
 
@@ -968,6 +964,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
           stateRef.current.uploadStats = newUploadStats;
           if (data.loadedLatency > 0) setUlLoadedLatency(data.loadedLatency);
           if (data.loadedJitter > 0) setUlLoadedJitter(data.loadedJitter);
+          if (data.loadedIcmpEstimate > 0) ulLoadedIcmpEstimate.current = data.loadedIcmpEstimate;
           if (data.requests) {
             stateRef.current.uploadRequests = data.requests;
             setUploadRequests(data.requests);
@@ -985,14 +982,18 @@ export function useSpeedTest(): UseSpeedTestReturn {
           setActiveProgressLine(null);
           // Add 2 second cooldown before packet loss test to let network recover from congestion
           setTimeout(() => {
+            const lossNetworkType = stateRef.current.clientInfo?.connectionType || stateRef.current.clientInfo?.effectiveType;
+            const lossInterval = lossNetworkType === "cellular" || lossNetworkType?.startsWith("cellular-") || lossNetworkType === "4g" || lossNetworkType === "3g" || lossNetworkType === "2g"
+              ? CONFIG.PACKET_LOSS_INTERVAL_CELLULAR_MS
+              : CONFIG.PACKET_LOSS_INTERVAL_WIFI_MS;
             setTerminalLogs((prev) => [
               ...prev,
-              `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${CONFIG.PACKET_LOSS_INTERVAL_MS}ms ${edgeNode.name}`,
+              `$ ping -c ${CONFIG.PACKET_LOSS_PINGS} --interval=${lossInterval}ms ${edgeNode.name}`,
               `Running dedicated packet loss test (${CONFIG.PACKET_LOSS_PINGS} pings)...`,
             ]);
             setPhase("packetLoss");
             setStatusMessage("Measuring packet loss...");
-            workerRef.current?.postMessage({ type: "START_PACKET_LOSS", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
+            workerRef.current?.postMessage({ type: "START_PACKET_LOSS", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, networkType: lossNetworkType });
           }, 2000);
           break;
         }
@@ -1038,7 +1039,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
       }
     };
 
-    workerRef.current.postMessage({ type: "START_PING", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon });
+    const networkType = currentClientInfo?.connectionType || currentClientInfo?.effectiveType;
+    workerRef.current.postMessage({ type: "START_PING", baseUrl, region, serverId: edgeNode.id, clientLat, clientLon, networkType });
   }, [phase, appendLogs, getPreciseCoords, upgradeToPreciseLocation, warmupServer, initCharts, updateThroughputChart, detectClientLocation]);
 
   const runPacketLossCheck = useCallback((realLossPercent: number) => {

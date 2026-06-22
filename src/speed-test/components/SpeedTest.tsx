@@ -248,8 +248,8 @@ export default function SpeedTest() {
               <div className="bg-canvas border border-hairline p-4 rounded-lg shadow-xs flex-1">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-                    <span>JITTER</span>
-                    <InfoTooltip content="Variance in latency over time. Lower jitter means more stable connections." />
+                    <span>JITTER (RMS)</span>
+                    <InfoTooltip content="Root Mean Square of successive latency differences. Lower jitter means more stable connections." />
                   </div>
                   <Activity className="w-4 h-4 text-mute" aria-hidden="true" />
                 </div>
@@ -287,8 +287,8 @@ export default function SpeedTest() {
                   <span className="text-[10px] text-mute font-mono">(HTTP)</span>
                 </div>
                 <div className="text-[10px] text-mute font-mono border-t border-hairline pt-2 mt-3 flex flex-col items-center gap-1">
-                  <span className={`transition-colors duration-150 ${packetLoss > 0 ? "text-error font-semibold" : "text-link font-semibold"}`}>
-                    {packetLoss > 0 ? "Suboptimal" : "Excellent"}
+                  <span className={`transition-colors duration-150 ${packetLoss > 2 ? "text-error font-semibold" : packetLoss > 0 ? "text-link font-semibold" : "text-link font-semibold"}`}>
+                    {packetLoss > 2 ? "Suboptimal" : packetLoss > 0 ? "Good" : "Excellent"}
                   </span>
                 </div>
               </div>

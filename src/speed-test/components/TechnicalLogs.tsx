@@ -96,9 +96,9 @@ export default function TechnicalLogs({
               </span>
             </div>
 
-            {/* WebRTC STUN */}
+            {/* WebRTC Data Channel */}
             <div className="flex flex-col gap-1.5 border border-hairline rounded-md p-2.5 bg-canvas-soft">
-              <span className="text-[10px] text-mute font-semibold uppercase">WebRTC STUN</span>
+              <span className="text-[10px] text-mute font-semibold uppercase">UDP RTT (WebRTC)</span>
               {hasWebRtc ? (
                 <span className="text-lg font-bold text-ink tabular-nums">
                   {webrtcLatency!.toFixed(1)}<span className="text-xs font-normal text-mute ml-0.5">ms</span>
@@ -107,7 +107,7 @@ export default function TechnicalLogs({
                 <span className="text-lg font-bold text-mute tabular-nums">—</span>
               )}
               <span className="text-[10px] text-mute leading-tight">
-                UDP-based latency, closer to true ICMP
+                Data channel echo over UDP transport
               </span>
             </div>
           </div>
@@ -126,9 +126,10 @@ export default function TechnicalLogs({
           )}
 
           <div className="text-[10px] text-mute leading-relaxed mt-1">
-            WebRTC STUN (UDP) is closer to real ICMP than HTTP RTT. ICMP
-            estimate prefers WebRTC when available, otherwise falls back
-            to HTTP RTT minus TLS/framing overhead.
+            UDP RTT via WebRTC data channel echo is closer to ICMP than HTTP RTT.
+            ICMP estimate prefers WebRTC when available (trimmed mean of 20 pings),
+            otherwise falls back to HTTP RTT minus a fixed offset based on network
+            type (3ms WiFi, 5ms cellular) to account for TLS 1.3 + HTTP/2 framing overhead.
           </div>
         </div>
       </div>

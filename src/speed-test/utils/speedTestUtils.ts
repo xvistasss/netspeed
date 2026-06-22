@@ -153,6 +153,34 @@ export const calculateStdDev = (arr: number[]): number => {
   return Math.sqrt(squaredDiffs.reduce((s, v) => s + v, 0) / (arr.length - 1));
 };
 
+// Median Absolute Deviation — robust measure of variability
+// Used for outlier detection: samples > MAD * threshold are considered outliers
+export const calculateMAD = (arr: number[]): number => {
+  if (arr.length === 0) return 0;
+  const med = calculateMedian(arr);
+  const absDiffs = arr.map((v) => Math.abs(v - med));
+  return calculateMedian(absDiffs);
+};
+
+// Remove outliers beyond N * MAD from the median.
+// More robust than σ-based filtering because MAD is resistant to outliers itself.
+export const removeOutliers = (arr: number[], threshold: number = 3): number[] => {
+  if (arr.length <= 3) return arr; // Too few samples to filter
+  const mad = calculateMAD(arr);
+  if (mad === 0) return arr; // No variation — nothing to filter
+  const med = calculateMedian(arr);
+  const madThreshold = mad * threshold;
+  return arr.filter((v) => Math.abs(v - med) <= madThreshold);
+};
+
+// Filtered RMS jitter — removes outliers before calculating RFC 3550 jitter.
+// Eliminates GC pauses, OS scheduler hiccups, and transient spikes
+// that inflate raw jitter on browser-based measurements.
+export const calculateFilteredJitter = (arr: number[], sigma: number = 3): number => {
+  const filtered = removeOutliers(arr, sigma);
+  return calculateJitterRMS(filtered);
+};
+
 export const calculatePercentile = (arr: number[], p: number): number => {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
@@ -275,52 +303,169 @@ export async function detectIPv4vsIPv6(): Promise<"ipv4" | "ipv6" | "dual"> {
   return "dual";
 }
 
-// WebRTC STUN measurement — measures UDP round-trip time to a public STUN server.
-// This is much closer to ICMP ping than HTTP RTT because both use UDP/ICMP
-// (connectionless) protocols, avoiding TCP handshake and TLS overhead.
-// Returns latency in ms, or null if WebRTC is unavailable or measurement fails.
-export async function measureWebRTCSTUN(timeoutMs: number = 5000): Promise<number | null> {
+// WebRTC Data Channel echo measurement — measures UDP round-trip time.
+// Creates two peer connections in a loopback configuration and exchanges
+// data channel messages. The RTT measured over the data channel reflects
+// the UDP transport latency through the browser's WebRTC stack, which
+// avoids TCP handshake, TLS, and HTTP framing overhead.
+//
+// Returns the trimmed mean RTT from 10 echo pings (more representative than min),
+// or null if unavailable.
+export async function measureWebRTCSTUN(timeoutMs: number = CONFIG.WEBRTC_TIMEOUT_MS): Promise<number | null> {
   if (typeof RTCPeerConnection === "undefined") return null;
 
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      try { pc.close(); } catch (_) {}
-      resolve(null);
-    }, timeoutMs);
-
-    const pc = new RTCPeerConnection({
+  try {
+    const pc1 = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+    const pc2 = new RTCPeerConnection({
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
-    const startTime = performance.now();
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate === null) {
-        // ICE gathering complete — all candidates resolved
-        const elapsed = performance.now() - startTime;
-        clearTimeout(timer);
-        try { pc.close(); } catch (_) {}
-        resolve(elapsed);
-      }
+    // Exchange ICE candidates between the two peers
+    pc1.onicecandidate = (e) => {
+      if (e.candidate) pc2.addIceCandidate(e.candidate).catch(() => {});
+    };
+    pc2.onicecandidate = (e) => {
+      if (e.candidate) pc1.addIceCandidate(e.candidate).catch(() => {});
     };
 
-    pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
-        clearTimeout(timer);
-        try { pc.close(); } catch (_) {}
-        resolve(null);
-      }
-    };
+    // Create data channel on pc1
+    const dc = pc1.createDataChannel("echo");
 
-    // Create a dummy data channel to trigger ICE gathering
-    pc.createDataChannel("ping");
-    pc.createOffer()
-      .then((offer) => pc.setLocalDescription(offer))
-      .catch(() => {
+    // Wait for the data channel to open on pc2
+    const dcOpenPromise = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Data channel open timeout")), timeoutMs);
+      pc2.ondatachannel = (e) => {
+        const remoteDc = e.channel;
+        // Echo back any received message
+        remoteDc.onmessage = (ev) => {
+          try { remoteDc.send(ev.data); } catch (_) {}
+        };
+      };
+      dc.onopen = () => {
         clearTimeout(timer);
-        try { pc.close(); } catch (_) {}
-        resolve(null);
+        resolve();
+      };
+    });
+
+    // Create offer and answer
+    const offer = await pc1.createOffer();
+    await pc1.setLocalDescription(offer);
+    await pc2.setRemoteDescription(pc1.localDescription!);
+    const answer = await pc2.createAnswer();
+    await pc2.setLocalDescription(answer);
+    await pc1.setRemoteDescription(pc2.localDescription!);
+
+    // Wait for data channel to open
+    await dcOpenPromise;
+
+    // Send 10 echo pings and measure round-trip times
+    // Increased from 5 to 10 for statistical significance
+    const rtts: number[] = [];
+    for (let i = 0; i < CONFIG.WEBRTC_PING_COUNT; i++) {
+      const rtt = await new Promise<number>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Echo timeout")), CONFIG.WEBRTC_ECHO_TIMEOUT_MS);
+        dc.onmessage = () => {
+          clearTimeout(timer);
+          resolve(performance.now() - pingStart);
+        };
+        const pingStart = performance.now();
+        dc.send("ping");
       });
-  });
+      rtts.push(rtt);
+      await new Promise(r => setTimeout(r, CONFIG.WEBRTC_PING_INTERVAL_MS));
+    }
+
+    // Clean up
+    dc.close();
+    pc1.close();
+    pc2.close();
+
+    // Return trimmed mean RTT — more representative than minimum.
+    // Trimmed mean discards top/bottom 10% of samples, eliminating outliers
+    // while preserving the central tendency. This matches how HTTP RTT is reported.
+    return calculateTrimmedMean(rtts, 0.1);
+  } catch (_) {
+    return null;
+  }
+}
+
+// ── Direct Cloudflare Latency URL Builder ──
+// Builds URLs for latency/ping/packet-loss measurements against Cloudflare's
+// speed test endpoint (__down?bytes=1). Uses the same CLOUDFLARE_SPEED_ENDPOINT
+// as download/upload for consistency. The tiny 1-byte payload has negligible
+// transfer time — the measurement is pure RTT.
+import { CONFIG } from "./speedTestConfig";
+
+export function buildDirectLatencyUrl(cacheBuster?: string): string {
+  const cb = cacheBuster || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=${cb}`;
+}
+
+// ── ICMP Estimate Calculator ──
+// Fixed-offset model: ICMP_RTT = HTTP_RTT - FIXED_OVERHEAD_MS
+//
+// TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms total round-trip.
+// This is a constant additive overhead, NOT proportional to RTT.
+// A multiplicative factor (e.g., 0.85) is mathematically wrong because:
+//   - At 20ms HTTP RTT: factor 0.85 gives 17ms (correct, actual ~17ms)
+//   - At 80ms HTTP RTT: factor 0.85 gives 68ms (wrong, actual ~77ms)
+//   - At 5ms HTTP RTT (fiber): factor 0.85 gives 4.25ms (wrong, actual ~2ms)
+//
+// Fixed offset is accurate across all RTT ranges.
+// Prefers WebRTC (UDP) when available — it's the closest to ICMP.
+export function calculateICMPEstimate(
+  httpRtt: number,
+  webrtcRtt: number | null,
+  networkType?: string,
+): number {
+  // Tier 1: Prefer WebRTC RTT — it's UDP-based and closest to ICMP.
+  // Bypasses all TCP/TLS/HTTP overhead since it's a raw DataChannel echo.
+  if (webrtcRtt !== null && webrtcRtt > 0) {
+    return webrtcRtt;
+  }
+
+  // Tier 2: Fixed offset based on network type.
+  // TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms constant
+  // additive overhead (NOT proportional to RTT). WiFi/fiber has lower CPU
+  // overhead; cellular adds carrier NAT + radio-layer processing.
+  if (httpRtt <= 0) return 0;
+
+  const isCellular = networkType === "cellular" ||
+    networkType?.startsWith("cellular-") ||
+    networkType === "4g" || networkType === "3g" || networkType === "2g";
+
+  const offsetMs = isCellular
+    ? CONFIG.ICMP_OVERHEAD_FIXED_CELLULAR_MS
+    : CONFIG.ICMP_OVERHEAD_FIXED_WIFI_MS;
+
+  return Math.max(0, httpRtt - offsetMs);
+}
+
+// ── Network-Type-Aware Loaded Ping Interval ──
+// Returns the appropriate background ping interval during data transfer.
+// Cellular networks need longer intervals to avoid self-congestion.
+export function getLoadedPingInterval(networkType?: string): number {
+  const isCellular = networkType === "cellular" ||
+    networkType?.startsWith("cellular-") ||
+    networkType === "4g" || networkType === "3g" || networkType === "2g";
+
+  return isCellular
+    ? CONFIG.LOADED_PING_INTERVAL_CELLULAR_MS
+    : CONFIG.LOADED_PING_INTERVAL_WIFI_MS;
+}
+
+// ── Network-Type-Aware Packet Loss Interval ──
+// Returns the appropriate interval between packet loss pings.
+// Cellular networks benefit from shorter intervals to detect burst loss.
+export function getPacketLossInterval(networkType?: string): number {
+  const isCellular = networkType === "cellular" ||
+    networkType?.startsWith("cellular-") ||
+    networkType === "4g" || networkType === "3g" || networkType === "2g";
+
+  return isCellular
+    ? CONFIG.PACKET_LOSS_INTERVAL_CELLULAR_MS
+    : CONFIG.PACKET_LOSS_INTERVAL_WIFI_MS;
 }
 

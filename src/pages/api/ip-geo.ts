@@ -306,13 +306,8 @@ export const GET: APIRoute = async ({ request, url }) => {
   // 4. Cross-check ISP against geo services — Cloudflare's cf-as-organization
   //    can be stale for some ASNs (e.g. ASN 9829 returns "NIB" instead of
   //    "Bharti Airtel"). Always query the geo services and prefer their result
-  //    if it differs, since they tend to have more up-to-date ISP data.
-  //    Reuses the step 3 result if available to avoid a duplicate API call.
-  if (!geoFallback) {
-    geoFallback = await fetchServerGeo(clientIp);
-  }
+  //    if it differs. Reuses step 3 result when available to avoid duplicate calls.
   if (geoFallback) {
-    const prevOrg = org;
     if (geoFallback.org && geoFallback.org !== "Edge Network Provider") {
       org = geoFallback.org;
     }

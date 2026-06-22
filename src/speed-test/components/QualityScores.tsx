@@ -78,14 +78,16 @@ function getCategoryScores(
     }
   }
 
-  // Online Gaming: needs latency < 30ms, jitter < 10ms
+  // Online Gaming: needs latency < 40ms (HTTP RTT), jitter < 10ms
+  // HTTP RTT includes ~5-10ms TLS+HTTP/2 overhead vs ICMP, so thresholds
+  // are adjusted upward to reflect real-world application performance.
   let gamingRating = "Evaluating\u2026";
   let gamingColor = "text-mute";
   if (latencyMs > 0 || jitterMs > 0) {
-    if (latencyMs <= 30 && jitterMs <= 10) {
+    if (latencyMs <= 40 && jitterMs <= 10) {
       gamingRating = "Great";
       gamingColor = "text-link";
-    } else if (latencyMs <= 80 && jitterMs <= 30) {
+    } else if (latencyMs <= 90 && jitterMs <= 30) {
       gamingRating = "Good";
       gamingColor = "text-link";
     } else {

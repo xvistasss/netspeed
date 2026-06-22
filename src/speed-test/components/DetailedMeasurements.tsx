@@ -9,6 +9,7 @@ import {
   calculateStdDev,
   calculatePercentile,
 } from "../utils/speedTestUtils";
+import { CONFIG } from "../utils/speedTestConfig";
 import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 import InfoTooltip from "./InfoTooltip";
 
@@ -300,14 +301,14 @@ export default function DetailedMeasurements({
                   {dlLoadedPingStats.sent > 0 ? dlLoadedPingStats.sent : "—"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
-                  {dlLoadedPingStats.sent > 0 ? dlLoadedPingStats.lost : "—"}
+                  {dlLoadedPingStats.sent >= 10 ? dlLoadedPingStats.lost : "—"}
                 </td>
                 <td
-                  className={`py-3 px-4 font-mono font-semibold tabular-nums ${dlLoadedPingStats.lost > 0 ? "text-error" : "text-body"}`}
+                  className={`py-3 px-4 font-mono font-semibold tabular-nums ${dlLoadedPingStats.sent >= 10 && dlLoadedPingStats.lost > 0 ? "text-error" : "text-body"}`}
                 >
-                  {dlLoadedPingStats.sent > 0
+                  {dlLoadedPingStats.sent >= 10
                     ? `${((dlLoadedPingStats.lost / dlLoadedPingStats.sent) * 100).toFixed(1)}%`
-                    : "—"}
+                    : dlLoadedPingStats.sent > 0 ? <span className="text-mute">N/A (samples &lt; 10)</span> : "—"}
                 </td>
               </tr>
               {/* Upload Loaded Row */}
@@ -320,14 +321,14 @@ export default function DetailedMeasurements({
                   {ulLoadedPingStats.sent > 0 ? ulLoadedPingStats.sent : "—"}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
-                  {ulLoadedPingStats.sent > 0 ? ulLoadedPingStats.lost : "—"}
+                  {ulLoadedPingStats.sent >= 10 ? ulLoadedPingStats.lost : "—"}
                 </td>
                 <td
-                  className={`py-3 px-4 font-mono font-semibold tabular-nums ${ulLoadedPingStats.lost > 0 ? "text-error" : "text-body"}`}
+                  className={`py-3 px-4 font-mono font-semibold tabular-nums ${ulLoadedPingStats.sent >= 10 && ulLoadedPingStats.lost > 0 ? "text-error" : "text-body"}`}
                 >
-                  {ulLoadedPingStats.sent > 0
+                  {ulLoadedPingStats.sent >= 10
                     ? `${((ulLoadedPingStats.lost / ulLoadedPingStats.sent) * 100).toFixed(1)}%`
-                    : "—"}
+                    : ulLoadedPingStats.sent > 0 ? <span className="text-mute">N/A (samples &lt; 10)</span> : "—"}
                 </td>
               </tr>
             </tbody>
@@ -359,58 +360,39 @@ export default function DetailedMeasurements({
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {(() => {
-                const bins = [
-                  {
-                    name: "100 kB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize <= 500 * 1024,
-                  },
-                  {
-                    name: "1 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize > 500 * 1024 && r.phaseSize <= 5 * 1024 * 1024,
-                  },
-                  {
-                    name: "10 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize > 5 * 1024 * 1024 && r.phaseSize <= 15 * 1024 * 1024,
-                  },
-                  {
-                    name: "25 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize > 15 * 1024 * 1024,
-                  },
-                ];
+              {CONFIG.DOWNLOAD_BINS.map((bin) => {
+                const binReqs = downloadRequests.filter(
+                  (r) => r.bytes > 0 && r.phaseSize >= bin.minBytes && r.phaseSize < bin.maxBytes
+                );
+                const speeds = binReqs.map((r) => r.bps / 1000000);
+                const hasData = speeds.length > 0;
 
-                return bins.map((bin) => {
-                  const binReqs = downloadRequests.filter((r) => bin.filter(r) && r.bytes > 0);
-                  const speeds = binReqs.map((r) => r.bps / 1000000);
-                  const hasData = speeds.length > 0;
-
-                  return (
-                    <tr
-                      key={bin.name}
-                      className="hover:bg-canvas-soft/40 transition-colors duration-150"
-                    >
-                      <td className="py-3 px-4 font-medium text-ink">
-                        {bin.name}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMean(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMedian(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMin(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMax(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-mute tabular-nums">
-                        {speeds.length}
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
+                return (
+                  <tr
+                    key={bin.name}
+                    className="hover:bg-canvas-soft/40 transition-colors duration-150"
+                  >
+                    <td className="py-3 px-4 font-medium text-ink">
+                      {bin.name}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMean(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMedian(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMin(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMax(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-mute tabular-nums">
+                      {speeds.length}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
@@ -440,58 +422,39 @@ export default function DetailedMeasurements({
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
-              {(() => {
-                const bins = [
-                  {
-                    name: "< 500 kB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize < 500 * 1024,
-                  },
-                  {
-                    name: "1 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize >= 500 * 1024 && r.phaseSize < 5 * 1024 * 1024,
-                  },
-                  {
-                    name: "10 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize >= 5 * 1024 * 1024 && r.phaseSize < 15 * 1024 * 1024,
-                  },
-                  {
-                    name: "25 MB",
-                    filter: (r: SpeedTestRequest) => r.phaseSize >= 15 * 1024 * 1024,
-                  },
-                ];
+              {CONFIG.UPLOAD_BINS.map((bin) => {
+                const binReqs = uploadRequests.filter(
+                  (r) => r.bytes > 0 && r.phaseSize >= bin.minBytes && r.phaseSize < bin.maxBytes
+                );
+                const speeds = binReqs.map((r) => r.bps / 1000000);
+                const hasData = speeds.length > 0;
 
-                return bins.map((bin) => {
-                  const binReqs = uploadRequests.filter((r) => bin.filter(r) && r.bytes > 0);
-                  const speeds = binReqs.map((r) => r.bps / 1000000);
-                  const hasData = speeds.length > 0;
-
-                  return (
-                    <tr
-                      key={bin.name}
-                      className="hover:bg-canvas-soft/40 transition-colors duration-150"
-                    >
-                      <td className="py-3 px-4 font-medium text-ink">
-                        {bin.name}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMean(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMedian(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMin(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-body tabular-nums">
-                        {hasData ? calculateMax(speeds).toFixed(1) : "—"}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-mute tabular-nums">
-                        {speeds.length}
-                      </td>
-                    </tr>
-                  );
-                });
-              })()}
+                return (
+                  <tr
+                    key={bin.name}
+                    className="hover:bg-canvas-soft/40 transition-colors duration-150"
+                  >
+                    <td className="py-3 px-4 font-medium text-ink">
+                      {bin.name}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMean(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMedian(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMin(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-body tabular-nums">
+                      {hasData ? calculateMax(speeds).toFixed(1) : "—"}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-mute tabular-nums">
+                      {speeds.length}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           </div>
