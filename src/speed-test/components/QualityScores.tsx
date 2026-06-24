@@ -55,21 +55,34 @@ function computeQualityScore(
   return { total, grade, gradeColor, dlScore, ulScore, latScore, jitScore, lossScore };
 }
 
-// Compute per-category ratings using the same metrics
+// Compute per-category ratings using the same metrics.
+// Categories gate both "Great" and "Good" on the overall composite score so
+// ratings are consistent with the grade: Great requires ≥ 70 (Good tier),
+// Good requires ≥ 50 (Fair tier). Prevents the paradox of all categories
+// showing Good while the overall grade is Poor.
 function getCategoryScores(
   dlMbps: number,
   ulMbps: number,
   latencyMs: number,
   jitterMs: number,
+  lossPct: number,
+  overallScore: number,
 ) {
-  // Video Streaming: needs download >= 25 Mbps, latency < 100ms
+  const isGreatEligible = overallScore >= 70;
+  const isGoodEligible = overallScore >= 50;
+
+  // Video Streaming: needs download, low latency, stable connection
+  // Jitter causes rebuffering; packet loss degrades video quality.
   let streamingRating = "Evaluating\u2026";
   let streamingColor = "text-mute";
   if (dlMbps > 0) {
-    if (dlMbps >= 25 && latencyMs < 100) {
+    if (
+      dlMbps >= 25 && latencyMs < 100 && jitterMs < 15 && lossPct < 2 &&
+      isGreatEligible
+    ) {
       streamingRating = "Great";
       streamingColor = "text-link";
-    } else if (dlMbps >= 5) {
+    } else if (dlMbps >= 5 && latencyMs < 150 && jitterMs < 30 && lossPct < 5 && isGoodEligible) {
       streamingRating = "Good";
       streamingColor = "text-link";
     } else {
@@ -78,16 +91,20 @@ function getCategoryScores(
     }
   }
 
-  // Online Gaming: needs latency < 40ms (HTTP RTT), jitter < 10ms
+  // Online Gaming: needs latency, jitter, and zero packet loss
   // HTTP RTT includes ~5-10ms TLS+HTTP/2 overhead vs ICMP, so thresholds
   // are adjusted upward to reflect real-world application performance.
+  // Packet loss causes rubber-banding and disconnects.
   let gamingRating = "Evaluating\u2026";
   let gamingColor = "text-mute";
   if (latencyMs > 0 || jitterMs > 0) {
-    if (latencyMs <= 40 && jitterMs <= 10) {
+    if (
+      latencyMs <= 40 && jitterMs <= 10 && lossPct < 1 &&
+      isGreatEligible
+    ) {
       gamingRating = "Great";
       gamingColor = "text-link";
-    } else if (latencyMs <= 90 && jitterMs <= 30) {
+    } else if (latencyMs <= 90 && jitterMs <= 30 && lossPct < 3 && isGoodEligible) {
       gamingRating = "Good";
       gamingColor = "text-link";
     } else {
@@ -96,14 +113,23 @@ function getCategoryScores(
     }
   }
 
-  // Video Chatting: needs both upload and download, low latency
+  // Video Chatting: needs both upload and download, low latency, stable line
+  // Jitter causes choppy audio/video; packet loss drops frames.
   let chattingRating = "Evaluating\u2026";
   let chattingColor = "text-mute";
   if (dlMbps > 0 || ulMbps > 0 || latencyMs > 0) {
-    const meetsSpeed = (dlMbps === 0 || dlMbps >= 4) && (ulMbps === 0 || ulMbps >= 1.5);
-    const meetsLatency = latencyMs === 0 || latencyMs <= 120;
-    if (meetsSpeed && meetsLatency) {
-      chattingRating = dlMbps >= 10 && ulMbps >= 3 && latencyMs <= 50 ? "Great" : "Good";
+    const meetsSpeed = dlMbps >= 4 && ulMbps >= 1.5;
+    const meetsLatency = latencyMs <= 120;
+    const meetsStability = lossPct < 3;
+    if (meetsSpeed && meetsLatency && meetsStability && isGoodEligible) {
+      if (
+        dlMbps >= 10 && ulMbps >= 3 && latencyMs <= 50 && jitterMs <= 15 &&
+        lossPct < 1 && isGreatEligible
+      ) {
+        chattingRating = "Great";
+      } else {
+        chattingRating = "Good";
+      }
       chattingColor = "text-link";
     } else {
       chattingRating = "Bad";
@@ -136,7 +162,7 @@ export default function QualityScores({
     : null;
 
   const categories = hasData
-    ? getCategoryScores(dlMbps, ulMbps, latencyAvg, latencyJitter)
+    ? getCategoryScores(dlMbps, ulMbps, latencyAvg, latencyJitter, packetLossPercent, score?.total ?? 0)
     : {
       streaming: { rating: "\u2014", color: "text-mute", icon: null },
       gaming: { rating: "\u2014", color: "text-mute", icon: null },
@@ -153,7 +179,7 @@ export default function QualityScores({
     <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs">
       <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-4 pb-2 border-b border-hairline">
         <span>NETWORK QUALITY SCORE</span>
-        <InfoTooltip content="Composite score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical below 25." />
+        <InfoTooltip content="Composite score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical below 25. Category ratings gate Great on score ≥ 70 and Good on score ≥ 50 to stay consistent with the grade." />
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-8">

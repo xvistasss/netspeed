@@ -3,10 +3,15 @@
 
 export const CONFIG = {
   // ── Cloudflare Speed Test Endpoint ──
-  // Single source of truth for speed.cloudflare.com — used by download, upload,
-  // latency, and packet-loss tests. All measurements target the same Cloudflare
-  // edge infrastructure for consistency.
+  // Upstream Cloudflare endpoint for download/upload/latency/packet-loss tests.
+  // The browser never fetches this directly — all requests go through the
+  // /api/speed-proxy server-side proxy to avoid CORS issues.
   CLOUDFLARE_SPEED_ENDPOINT: "https://speed.cloudflare.com",
+
+  // ── Speed Proxy Endpoint ──
+  // Server-side proxy that forwards requests to speed.cloudflare.com.
+  // Same-origin relative URL — no CORS restrictions from the browser.
+  SPEED_PROXY_ENDPOINT: "/api/speed-proxy",
 
   // ── Ping Test ──
   PING_ITERATIONS: 35,
@@ -68,12 +73,21 @@ export const CONFIG = {
   LOADED_PING_INTERVAL_CELLULAR_MS: 300,
   LOADED_PING_INTERVAL_WIFI_MS: 100,
 
-  // ── ICMP Estimation ──
-  // Fixed offset model: ICMP_RTT = HTTP_RTT - FIXED_OFFSET
-  // TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms total round-trip.
-  // This is a constant additive overhead, NOT proportional to RTT.
-  // WiFi/Fiber: ~3ms (low CPU overhead, fast TLS termination)
-  // Cellular: ~5ms (carrier NAT, radio-layer processing, slower CPU)
+  // ── ICMP Estimation (HTTP fallback only) ──
+  // These offsets are applied ONLY when WebRTC UDP measurement is unavailable.
+  //
+  // Why fixed offset, not multiplicative?
+  //   TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms CONSTANT
+  //   additive overhead per round-trip. It does NOT scale with RTT.
+  //   Example: at 80ms HTTP RTT, subtracting 3ms gives 77ms (correct).
+  //   Using 0.85 factor gives 68ms (wrong — off by 9ms).
+  //
+  // Why different values for WiFi vs Cellular?
+  //   Cellular adds carrier-grade NAT (CGNAT), radio-layer scheduling,
+  //   and slower CPU processing on the device — ~2ms additional overhead.
+  //
+  // Note: When WebRTC is available, the ICMP estimate uses the WebRTC RTT
+  // directly (no offset needed — UDP bypasses TCP/TLS/HTTP layers entirely).
   ICMP_OVERHEAD_FIXED_WIFI_MS: 3,
   ICMP_OVERHEAD_FIXED_CELLULAR_MS: 5,
 

@@ -1,10 +1,12 @@
-import type { ClientInfo, LatencyStats } from "../utils/speedTestUtils";
+import type { ClientInfo, LatencyStats, IcmpSource } from "../utils/speedTestUtils";
 
 interface TechnicalLogsProps {
   clientInfo: ClientInfo | null;
   latencyStats: LatencyStats;
   icmpEstimate?: number;
   webrtcLatency?: number | null;
+  icmpSource?: IcmpSource;
+  icmpOffsetApplied?: number;
 }
 
 export default function TechnicalLogs({
@@ -12,6 +14,8 @@ export default function TechnicalLogs({
   latencyStats,
   icmpEstimate,
   webrtcLatency = null,
+  icmpSource = "http-fallback",
+  icmpOffsetApplied = 0,
 }: TechnicalLogsProps) {
   if (!clientInfo) return null;
 
@@ -83,7 +87,7 @@ export default function TechnicalLogs({
           <div className="grid grid-cols-2 gap-3">
             {/* HTTP RTT */}
             <div className="flex flex-col gap-1.5 border border-hairline rounded-md p-2.5 bg-canvas-soft">
-              <span className="text-[10px] text-mute font-semibold uppercase">HTTP RTT</span>
+              <span className="text-[10px] text-mute font-semibold uppercase">HTTP RTT (TCP)</span>
               {hasHttpRtt ? (
                 <span className="text-lg font-bold text-ink tabular-nums">
                   {httpRtt.toFixed(1)}<span className="text-xs font-normal text-mute ml-0.5">ms</span>
@@ -92,7 +96,7 @@ export default function TechnicalLogs({
                 <span className="text-lg font-bold text-mute tabular-nums">—</span>
               )}
               <span className="text-[10px] text-mute leading-tight">
-                TCP-based round-trip measured during unloaded ping phase
+                TCP + TLS 1.3 + HTTP/2 framing overhead
               </span>
             </div>
 
@@ -107,7 +111,7 @@ export default function TechnicalLogs({
                 <span className="text-lg font-bold text-mute tabular-nums">—</span>
               )}
               <span className="text-[10px] text-mute leading-tight">
-                Data channel echo over UDP transport
+                UDP transport — no TCP/TLS/HTTP layers
               </span>
             </div>
           </div>
@@ -118,18 +122,21 @@ export default function TechnicalLogs({
               <div className="flex items-baseline gap-1.5">
                 <span className="text-[10px] text-mute">Est. ICMP:</span>
                 <span className="text-sm font-semibold text-ink tabular-nums">~{icmpEstimate!.toFixed(1)} ms</span>
-                {hasWebRtc && (
-                  <span className="text-[10px] text-mute">(via WebRTC)</span>
+                {icmpSource === "webrtc" ? (
+                  <span className="text-[10px] text-[#0070f3]">(via WebRTC UDP)</span>
+                ) : (
+                  <span className="text-[10px] text-mute">(via HTTP -{icmpOffsetApplied}ms)</span>
                 )}
               </div>
             </div>
           )}
 
           <div className="text-[10px] text-mute leading-relaxed mt-1">
-            UDP RTT via WebRTC data channel echo is closer to ICMP than HTTP RTT.
-            ICMP estimate prefers WebRTC when available (trimmed mean of 20 pings),
-            otherwise falls back to HTTP RTT minus a fixed offset based on network
-            type (3ms WiFi, 5ms cellular) to account for TLS 1.3 + HTTP/2 framing overhead.
+            <strong>ICMP estimation method:</strong> Prefers WebRTC DataChannel echo RTT
+            (UDP transport, bypasses TCP/TLS/HTTP overhead — closest to ICMP in browser).
+            Falls back to HTTP RTT minus a fixed offset ({icmpOffsetApplied}ms) when WebRTC
+            is unavailable (firewall, STUN blocked, permission denied). The offset accounts
+            for TLS 1.3 + HTTP/2 framing overhead — a constant additive delay, not proportional to RTT.
           </div>
         </div>
       </div>

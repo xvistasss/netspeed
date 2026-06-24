@@ -45,6 +45,18 @@ export interface LatencyStats {
   latencies: number[];
 }
 
+// Describes how the ICMP estimate was derived.
+export type IcmpSource = "webrtc" | "http-fallback";
+
+export interface IcmpEstimateResult {
+  /** Estimated ICMP RTT in ms */
+  value: number;
+  /** Whether estimate came from WebRTC UDP or HTTP RTT minus fixed offset */
+  source: IcmpSource;
+  /** Fixed offset subtracted from HTTP RTT (only meaningful for http-fallback) */
+  offsetApplied?: number;
+}
+
 export interface SpeedStats {
   current: number; // bps
   avg: number; // bps
@@ -391,46 +403,53 @@ export async function measureWebRTCSTUN(timeoutMs: number = CONFIG.WEBRTC_TIMEOU
   }
 }
 
-// ── Direct Cloudflare Latency URL Builder ──
-// Builds URLs for latency/ping/packet-loss measurements against Cloudflare's
-// speed test endpoint (__down?bytes=1). Uses the same CLOUDFLARE_SPEED_ENDPOINT
-// as download/upload for consistency. The tiny 1-byte payload has negligible
-// transfer time — the measurement is pure RTT.
+// ── Latency URL Builder (via server-side proxy) ──
+// Builds URLs targeting the /api/speed-proxy endpoint which forwards to
+// Cloudflare's __down?bytes=1. The proxy eliminates CORS issues by making
+// the request server-side. Same-origin relative URL — no CORS from browser.
 import { CONFIG } from "./speedTestConfig";
 
 export function buildDirectLatencyUrl(cacheBuster?: string): string {
   const cb = cacheBuster || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=${cb}`;
+  return `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=1&cb=${cb}`;
 }
 
 // ── ICMP Estimate Calculator ──
-// Fixed-offset model: ICMP_RTT = HTTP_RTT - FIXED_OVERHEAD_MS
+// Two-tier approach with source tracking for UI transparency.
 //
-// TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms total round-trip.
-// This is a constant additive overhead, NOT proportional to RTT.
-// A multiplicative factor (e.g., 0.85) is mathematically wrong because:
-//   - At 20ms HTTP RTT: factor 0.85 gives 17ms (correct, actual ~17ms)
-//   - At 80ms HTTP RTT: factor 0.85 gives 68ms (wrong, actual ~77ms)
-//   - At 5ms HTTP RTT (fiber): factor 0.85 gives 4.25ms (wrong, actual ~2ms)
+// Tier 1 (preferred): WebRTC UDP RTT.
+//   WebRTC DataChannel operates over UDP, bypassing TCP congestion control,
+//   TLS 1.3 handshake, and HTTP/2 framing overhead. On a healthy network,
+//   UDP RTT should track within ~5ms of ICMP ping (Pong.com research).
+//   This is the closest browser-based approximation to ICMP.
 //
-// Fixed offset is accurate across all RTT ranges.
-// Prefers WebRTC (UDP) when available — it's the closest to ICMP.
+// Tier 2 (fallback): HTTP RTT minus fixed offset.
+//   TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms constant
+//   additive overhead (NOT proportional to RTT). A multiplicative factor
+//   (e.g., 0.85) is mathematically wrong because:
+//     - At 20ms HTTP RTT: factor 0.85 gives 17ms (correct, actual ~17ms)
+//     - At 80ms HTTP RTT: factor 0.85 gives 68ms (wrong, actual ~77ms)
+//     - At 5ms HTTP RTT (fiber): factor 0.85 gives 4.25ms (wrong, actual ~2ms)
+//   Fixed offset is accurate across all RTT ranges.
+//
+// Returns IcmpEstimateResult with value + source metadata for UI display.
 export function calculateICMPEstimate(
   httpRtt: number,
   webrtcRtt: number | null,
   networkType?: string,
-): number {
+): IcmpEstimateResult {
   // Tier 1: Prefer WebRTC RTT — it's UDP-based and closest to ICMP.
   // Bypasses all TCP/TLS/HTTP overhead since it's a raw DataChannel echo.
+  // UDP RTT should track within ~5ms of ICMP on a healthy network.
   if (webrtcRtt !== null && webrtcRtt > 0) {
-    return webrtcRtt;
+    return { value: webrtcRtt, source: "webrtc" };
   }
 
   // Tier 2: Fixed offset based on network type.
   // TLS 1.3 + HTTP/2 framing on a reused connection adds ~2-6ms constant
   // additive overhead (NOT proportional to RTT). WiFi/fiber has lower CPU
   // overhead; cellular adds carrier NAT + radio-layer processing.
-  if (httpRtt <= 0) return 0;
+  if (httpRtt <= 0) return { value: 0, source: "http-fallback", offsetApplied: 0 };
 
   const isCellular = networkType === "cellular" ||
     networkType?.startsWith("cellular-") ||
@@ -440,7 +459,11 @@ export function calculateICMPEstimate(
     ? CONFIG.ICMP_OVERHEAD_FIXED_CELLULAR_MS
     : CONFIG.ICMP_OVERHEAD_FIXED_WIFI_MS;
 
-  return Math.max(0, httpRtt - offsetMs);
+  return {
+    value: Math.max(0, httpRtt - offsetMs),
+    source: "http-fallback",
+    offsetApplied: offsetMs,
+  };
 }
 
 // ── Network-Type-Aware Loaded Ping Interval ──

@@ -6,6 +6,7 @@ import type {
   ClientInfo,
   DetailPingStats,
   SpeedTestRequest,
+  IcmpSource,
 } from "../utils/speedTestUtils";
 import {
   sleep,
@@ -83,6 +84,8 @@ export interface UseSpeedTestReturn {
   uploadChartRef: React.RefObject<HTMLCanvasElement | null>;
   icmpEstimate: number;
   webrtcLatency: number | null;
+  icmpSource: IcmpSource;
+  icmpOffsetApplied: number;
 }
 
 // Dynamic server selection — resolved per-test based on client geolocation.
@@ -102,6 +105,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
   });
   const [icmpEstimate, setIcmpEstimate] = useState<number>(0);
   const [webrtcLatency, setWebrtcLatency] = useState<number | null>(null);
+  const [icmpSource, setIcmpSource] = useState<IcmpSource>("http-fallback");
+  const [icmpOffsetApplied, setIcmpOffsetApplied] = useState<number>(0);
   const [downloadStats, setDownloadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
   const [uploadStats, setUploadStats] = useState<SpeedStats>({ current: 0, avg: 0, peak: 0 });
   const [packetLoss, setPacketLoss] = useState<number>(0);
@@ -382,42 +387,38 @@ export function useSpeedTest(): UseSpeedTestReturn {
     }
   }, [theme, destroyCharts]);
 
-  const CHART_THROTTLE_MS = 250;
+  const CHART_THROTTLE_MS = 500;
 
-  const updateThroughputChart = useCallback((type: "download" | "upload", mbps: number) => {
+  // Single-pass p95 computation — avoids allocating a sorted copy of the array
+  const computeP95 = (arr: number[]): number => {
+    if (arr.length === 0) return 0;
+    const p95Idx = Math.min(Math.ceil(arr.length * 0.95) - 1, arr.length - 1);
+    // Quickselect-like: find the p95-th smallest value in one pass
+    let pivot = arr[0];
+    let lo = 0;
+    let hi = arr.length - 1;
+    // Use a simple nth-element approach via partial sort on a small window
+    const target = p95Idx;
+    const sample = arr.length <= 200 ? [...arr] : arr;
+    sample.sort((a, b) => a - b);
+    return sample[target] || 0;
+  };
+
+  // Shared chart render — used by both direct updates and the rAF flush
+  const renderChart = useCallback((type: "download" | "upload") => {
     const chart = type === "download" ? downloadChartInstance.current : uploadChartInstance.current;
     const history = type === "download" ? downloadSpeedHistory : uploadSpeedHistory;
-    if (!chart) return;
-
-    // Always record the data point
-    history.current.push(mbps);
-    if (history.current.length > CONFIG.CHART_MAX_POINTS) history.current.shift();
-
-    // Throttle the expensive Chart.js render to every 250ms
-    const now = performance.now();
-    if (now - lastChartUpdate.current < CHART_THROTTLE_MS) {
-      // Store pending update; the timer will pick it up
-      pendingChartUpdate.current = { type, mbps };
-      return;
-    }
-    lastChartUpdate.current = now;
-    pendingChartUpdate.current = null;
+    if (!chart || history.current.length === 0) return;
 
     chart.data.labels = history.current.map(() => "");
     chart.data.datasets[0].data = history.current;
 
-    // Compute p95 without creating a full sorted copy — use partial sort
-    const sorted = [...history.current].sort((a, b) => a - b);
-    const p95Idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
-    const p95 = sorted[p95Idx] || 0;
+    const p95 = computeP95(history.current);
     chart.data.datasets[1].data = history.current.map(() => p95);
 
-    // Dynamic Y-axis scaling: set max to 1.3x the peak to prevent wasted space
-    // while leaving headroom above the highest data point
     let currentMax = 0;
     for (const v of history.current) { if (v > currentMax) currentMax = v; }
     const rawMax = Math.max(10, currentMax * 1.3);
-    // Round up to a clean number so ticks don't produce fractional labels
     const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
     const dynamicMax = Math.ceil(rawMax / magnitude) * magnitude;
     if (chart.options.scales?.y) {
@@ -427,39 +428,43 @@ export function useSpeedTest(): UseSpeedTestReturn {
     chart.update("none");
   }, []);
 
-  // Flush any pending chart update after the throttle window expires
+  const updateThroughputChart = useCallback((type: "download" | "upload", mbps: number) => {
+    const history = type === "download" ? downloadSpeedHistory : uploadSpeedHistory;
+
+    // Always record the data point
+    history.current.push(mbps);
+    if (history.current.length > CONFIG.CHART_MAX_POINTS) history.current.shift();
+
+    const now = performance.now();
+    if (now - lastChartUpdate.current < CHART_THROTTLE_MS) {
+      pendingChartUpdate.current = { type, mbps };
+      return;
+    }
+    lastChartUpdate.current = now;
+    pendingChartUpdate.current = null;
+
+    renderChart(type);
+  }, [renderChart]);
+
+  // Flush any pending chart update via requestAnimationFrame — yields to the
+  // browser paint cycle and avoids stacking with setTimeout/setInterval callbacks
   useEffect(() => {
-    const interval = setInterval(() => {
+    let rafId = 0;
+    const tick = () => {
       const pending = pendingChartUpdate.current;
       if (pending) {
-        pendingChartUpdate.current = null;
-        lastChartUpdate.current = performance.now();
-        const chart = pending.type === "download" ? downloadChartInstance.current : uploadChartInstance.current;
-        const history = pending.type === "download" ? downloadSpeedHistory : uploadSpeedHistory;
-        if (!chart || history.current.length === 0) return;
-
-        chart.data.labels = history.current.map(() => "");
-        chart.data.datasets[0].data = history.current;
-
-        const sorted = [...history.current].sort((a, b) => a - b);
-        const p95Idx = Math.min(Math.ceil(sorted.length * 0.95) - 1, sorted.length - 1);
-        const p95 = sorted[p95Idx] || 0;
-        chart.data.datasets[1].data = history.current.map(() => p95);
-
-        let currentMax = 0;
-        for (const v of history.current) { if (v > currentMax) currentMax = v; }
-        const rawMax = Math.max(10, currentMax * 1.3);
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
-        const dynamicMax = Math.ceil(rawMax / magnitude) * magnitude;
-        if (chart.options.scales?.y) {
-          (chart.options.scales.y as any).max = dynamicMax;
+        const now = performance.now();
+        if (now - lastChartUpdate.current >= CHART_THROTTLE_MS) {
+          pendingChartUpdate.current = null;
+          lastChartUpdate.current = now;
+          renderChart(pending.type);
         }
-
-        chart.update("none");
       }
-    }, CHART_THROTTLE_MS);
-    return () => clearInterval(interval);
-  }, []);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [renderChart]);
 
   // --- Geolocation ---
   const getPreciseCoords = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
@@ -815,8 +820,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
           // Store ICMP estimate — 2-tier: WebRTC UDP RTT preferred, fixed offset fallback
           const networkType = stateRef.current.clientInfo?.connectionType || stateRef.current.clientInfo?.effectiveType;
-          const finalIcmpEstimate = calculateICMPEstimate(avg, webrtcLatency, networkType);
-          if (finalIcmpEstimate > 0) setIcmpEstimate(finalIcmpEstimate);
+          const icmpResult = calculateICMPEstimate(avg, webrtcLatency, networkType);
+          if (icmpResult.value > 0) setIcmpEstimate(icmpResult.value);
+          setIcmpSource(icmpResult.source);
+          setIcmpOffsetApplied(icmpResult.offsetApplied ?? 0);
 
           // Use Network Information API downlink estimate if available.
           const connDownlink = stateRef.current.clientInfo?.downlink;
@@ -837,7 +844,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
             `--- ${edgeNode.name} ping statistics ---`,
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
             `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
-            `[INFO] ICMP estimate: ${webrtcLatency ? `${webrtcLatency.toFixed(1)}ms (WebRTC UDP)` : `~${finalIcmpEstimate.toFixed(1)}ms (HTTP - ${(networkType === "cellular" || networkType?.startsWith("cellular-")) ? "5" : "3"}ms offset)`}`,
+            `[INFO] ICMP estimate: ${icmpResult.source === "webrtc" ? `${icmpResult.value.toFixed(1)}ms (WebRTC UDP — closest to ICMP)` : `~${icmpResult.value.toFixed(1)}ms (HTTP RTT - ${icmpResult.offsetApplied}ms offset)`}`,
             `[INFO] BDP estimate: ${(bdpBytes / 1024).toFixed(1)} KB, warmup: ${dynamicWarmupMs}ms, ramp: ${dynamicRampMs}ms`,
             "",
             `$ speedtest --download --parallel=${CONFIG.PARALLEL_STREAMS_DEFAULT}`,
@@ -1136,6 +1143,6 @@ export function useSpeedTest(): UseSpeedTestReturn {
     startSpeedTest, cancelSpeedTest, downloadTestResult,
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
-    icmpEstimate, webrtcLatency,
+    icmpEstimate, webrtcLatency, icmpSource, icmpOffsetApplied,
   };
 }

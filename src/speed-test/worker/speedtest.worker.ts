@@ -508,8 +508,7 @@ async function runDownloadTest(
       const streamStart = performance.now();
 
       try {
-        // Direct to Cloudflare — no Worker proxy
-        const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
+        const url = `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
 
         const response = await fetch(url, {
           method: "GET",
@@ -953,22 +952,7 @@ async function runUploadTest(
 
           const currentChunkSize = streamNextChunkSize;
 
-          // Send directly to Cloudflare's __up endpoint, bypassing our Worker
-          // proxy. The Cloudflare speedtest SDK sends uploads directly from the
-          // browser to speed.cloudflare.com/__up with no proxy.
-          //
-          // CORS constraint: the request MUST use a CORS-safelisted content
-          // type to avoid a preflight OPTIONS request. Cloudflare's __up does
-          // NOT respond to preflight requests (returns 400). The safelisted
-          // types are: application/x-www-form-urlencoded, multipart/form-data,
-          // text/plain. We use a string body which the browser sends as
-          // text/plain;charset=UTF-8 — no preflight triggered.
-          //
-          // NOTE: POST request bodies are NEVER compressed by browsers.
-          // Content-Encoding: gzip applies to responses, not requests.
-          // We use random printable ASCII text (not "0".repeat) so the payload
-          // is truly non-compressible, matching our website's claim.
-          const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__up?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
+          const url = `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
 
           const chunkStart = performance.now();
           const requestTimestamp = Date.now();

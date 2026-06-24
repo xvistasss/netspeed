@@ -30,6 +30,37 @@ const {
     <meta name="title" content={title} />
     <meta name="description" content={description} />
 
+    <!-- Google Analytics — deferred until page load + browser idle -->
+    <script is:inline>
+      (function () {
+        var loaded = false;
+        function loadGA() {
+          if (loaded) return;
+          loaded = true;
+          var s = document.createElement("script");
+          s.async = true;
+          s.src = "https://www.googletagmanager.com/gtag/js?id=G-341P014VS4";
+          document.head.appendChild(s);
+          window.dataLayer = window.dataLayer || [];
+          function gtag() { dataLayer.push(arguments); }
+          gtag("js", new Date());
+          gtag("config", "G-341P014VS4");
+        }
+        function onIdle() {
+          if ("requestIdleCallback" in window) {
+            requestIdleCallback(loadGA, { timeout: 30000 });
+          } else {
+            setTimeout(loadGA, 30000);
+          }
+        }
+        if (document.readyState === "complete") {
+          onIdle();
+        } else {
+          window.addEventListener("load", onIdle);
+        }
+      })();
+    </script>
+
     <!-- Canonical URL -->
     <link rel="canonical" href={Astro.url} />
 

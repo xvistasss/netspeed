@@ -29,7 +29,7 @@ export default function SpeedTest() {
     startSpeedTest, cancelSpeedTest, downloadTestResult,
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
-    icmpEstimate, webrtcLatency,
+    icmpEstimate, webrtcLatency, icmpSource, icmpOffsetApplied,
   } = useSpeedTest();
 
   const isTestRunning = phase !== "idle" && phase !== "complete" && phase !== "error";
@@ -227,8 +227,10 @@ export default function SpeedTest() {
                 {icmpEstimate > 0 && (
                   <div className="text-[10px] text-mute font-mono mt-1">
                     Est. ICMP: ~{icmpEstimate.toFixed(1)} ms
-                    {webrtcLatency !== null && webrtcLatency > 0 && (
-                      <span className="text-[9px]"> (via WebRTC)</span>
+                    {icmpSource === "webrtc" ? (
+                      <span className="text-[9px] text-[#0070f3]"> (via WebRTC UDP)</span>
+                    ) : (
+                      <span className="text-[9px]"> (via HTTP -{icmpOffsetApplied}ms)</span>
                     )}
                   </div>
                 )}
@@ -317,7 +319,14 @@ export default function SpeedTest() {
           />
 
           {/* Technical Details */}
-          <TechnicalLogs clientInfo={clientInfo} latencyStats={latencyStats} icmpEstimate={icmpEstimate} webrtcLatency={webrtcLatency} />
+          <TechnicalLogs
+            clientInfo={clientInfo}
+            latencyStats={latencyStats}
+            icmpEstimate={icmpEstimate}
+            webrtcLatency={webrtcLatency}
+            icmpSource={icmpSource}
+            icmpOffsetApplied={icmpOffsetApplied}
+          />
         </div>
 
         {/* Terminal Panel */}
