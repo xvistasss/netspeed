@@ -655,7 +655,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     let warmupMs = 0;
     try {
       const startWarmup = performance.now();
-      const res = await fetch(buildDirectLatencyUrl(`warmup-${Date.now()}`), { cache: "no-store" });
+      const res = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=warmup-${Date.now()}`, { cache: "no-store" });
       if (res.status !== 204) {
         await res.text();
       }

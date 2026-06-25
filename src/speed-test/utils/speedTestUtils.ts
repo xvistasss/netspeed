@@ -414,6 +414,18 @@ export function buildDirectLatencyUrl(cacheBuster?: string): string {
   return `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=1&cb=${cb}`;
 }
 
+// ── Direct Cloudflare URL Builder ──
+// Builds URLs targeting the Cloudflare speed test endpoint directly.
+// Used for high-throughput operations (download/upload) to avoid Worker proxy overhead.
+export function buildDirectCloudflareUrl(
+  endpoint: "/__down" | "/__up",
+  bytes: number,
+  cacheBuster?: string,
+): string {
+  const cb = cacheBuster || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}${endpoint}?bytes=${bytes}&cb=${cb}`;
+}
+
 // ── ICMP Estimate Calculator ──
 // Two-tier approach with source tracking for UI transparency.
 //

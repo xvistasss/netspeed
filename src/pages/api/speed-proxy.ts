@@ -37,6 +37,16 @@ export const GET: APIRoute = async ({ request }) => {
     const responseHeaders = new Headers(corsHeaders);
     responseHeaders.set("Content-Type", upstreamResponse.headers.get("Content-Type") || "application/octet-stream");
 
+    const contentLength = upstreamResponse.headers.get("Content-Length");
+    if (contentLength) {
+      responseHeaders.set("Content-Length", contentLength);
+    }
+
+    const timingAllowOrigin = upstreamResponse.headers.get("Timing-Allow-Origin");
+    if (timingAllowOrigin) {
+      responseHeaders.set("Timing-Allow-Origin", timingAllowOrigin);
+    }
+
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       headers: responseHeaders,
@@ -58,11 +68,20 @@ export const POST: APIRoute = async ({ request }) => {
     const upstreamResponse = await fetch(upstreamUrl.toString(), {
       method: "POST",
       body: request.body,
-      duplex: "half",
     });
 
     const responseHeaders = new Headers(corsHeaders);
     responseHeaders.set("Content-Type", upstreamResponse.headers.get("Content-Type") || "application/octet-stream");
+
+    const contentLength = upstreamResponse.headers.get("Content-Length");
+    if (contentLength) {
+      responseHeaders.set("Content-Length", contentLength);
+    }
+
+    const timingAllowOrigin = upstreamResponse.headers.get("Timing-Allow-Origin");
+    if (timingAllowOrigin) {
+      responseHeaders.set("Timing-Allow-Origin", timingAllowOrigin);
+    }
 
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,

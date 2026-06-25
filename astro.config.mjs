@@ -25,6 +25,9 @@ export default defineConfig({
     plugins: [tailwindcss()],
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version)
-    }
+    },
+    optimizeDeps: {
+      include: ['chart.js'],
+    },
   }
 });

@@ -3,13 +3,14 @@
 
 export const CONFIG = {
   // ── Cloudflare Speed Test Endpoint ──
-  // Upstream Cloudflare endpoint for download/upload/latency/packet-loss tests.
-  // The browser never fetches this directly — all requests go through the
-  // /api/speed-proxy server-side proxy to avoid CORS issues.
+  // Direct Cloudflare endpoint for download/upload/latency/packet-loss tests.
+  // The browser fetches directly from this endpoint (CORS enabled: *).
+  // This eliminates Worker proxy overhead and subrequest limits.
   CLOUDFLARE_SPEED_ENDPOINT: "https://speed.cloudflare.com",
 
   // ── Speed Proxy Endpoint ──
   // Server-side proxy that forwards requests to speed.cloudflare.com.
+  // Used as fallback for environments where direct connection fails.
   // Same-origin relative URL — no CORS restrictions from the browser.
   SPEED_PROXY_ENDPOINT: "/api/speed-proxy",
 

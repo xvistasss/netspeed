@@ -23,7 +23,7 @@ const CSP = {
   ],
 
   connectSrc: [
-    // Speed test infrastructure
+    // Speed test infrastructure (direct browser connection)
     "https://speed.cloudflare.com",
 
     // IP geolocation APIs
@@ -33,12 +33,18 @@ const CSP = {
     "https://ipapi.co",
     "https://ipinfo.io",
     "https://api.ipify.org",
+    "https://ifconfig.me",
+    "https://icanhazip.com",
 
     // Google Analytics
     "https://www.google-analytics.com",
     "https://analytics.google.com",
     "https://www.googletagmanager.com",
     "https://www.google.com",
+
+    // WebRTC STUN servers
+    // "stun:stun.l.google.com:19302",
+    // "stun:stun1.l.google.com:19302",
   ],
 
   fontSrc: [] as string[],

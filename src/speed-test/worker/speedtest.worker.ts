@@ -130,6 +130,10 @@ self.onmessage = async (e: MessageEvent) => {
       errorMessage = "Connection reset by server — network instability detected";
     } else if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
       errorMessage = "Network error — check your connection and firewall settings";
+    } else if (error.message?.includes("CORS") || error.message?.includes("cors")) {
+      errorMessage = "CORS error — direct connection blocked, falling back to proxy";
+    } else if (error.message?.includes("AbortError") || error.name === "AbortError") {
+      errorMessage = "Request aborted — test may have been cancelled or timed out";
     }
     self.postMessage({
       type: "ERROR",
@@ -174,7 +178,7 @@ async function runPingTest(
   try {
     for (let w = 0; w < 4; w++) {
       const startWarmup = performance.now();
-      const res = await fetch(buildDirectLatencyUrl(`warmup-${w}-${Date.now()}`), {
+      const res = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=warmup-${w}-${Date.now()}`, {
         method: "GET",
         cache: "no-store",
         signal,
@@ -204,7 +208,7 @@ async function runPingTest(
       const start = performance.now();
       try {
         const suffix = `ping-${i}${retry > 0 ? `-retry${retry}` : ""}-${Date.now()}`;
-        const response = await fetch(buildDirectLatencyUrl(suffix), {
+        const response = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=${suffix}`, {
           method: "GET",
           cache: "no-store",
           signal,
@@ -381,7 +385,7 @@ async function runDownloadTest(
     activePingControllers.push(pingCtrl);
     const pingTimeout = setTimeout(() => pingCtrl.abort(), 3000);
 
-    fetch(buildDirectLatencyUrl(`loaded-dl-${Date.now()}`), { signal: pingCtrl.signal, cache: "no-store" })
+    fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=loaded-dl-${Date.now()}`, { signal: pingCtrl.signal, cache: "no-store" })
       .then((res) => {
         if (res.ok) {
           return res.status === 204 ? null : res.text().then(() => null);
@@ -508,7 +512,7 @@ async function runDownloadTest(
       const streamStart = performance.now();
 
       try {
-        const url = `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
+        const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=${perStreamBytes}&cb=${Date.now()}-${Math.random()}-${streamIndex}`;
 
         const response = await fetch(url, {
           method: "GET",
@@ -816,7 +820,7 @@ async function runUploadTest(
     activePingControllers.push(pingCtrl);
     const pingTimeout = setTimeout(() => pingCtrl.abort(), 3000);
 
-    fetch(buildDirectLatencyUrl(`loaded-ul-${Date.now()}`), { signal: pingCtrl.signal, cache: "no-store" })
+    fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=loaded-ul-${Date.now()}`, { signal: pingCtrl.signal, cache: "no-store" })
       .then((res) => {
         if (res.ok) {
           return res.status === 204 ? null : res.text().then(() => null);
@@ -952,7 +956,7 @@ async function runUploadTest(
 
           const currentChunkSize = streamNextChunkSize;
 
-          const url = `${CONFIG.SPEED_PROXY_ENDPOINT}?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
+          const url = `${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__up?bytes=${currentChunkSize}&cb=${Date.now()}-${Math.random()}`;
 
           const chunkStart = performance.now();
           const requestTimestamp = Date.now();
@@ -1214,7 +1218,7 @@ async function runPacketLossTest(
 
   // 1. Warm-up — establish connection before loss measurement
   try {
-    const warmupRes = await fetch(buildDirectLatencyUrl(`pl-warmup-${Date.now()}`), {
+    const warmupRes = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=pl-warmup-${Date.now()}`, {
       method: "GET",
       cache: "no-store",
       signal,
@@ -1232,7 +1236,7 @@ async function runPacketLossTest(
 
     sent++;
     try {
-      const res = await fetch(buildDirectLatencyUrl(`pl-${i}-${Date.now()}`), {
+      const res = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=pl-${i}-${Date.now()}`, {
         method: "GET",
         cache: "no-store",
         signal,
