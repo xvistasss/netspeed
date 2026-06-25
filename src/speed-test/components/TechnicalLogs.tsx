@@ -51,6 +51,9 @@ export default function TechnicalLogs({
               <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] text-success font-sans">
                 <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
                 GPS
+                {clientInfo.gpsAccuracy != null && (
+                  <span className="text-mute">({clientInfo.gpsAccuracy}m)</span>
+                )}
               </span>
             )}
             {clientInfo.isApproximate && !clientInfo.isPrecise && (

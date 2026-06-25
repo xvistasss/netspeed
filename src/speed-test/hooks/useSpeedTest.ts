@@ -19,7 +19,7 @@ import {
   calculateICMPEstimate,
 } from "../utils/speedTestUtils";
 import { CONFIG } from "../utils/speedTestConfig";
-import { selectNearestEdge, describeServerSelection, type ServerSelectionResult } from "../utils/serverSelection";
+import { selectNearestEdge, describeServerSelection, haversineDistance, type ServerSelectionResult } from "../utils/serverSelection";
 
 // Lazy-loaded Chart.js module — only loaded when first test starts
 let ChartJSModule: typeof import("chart.js") | null = null;
@@ -156,7 +156,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [locationPrePromptTimeLeft, setLocationPrePromptTimeLeft] = useState<number | null>(null);
   const locationPrePromptTimerRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<number | null>(null);
-  const locationResolveRef = useRef<((value: { latitude: number; longitude: number } | null) => void) | null>(null);
+  const locationResolveRef = useRef<((value: { latitude: number; longitude: number; accuracy: number } | null) => void) | null>(null);
   const locationActionRef = useRef<"allow" | "skip" | null>(null);
   const geoWatchIdRef = useRef<number | null>(null);
   const isCancelledRef = useRef<boolean>(false);
@@ -527,7 +527,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
   }, [renderChart]);
 
   // --- Geolocation ---
-  const getPreciseCoords = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
+  const getPreciseCoords = useCallback((): Promise<{ latitude: number; longitude: number; accuracy: number } | null> => {
     return new Promise(async (resolve) => {
       if (!("geolocation" in navigator)) { resolve(null); return; }
 
@@ -557,9 +557,24 @@ export function useSpeedTest(): UseSpeedTestReturn {
                   attempt(false, 0, 200);
                   return;
                 }
+                // Reject unreasonably inaccurate positions — on desktops without
+                // GPS hardware, the browser may return WiFi/IP-based locations
+                // with accuracy > 1 km. These are too unreliable for server
+                // selection and would pick a distant edge server.
+                if (!enableHighAccuracy && position.coords.accuracy > 1000) {
+                  appendLogs([`[WARN] Location accuracy ${position.coords.accuracy.toFixed(0)}m is too unreliable (>1km). Falling back to IP-based location.`]);
+                  cancelGeoWatch();
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem("location-prompt-dismissed", "true");
+                  }
+                  resolve(null);
+                  locationResolveRef.current = null;
+                  return;
+                }
                 const label = enableHighAccuracy ? "High-accuracy" : "Low-accuracy";
-                setTerminalLogs((prev) => [...prev, `[INFO] ${label} geolocation obtained from device (accuracy: ${position.coords.accuracy.toFixed(0)}m).`]);
-                resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+                const accuracy = Math.round(position.coords.accuracy);
+                setTerminalLogs((prev) => [...prev, `[INFO] ${label} geolocation obtained from device (accuracy: ${accuracy}m).`]);
+                resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy });
                 locationResolveRef.current = null;
               }
             },
@@ -592,7 +607,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
                 locationResolveRef.current = null;
               }
             },
-            { enableHighAccuracy, maximumAge: enableHighAccuracy ? 300000 : Infinity },
+            { enableHighAccuracy, maximumAge: enableHighAccuracy ? 300000 : 600000 },
           );
         };
 
@@ -731,10 +746,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const upgradeToPreciseLocation = useCallback(async () => {
     const coords = await getPreciseCoords();
     if (!coords) return null;
-    const { city, region, countryCode } = await reverseGeocode(coords.latitude, coords.longitude);
+    const { city: gpsCity, region: gpsRegion, countryCode } = await reverseGeocode(coords.latitude, coords.longitude);
     let url = `/api/ip-geo?clientLat=${coords.latitude}&clientLon=${coords.longitude}`;
-    if (city) url += `&city=${encodeURIComponent(city)}`;
-    if (region) url += `&region=${encodeURIComponent(region)}`;
+    if (gpsCity) url += `&city=${encodeURIComponent(gpsCity)}`;
+    if (gpsRegion) url += `&region=${encodeURIComponent(gpsRegion)}`;
     if (countryCode) url += `&countryCode=${encodeURIComponent(countryCode)}`;
     try {
       const geoRes = await fetch(url, { cache: "no-store" });
@@ -744,6 +759,30 @@ export function useSpeedTest(): UseSpeedTestReturn {
         // connection info that were already correctly resolved by detectClientLocation.
         const existing = stateRef.current.clientInfo;
         if (!existing) return null;
+
+        // Sanity check: compare GPS-derived city with IP-derived city.
+        // If the GPS position is > 50 km from the IP position, the GPS
+        // coordinates are likely stale or unreliable (e.g., old WiFi-based
+        // position on a desktop). Prefer the IP-based location in this case.
+        const ipLat = existing.latitude;
+        const ipLon = existing.longitude;
+        const distFromIp = (ipLat !== 0 || ipLon !== 0)
+          ? haversineDistance(coords.latitude, coords.longitude, ipLat, ipLon)
+          : 0;
+        const gpsCityLower = (gpsCity || "").toLowerCase();
+        const ipCityLower = (existing.city || "").toLowerCase();
+        const citiesMatch = gpsCityLower && ipCityLower && gpsCityLower === ipCityLower;
+        const isSuspicious = distFromIp > 50 && !citiesMatch;
+
+        if (isSuspicious) {
+          appendLogs([
+            `[WARN] GPS location is ${Math.round(distFromIp)}km from IP location (GPS: ${gpsCity || "?"}, IP: ${existing.city || "?"}).`,
+            `[WARN] GPS coordinates may be stale or unreliable. Keeping IP-based location.`
+          ]);
+          // Don't update — keep existing IP-based location
+          return existing;
+        }
+
         const preciseData: ClientInfo = {
           ...existing,
           city: data.city || existing.city,
@@ -751,13 +790,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
           country: data.country || existing.country,
           latitude: coords.latitude,
           longitude: coords.longitude,
+          gpsAccuracy: coords.accuracy,
           isPrecise: true,
           isApproximate: false,
         };
         setClientInfo(preciseData);
         stateRef.current.clientInfo = preciseData;
         setStatusMessage(`Precise location loaded: ${preciseData.city}, ${preciseData.country}`);
-        appendLogs([`[OK] Precise location: ${preciseData.city}, ${preciseData.region}, ${preciseData.country}`]);
+        appendLogs([`[OK] Precise location: ${preciseData.city}, ${preciseData.region}, ${preciseData.country} (accuracy: ${coords.accuracy}m)`]);
         return preciseData;
       }
     } catch (e) { console.warn("Precise location upgrade failed:", e); }
