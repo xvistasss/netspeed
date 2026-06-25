@@ -73,6 +73,7 @@ export interface ClientInfo {
   longitude: number;
   isLocal: boolean;
   isPrecise?: boolean;
+  isApproximate?: boolean;
   connectionType?: string;    // e.g. "wifi", "ethernet", "cellular", "unknown"
   effectiveType?: string;     // e.g. "4g", "3g", "2g", "slow-2g"
   downlink?: number;          // Mbps estimate from Network Information API

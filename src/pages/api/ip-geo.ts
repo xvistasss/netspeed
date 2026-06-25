@@ -341,9 +341,9 @@ export const GET: APIRoute = async ({ request, url }) => {
       country: countryName,
       countryCode: countryCode || "Unknown",
       org: asn ? `AS${asn} ${org}` : org,
-      // Don't return raw GPS coordinates for privacy
-      latitude: undefined,
-      longitude: undefined,
+      latitude: latitude,
+      longitude: longitude,
+      isApproximate: true,
     }),
     {
       status: 200,

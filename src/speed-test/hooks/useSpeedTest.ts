@@ -86,6 +86,10 @@ export interface UseSpeedTestReturn {
   webrtcLatency: number | null;
   icmpSource: IcmpSource;
   icmpOffsetApplied: number;
+  skipLocationPrompt: () => void;
+  allowLocationPrompt: () => void;
+  locationPrePromptWaiting: boolean;
+  locationPrePromptTimeLeft: number | null;
 }
 
 // Dynamic server selection — resolved per-test based on client geolocation.
@@ -148,6 +152,48 @@ export function useSpeedTest(): UseSpeedTestReturn {
   });
   const startDisabled = useRef(false);
 
+  const [locationPrePromptWaiting, setLocationPrePromptWaiting] = useState(false);
+  const [locationPrePromptTimeLeft, setLocationPrePromptTimeLeft] = useState<number | null>(null);
+  const locationPrePromptTimerRef = useRef<number | null>(null);
+  const locationIntervalRef = useRef<number | null>(null);
+  const locationResolveRef = useRef<((value: { latitude: number; longitude: number } | null) => void) | null>(null);
+  const locationActionRef = useRef<"allow" | "skip" | null>(null);
+  const geoWatchIdRef = useRef<number | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
+
+  const skipLocationPrompt = useCallback(() => {
+    if (locationPrePromptTimerRef.current) {
+      clearInterval(locationPrePromptTimerRef.current);
+      locationPrePromptTimerRef.current = null;
+    }
+    if (locationIntervalRef.current) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
+    if (geoWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(geoWatchIdRef.current);
+      geoWatchIdRef.current = null;
+    }
+    setLocationPrePromptWaiting(false);
+    setLocationPrePromptTimeLeft(null);
+    locationActionRef.current = "skip";
+    if (locationResolveRef.current) {
+      appendLogs(["[INFO] Location permission request skipped by user. Using approximate location."]);
+      locationResolveRef.current(null);
+      locationResolveRef.current = null;
+    }
+  }, [appendLogs]);
+
+  const allowLocationPrompt = useCallback(() => {
+    if (locationPrePromptTimerRef.current) {
+      clearInterval(locationPrePromptTimerRef.current);
+      locationPrePromptTimerRef.current = null;
+    }
+    setLocationPrePromptWaiting(false);
+    setLocationPrePromptTimeLeft(null);
+    locationActionRef.current = "allow";
+  }, []);
+
   // Consolidated mutable refs — single object to avoid stale closures in worker callbacks
   const stateRef = useRef({
     downloadStats: { current: 0, avg: 0, peak: 0 } as SpeedStats,
@@ -187,9 +233,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
     }
   }, [terminalLogs, activeProgressLine]);
 
-  // Initialize client location and theme
+  // Initialize theme and set up event listeners.
+  // Location detection is deferred to startSpeedTest() — no need to fetch
+  // IP-based geolocation on page load since the test re-fetches on start.
   useEffect(() => {
-    detectClientLocation();
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
     const handleThemeChange = (e: Event) => {
@@ -204,23 +251,23 @@ export function useSpeedTest(): UseSpeedTestReturn {
     window.addEventListener("toggle-terminal", handleTerminalToggle);
 
     // Re-detect location when network changes (e.g., WiFi → cellular, VPN on/off).
-    // The Network Information API fires "change" when the device switches networks.
-    // Without this, the ISP/org info stays stale after a network switch.
+    // Only runs after initial detection (clientInfo exists) to avoid redundant
+    // fetches before the user starts a test.
     const conn = (navigator as any).connection;
     let networkChangeHandler: (() => void) | null = null;
     if (conn && typeof conn.addEventListener === "function") {
       networkChangeHandler = () => {
-        detectClientLocation();
+        if (stateRef.current.clientInfo) {
+          detectClientLocation();
+        }
       };
       conn.addEventListener("change", networkChangeHandler);
     }
 
     // Re-detect location when user returns to tab (visibilitychange).
-    // This catches network switches that happened while the tab was hidden —
-    // the browser won't fire "change" if the effective connection type didn't
-    // change (e.g., switching from one WiFi to another).
+    // Only runs after initial detection to avoid redundant fetches.
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "visible" && stateRef.current.clientInfo) {
         detectClientLocation();
       }
     };
@@ -235,20 +282,33 @@ export function useSpeedTest(): UseSpeedTestReturn {
         conn.removeEventListener("change", networkChangeHandler);
       }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+      if (geoWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(geoWatchIdRef.current);
+        geoWatchIdRef.current = null;
+      }
+      if (locationPrePromptTimerRef.current) {
+        clearInterval(locationPrePromptTimerRef.current);
+        locationPrePromptTimerRef.current = null;
+      }
     };
   }, []);
 
   // Auto-run on ?autorun=true
+  // No dependency on clientInfo — startSpeedTest() handles location detection internally.
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get("autorun") === "true" && !autorunTriggered.current && clientInfo !== null) {
+    if (searchParams.get("autorun") === "true" && !autorunTriggered.current) {
       autorunTriggered.current = true;
       const url = new URL(window.location.href);
       url.searchParams.delete("autorun");
       window.history.replaceState({}, document.title, url.pathname + url.search);
       startSpeedTest();
     }
-  }, [clientInfo]);
+  }, []);
 
   // Sync Chart.js theme colors
   useEffect(() => {
@@ -468,37 +528,183 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   // --- Geolocation ---
   const getPreciseCoords = useCallback((): Promise<{ latitude: number; longitude: number } | null> => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (!("geolocation" in navigator)) { resolve(null); return; }
 
-      const attempt = (enableHighAccuracy: boolean, timeout: number, retries: number, delayMs: number) => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const label = enableHighAccuracy ? "High-accuracy" : "Low-accuracy";
-            setTerminalLogs((prev) => [...prev, `[INFO] ${label} geolocation obtained from device.`]);
-            resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-          },
-          (error) => {
-            if (error.code === error.PERMISSION_DENIED) { resolve(null); return; }
-            if (retries > 0 && enableHighAccuracy) {
-              // Retry with exponential backoff — the browser may need time
-              // to fully initialize the geolocation hardware after permission grant.
-              setTimeout(() => attempt(enableHighAccuracy, timeout, retries - 1, delayMs * 2), delayMs);
-            } else if (enableHighAccuracy) {
-              // Fall back to low-accuracy mode (uses network/IP-based location)
-              attempt(false, 4000, 0, 200);
-            } else {
-              resolve(null);
-            }
-          },
-          { enableHighAccuracy, timeout, maximumAge: enableHighAccuracy ? 300000 : Infinity },
-        );
+      // Helper: cancel any active geolocation watch.
+      // Note: clearWatch does NOT dismiss the browser permission dialog —
+      // that dialog is a browser-chrome element outside JS control. The
+      // pre-prompt pattern (below) avoids triggering it in the first place.
+      const cancelGeoWatch = () => {
+        if (geoWatchIdRef.current !== null) {
+          navigator.geolocation.clearWatch(geoWatchIdRef.current);
+          geoWatchIdRef.current = null;
+        }
       };
 
-      // 3 retries with 500ms, 1000ms, 2000ms backoff for high-accuracy
-      attempt(true, 6000, 3, 500);
+      // Helper: request geolocation via watchPosition with retry/fallback logic.
+      // Only called after user explicitly consents via the pre-prompt UI.
+      const requestGeoPosition = () => {
+        const attempt = (enableHighAccuracy: boolean, retries: number, delayMs: number) => {
+          cancelGeoWatch();
+
+          geoWatchIdRef.current = navigator.geolocation.watchPosition(
+            (position) => {
+              cancelGeoWatch();
+              if (locationResolveRef.current === resolve) {
+                if (enableHighAccuracy && position.coords.accuracy > 100) {
+                  appendLogs([`[WARN] GPS accuracy ${position.coords.accuracy.toFixed(0)}m is too low (threshold: 100m). Retrying with low-accuracy mode.`]);
+                  attempt(false, 0, 200);
+                  return;
+                }
+                const label = enableHighAccuracy ? "High-accuracy" : "Low-accuracy";
+                setTerminalLogs((prev) => [...prev, `[INFO] ${label} geolocation obtained from device (accuracy: ${position.coords.accuracy.toFixed(0)}m).`]);
+                resolve({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+                locationResolveRef.current = null;
+              }
+            },
+            (error) => {
+              if (locationResolveRef.current !== resolve) return;
+              cancelGeoWatch();
+
+              if (error.code === error.PERMISSION_DENIED) {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("location-prompt-dismissed", "true");
+                }
+                resolve(null);
+                locationResolveRef.current = null;
+                return;
+              }
+
+              if (retries > 0 && enableHighAccuracy) {
+                setTimeout(() => {
+                  if (locationResolveRef.current === resolve) {
+                    attempt(enableHighAccuracy, retries - 1, delayMs * 2);
+                  }
+                }, delayMs);
+              } else if (enableHighAccuracy) {
+                attempt(false, 0, 200);
+              } else {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("location-prompt-dismissed", "true");
+                }
+                resolve(null);
+                locationResolveRef.current = null;
+              }
+            },
+            { enableHighAccuracy, maximumAge: enableHighAccuracy ? 300000 : Infinity },
+          );
+        };
+
+        appendLogs(["[INFO] Requesting browser geolocation..."]);
+        attempt(true, 3, 500);
+      };
+
+      // --- Permission state check ---
+      let permissionState: PermissionState | null = null;
+      let permissionStatus: PermissionStatus | null = null;
+      if (typeof navigator !== "undefined" && navigator.permissions) {
+        try {
+          const result = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+          permissionState = result.state;
+          permissionStatus = result;
+        } catch (_) {}
+      }
+
+      // Denied: fall back immediately — no dialog will appear
+      if (permissionState === "denied") {
+        appendLogs(["[INFO] Geolocation permission is denied. Using approximate location."]);
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("location-prompt-dismissed", "true");
+        }
+        resolve(null);
+        return;
+      }
+
+      // Granted: use GPS directly — no dialog needed
+      if (permissionState === "granted") {
+        locationResolveRef.current = resolve;
+        appendLogs(["[INFO] Geolocation permission granted. Requesting GPS coordinates..."]);
+        requestGeoPosition();
+        return;
+      }
+
+      // --- Permission state is "prompt" (first-time or cleared) ---
+      // Pre-prompt pattern: show our own UI first. Only call the geolocation
+      // API AFTER the user explicitly clicks "Allow". This avoids showing a
+      // browser permission dialog that cannot be programmatically dismissed.
+
+      locationResolveRef.current = resolve;
+      locationActionRef.current = null;
+      setLocationPrePromptWaiting(true);
+      setLocationPrePromptTimeLeft(10);
+      appendLogs(["[INFO] Location permission not yet decided. Awaiting user response..."]);
+
+      // 10-second countdown — auto-fallback to approximate location on expiry
+      let timeLeft = 10;
+      locationPrePromptTimerRef.current = window.setInterval(() => {
+        timeLeft -= 1;
+        if (timeLeft <= 0) {
+          if (locationPrePromptTimerRef.current) {
+            clearInterval(locationPrePromptTimerRef.current);
+            locationPrePromptTimerRef.current = null;
+          }
+          setLocationPrePromptTimeLeft(null);
+          // Auto-fallback: treat as skip
+          if (locationResolveRef.current === resolve) {
+            appendLogs(["[WARN] Location pre-prompt timed out. Using approximate location."]);
+            setLocationPrePromptWaiting(false);
+            locationResolveRef.current(null);
+            locationResolveRef.current = null;
+          }
+        } else {
+          setLocationPrePromptTimeLeft(timeLeft);
+        }
+      }, 1000);
+
+      // Listen for browser-side permission changes (e.g., user changes mind
+      // in browser settings while pre-prompt is visible).
+      if (permissionStatus) {
+        permissionStatus.onchange = () => {
+          if (permissionStatus!.state === "denied" && locationResolveRef.current === resolve) {
+            cancelGeoWatch();
+            if (locationPrePromptTimerRef.current) {
+              clearInterval(locationPrePromptTimerRef.current);
+              locationPrePromptTimerRef.current = null;
+            }
+            setLocationPrePromptWaiting(false);
+            setLocationPrePromptTimeLeft(null);
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("location-prompt-dismissed", "true");
+            }
+            appendLogs(["[INFO] Geolocation permission denied by user."]);
+            resolve(null);
+            locationResolveRef.current = null;
+          }
+        };
+      }
+
+      // Wait for user action (Allow or Skip) by polling locationActionRef.
+      // This avoids complex callback wiring between the handler and this Promise.
+      const pollInterval = setInterval(() => {
+        const action = locationActionRef.current;
+        if (action === null) return;
+
+        clearInterval(pollInterval);
+        locationActionRef.current = null;
+
+        if (action === "allow") {
+          appendLogs(["[INFO] User granted location access. Starting geolocation request..."]);
+          requestGeoPosition();
+        } else if (action === "skip") {
+          // skipLocationPrompt already resolved the promise and logged
+        }
+      }, 50);
+
+      // Cleanup: pollInterval is cleared when action is detected or promise settles.
+      // The resolve guard in requestGeoPosition prevents double-settle.
     });
-  }, []);
+  }, [appendLogs]);
 
   const reverseGeocode = useCallback(async (lat: number, lon: number) => {
     let city = "", region = "", countryCode = "";
@@ -546,6 +752,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
           latitude: coords.latitude,
           longitude: coords.longitude,
           isPrecise: true,
+          isApproximate: false,
         };
         setClientInfo(preciseData);
         stateRef.current.clientInfo = preciseData;
@@ -589,8 +796,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
       // would overwrite precise city/region with approximate IP-based data.
       const existing = stateRef.current.clientInfo;
       const initialData: ClientInfo = existing?.isPrecise
-        ? { ...data, isPrecise: true, city: existing.city, region: existing.region, country: existing.country, latitude: existing.latitude, longitude: existing.longitude }
-        : { ...data, isPrecise: false };
+        ? { ...data, isPrecise: true, isApproximate: false, city: existing.city, region: existing.region, country: existing.country, latitude: existing.latitude, longitude: existing.longitude }
+        : { ...data, isPrecise: false, isApproximate: true };
 
       if ("connection" in navigator) {
         const conn = (navigator as any).connection;
@@ -624,7 +831,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
       stateRef.current.clientInfo = initialData;
       setStatusMessage(`Client IP detected: ${initialData.ip}`);
     } catch (err) {
-      const defaultData = { ip: "0.0.0.0", city: "Unknown", region: "Unknown", country: "Unknown", org: "Unknown", latitude: 0, longitude: 0, isLocal: false, isPrecise: false };
+      const defaultData = { ip: "0.0.0.0", city: "Unknown", region: "Unknown", country: "Unknown", org: "Unknown", latitude: 0, longitude: 0, isLocal: false, isPrecise: false, isApproximate: true };
       console.error("Failed to locate client:", err);
       setStatusMessage("GeoIP detection failed. Using global defaults.");
       setClientInfo(defaultData as any);
@@ -696,24 +903,38 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     setIsCancelling(false);
     setIsStarting(true);
+    isCancelledRef.current = false;
 
     // Re-detect location at the start of each test to ensure fresh ISP info,
     // even if the user switched networks between tests without reloading.
     await detectClientLocation();
 
+    if (isCancelledRef.current) {
+      setIsStarting(false);
+      setIsCancelling(false);
+      return;
+    }
+
     let currentClientInfo = stateRef.current.clientInfo;
     let clientLat = currentClientInfo?.latitude || 0;
     let clientLon = currentClientInfo?.longitude || 0;
 
-    // Trigger browser geolocation if not precise
-    if ("geolocation" in navigator && (!currentClientInfo || !currentClientInfo.isPrecise)) {
+    // Trigger browser geolocation if not precise and not already dismissed
+    const isDismissed = typeof window !== "undefined" && sessionStorage.getItem("location-prompt-dismissed") === "true";
+    if ("geolocation" in navigator && (!currentClientInfo || !currentClientInfo.isPrecise) && !isDismissed) {
       setStatusMessage("Requesting browser geolocation for edge server selection...");
-      appendLogs(["[INFO] Requesting browser geolocation for high accuracy routing..."]);
       const upgraded = await upgradeToPreciseLocation();
+      if (isCancelledRef.current) {
+        setIsStarting(false);
+        setIsCancelling(false);
+        return;
+      }
       if (upgraded) {
         currentClientInfo = upgraded;
         clientLat = upgraded.latitude || 0;
         clientLon = upgraded.longitude || 0;
+      } else {
+        appendLogs(["[INFO] Using IP-based approximate location for edge selection."]);
       }
     }
 
@@ -754,7 +975,17 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setActiveProgressLine(null);
 
     const edgeNode = await warmupServer();
+    if (isCancelledRef.current) {
+      setIsStarting(false);
+      setIsCancelling(false);
+      return;
+    }
     await initCharts();
+    if (isCancelledRef.current) {
+      setIsStarting(false);
+      setIsCancelling(false);
+      return;
+    }
     setIsStarting(false);
     setPhase("ping");
     setStatusMessage("Pinging edge server...");
@@ -1078,6 +1309,28 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
   const cancelSpeedTest = useCallback(() => {
     setIsCancelling(true);
+    isCancelledRef.current = true;
+
+    // Clear location timer if active
+    if (locationIntervalRef.current) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
+    if (geoWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(geoWatchIdRef.current);
+      geoWatchIdRef.current = null;
+    }
+    if (locationPrePromptTimerRef.current) {
+      clearInterval(locationPrePromptTimerRef.current);
+      locationPrePromptTimerRef.current = null;
+    }
+    setLocationPrePromptWaiting(false);
+    setLocationPrePromptTimeLeft(null);
+    if (locationResolveRef.current) {
+      locationResolveRef.current(null);
+      locationResolveRef.current = null;
+    }
+
     if (workerRef.current) {
       workerRef.current.postMessage({ type: "CANCEL" });
       return;
@@ -1085,6 +1338,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setPhase("idle");
     setStatusMessage("Test cancelled.");
     setIsCancelling(false);
+    setIsStarting(false);
   }, []);
 
   const downloadTestResult = useCallback(() => {
@@ -1114,7 +1368,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setTerminalLogs([]);
       setActiveProgressLine(null);
     } else if (cmd === "help") {
-      appendLogs(["Available commands:", "  run, speedtest  - Start the network speed test", "  stop, cancel    - Stop the running speed test", "  clear           - Clear the terminal screen", "  help            - Show this help message"]);
+      appendLogs([
+        "Available commands:",
+        "  run, speedtest  - Start the network speed test",
+        "  stop, cancel    - Stop the running speed test",
+        "  skip            - Skip the location permission prompt and use approximate location",
+        "  clear           - Clear the terminal screen",
+        "  help            - Show this help message"
+      ]);
     } else if (cmd === "run" || cmd === "speedtest") {
       if (phase !== "idle" && phase !== "complete" && phase !== "error") {
         appendLogs(["Error: A speed test is already running."]);
@@ -1122,15 +1383,21 @@ export function useSpeedTest(): UseSpeedTestReturn {
         startSpeedTest();
       }
     } else if (cmd === "stop" || cmd === "cancel") {
-      if (phase === "idle" || phase === "complete" || phase === "error") {
+      if (phase === "idle" && !isStarting) {
         appendLogs(["No speed test is currently running."]);
       } else {
         cancelSpeedTest();
       }
+    } else if (cmd === "skip") {
+      if (locationPrePromptWaiting) {
+        skipLocationPrompt();
+      } else {
+        appendLogs(["No active location prompt to skip."]);
+      }
     } else {
       appendLogs([`Unknown command: ${cmd}. Type 'help' for options.`]);
     }
-  }, [cliInput, phase, appendLogs, startSpeedTest, cancelSpeedTest]);
+  }, [cliInput, phase, isStarting, appendLogs, startSpeedTest, cancelSpeedTest, locationPrePromptWaiting, skipLocationPrompt]);
 
   return {
     phase, statusMessage, isCancelling, isStarting, activeTab, setActiveTab,
@@ -1144,5 +1411,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
     icmpEstimate, webrtcLatency, icmpSource, icmpOffsetApplied,
+    skipLocationPrompt, allowLocationPrompt,
+    locationPrePromptWaiting, locationPrePromptTimeLeft,
   };
 }

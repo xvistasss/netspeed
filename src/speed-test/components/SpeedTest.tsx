@@ -8,6 +8,7 @@ import {
   Play,
   Square,
   Loader2,
+  MapPin,
 } from "lucide-react";
 import InfoTooltip from "./InfoTooltip";
 import QualityScores from "./QualityScores";
@@ -30,6 +31,8 @@ export default function SpeedTest() {
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
     icmpEstimate, webrtcLatency, icmpSource, icmpOffsetApplied,
+    skipLocationPrompt, allowLocationPrompt,
+    locationPrePromptWaiting, locationPrePromptTimeLeft,
   } = useSpeedTest();
 
   const isTestRunning = phase !== "idle" && phase !== "complete" && phase !== "error";
@@ -112,6 +115,47 @@ export default function SpeedTest() {
           <span className="text-[11px] text-mute">Measured at {completionTime}</span>
         )}
       </div>
+
+      {/* Location Pre-Prompt */}
+      {locationPrePromptWaiting && (
+        <section
+          className="w-full flex flex-col md:flex-row md:items-center justify-between gap-4 bg-primary/5 border border-primary/20 p-4 rounded-lg shadow-xs border-l-4 border-l-primary"
+          aria-live="polite"
+        >
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-primary/10 rounded-full text-primary shrink-0 mt-0.5">
+              <MapPin className="w-5 h-5" aria-hidden="true" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold tracking-tight text-ink font-sans">
+                Share precise location?
+              </h3>
+              <p className="text-xs text-body leading-relaxed max-w-xl">
+                Use GPS to find the closest edge server for highest accuracy.
+                Falls back to IP location in{" "}
+                <span className="font-mono font-bold text-primary tabular-nums">{locationPrePromptTimeLeft}s</span>
+                {" "}if no action is taken.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+            <button
+              onClick={allowLocationPrompt}
+              type="button"
+              className="flex-1 md:flex-none min-h-[36px] bg-primary text-on-primary font-medium text-xs rounded-md py-2 px-4 shadow-xs hover:opacity-90 active:scale-[0.97] transition-[opacity,transform] duration-150 cursor-pointer select-none flex items-center justify-center gap-1.5"
+            >
+              Allow
+            </button>
+            <button
+              onClick={skipLocationPrompt}
+              type="button"
+              className="flex-1 md:flex-none min-h-[36px] bg-canvas hover:bg-canvas-soft border border-hairline hover:border-hairline-strong text-ink font-mono text-xs rounded-md py-2 px-4 shadow-xs transition-colors duration-150 cursor-pointer select-none flex items-center justify-center gap-1.5"
+            >
+              Skip
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* Progress Bar */}
       {isTestRunning && (

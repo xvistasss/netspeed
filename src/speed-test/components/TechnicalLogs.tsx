@@ -47,6 +47,18 @@ export default function TechnicalLogs({
             <span className="text-ink">
               {clientInfo.city}, {clientInfo.region}, {clientInfo.country}
             </span>
+            {clientInfo.isPrecise && (
+              <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] text-success font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                GPS
+              </span>
+            )}
+            {clientInfo.isApproximate && !clientInfo.isPrecise && (
+              <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] text-warning font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-warning inline-block" />
+                IP
+              </span>
+            )}
           </div>
           {clientInfo.connectionType && (
             <div>
