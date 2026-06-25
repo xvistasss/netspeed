@@ -1,7 +1,7 @@
 {
   "name": "net-speed-test",
   "type": "module",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
-    "@astrojs/cloudflare": "^13.7.0",
+    "@astrojs/cloudflare": "^14.0.0",
     "@astrojs/react": "^5.0.7",
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.17",
