@@ -15,7 +15,7 @@ export default defineConfig({
   output: 'server',
   integrations: [react()],
 
-  adapter: cloudflare({ prerenderEnvironment: 'node' }),
+  adapter: cloudflare(),
 
   security: {
     checkOrigin: true
@@ -24,35 +24,6 @@ export default defineConfig({
   vite: {
     plugins: [
       tailwindcss(),
-      {
-        name: 'cloudflare-ssr-entry',
-        configEnvironment(environmentName, options) {
-          if (environmentName === 'prerender') {
-            return {
-              build: {
-                rollupOptions: {
-                  input: 'astro/entrypoints/prerender',
-                  output: {
-                    entryFileNames: 'prerender-entry-[name].js',
-                    chunkFileNames: 'chunks/[name].[hash].js',
-                    assetFileNames: 'assets/[name].[ext]',
-                    ...(options.build?.rollupOptions?.output || {}),
-                  },
-                },
-              },
-            };
-          }
-          if (environmentName === 'client') {
-            return {
-              build: {
-                rollupOptions: {
-                  input: 'virtual:astro:noop',
-                },
-              },
-            };
-          }
-        },
-      }
     ],
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version)

@@ -144,12 +144,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const [progressPercent, setProgressPercent] = useState(0);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [isTerminalOpen, setIsTerminalOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("terminal-open") === "true";
-    }
-    return false;
-  });
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const startDisabled = useRef(false);
 
   const [locationPrePromptWaiting, setLocationPrePromptWaiting] = useState(false);
@@ -244,6 +239,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
       setTheme(customEvent.detail.theme);
     };
     window.addEventListener("theme-changed", handleThemeChange);
+
+    // Sync terminal state from localStorage after hydration.
+    // Server always renders with terminal closed (isTerminalOpen=false),
+    // so we read localStorage here to avoid SSR/client mismatch.
+    const storedTerminalOpen = localStorage.getItem("terminal-open") === "true";
+    setIsTerminalOpen(storedTerminalOpen);
+
     const handleTerminalToggle = (e: Event) => {
       const customEvent = e as CustomEvent;
       setIsTerminalOpen(customEvent.detail.open);
@@ -564,9 +566,11 @@ export function useSpeedTest(): UseSpeedTestReturn {
                 if (!enableHighAccuracy && position.coords.accuracy > 1000) {
                   appendLogs([`[WARN] Location accuracy ${position.coords.accuracy.toFixed(0)}m is too unreliable (>1km). Falling back to IP-based location.`]);
                   cancelGeoWatch();
-                  if (typeof window !== "undefined") {
-                    sessionStorage.setItem("location-prompt-dismissed", "true");
-                  }
+                  // NOTE: Do NOT set sessionStorage dismissal here. Accuracy
+                  // rejection is about GPS quality, not user intent — the user
+                  // already granted permission. Blocking future retries would
+                  // prevent getting a good fix if conditions improve (e.g.,
+                  // user moves outdoors or switches to a device with GPS).
                   resolve(null);
                   locationResolveRef.current = null;
                   return;
@@ -760,27 +764,41 @@ export function useSpeedTest(): UseSpeedTestReturn {
         const existing = stateRef.current.clientInfo;
         if (!existing) return null;
 
-        // Sanity check: compare GPS-derived city with IP-derived city.
-        // If the GPS position is > 50 km from the IP position, the GPS
-        // coordinates are likely stale or unreliable (e.g., old WiFi-based
-        // position on a desktop). Prefer the IP-based location in this case.
-        const ipLat = existing.latitude;
-        const ipLon = existing.longitude;
-        const distFromIp = (ipLat !== 0 || ipLon !== 0)
-          ? haversineDistance(coords.latitude, coords.longitude, ipLat, ipLon)
-          : 0;
-        const gpsCityLower = (gpsCity || "").toLowerCase();
-        const ipCityLower = (existing.city || "").toLowerCase();
-        const citiesMatch = gpsCityLower && ipCityLower && gpsCityLower === ipCityLower;
-        const isSuspicious = distFromIp > 50 && !citiesMatch;
+        // GPS accuracy-aware sanity check:
+        // - GPS accuracy ≤ 200m: always trust GPS — it is the ground truth.
+        //   IP geolocation is often 50-500km off for VPN, CGNAT, and corporate
+        //   networks. A device with sub-200m GPS accuracy is reporting real
+        //   hardware coordinates, not a WiFi/IP approximation.
+        // - GPS accuracy > 200m: apply a lenient sanity check. WiFi-based
+        //   positions can be stale on desktops without GPS hardware. Only
+        //   reject if GPS and IP disagree on both distance (> 200km) AND
+        //   country, which indicates a truly stale or erroneous position.
+        const isHighConfidenceGps = coords.accuracy <= 200;
+        let isSuspicious = false;
+
+        if (!isHighConfidenceGps) {
+          const ipLat = existing.latitude;
+          const ipLon = existing.longitude;
+          const distFromIp = (ipLat !== 0 || ipLon !== 0)
+            ? haversineDistance(coords.latitude, coords.longitude, ipLat, ipLon)
+            : 0;
+          const gpsCountryLower = (countryCode || "").toLowerCase();
+          const ipCountryLower = (existing.country || "").toLowerCase();
+          const countriesMatch = gpsCountryLower && ipCountryLower && gpsCountryLower === ipCountryLower;
+          isSuspicious = distFromIp > 200 && !countriesMatch;
+        }
 
         if (isSuspicious) {
+          const distFromIp = haversineDistance(coords.latitude, coords.longitude, existing.latitude, existing.longitude);
           appendLogs([
-            `[WARN] GPS location is ${Math.round(distFromIp)}km from IP location (GPS: ${gpsCity || "?"}, IP: ${existing.city || "?"}).`,
-            `[WARN] GPS coordinates may be stale or unreliable. Keeping IP-based location.`
+            `[WARN] Low-accuracy GPS (${coords.accuracy}m) is ${Math.round(distFromIp)}km from IP location (GPS: ${gpsCity || "?"}, IP: ${existing.city || "?"}).`,
+            `[WARN] GPS may be stale WiFi-based position. Keeping IP-based location.`
           ]);
-          // Don't update — keep existing IP-based location
           return existing;
+        }
+
+        if (!isHighConfidenceGps) {
+          appendLogs([`[INFO] Accepting GPS with accuracy ${coords.accuracy}m (within same country as IP).`]);
         }
 
         const preciseData: ClientInfo = {

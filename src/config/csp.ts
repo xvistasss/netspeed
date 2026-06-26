@@ -48,6 +48,10 @@ const CSP = {
   ],
 
   fontSrc: [] as string[],
+
+  manifestSrc: [] as string[],
+
+  workerSrc: [] as string[],
 } as const;
 
 // Build the CSP header string from the config above.
@@ -69,6 +73,8 @@ export function buildCspHeader(): string {
   add("img-src", CSP.imgSrc);
   add("connect-src", CSP.connectSrc);
   add("font-src", CSP.fontSrc);
+  add("manifest-src", CSP.manifestSrc);
+  add("worker-src", CSP.workerSrc);
 
   return directives.join('; ') + ';';
 }
