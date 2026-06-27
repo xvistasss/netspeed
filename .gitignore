@@ -31,3 +31,11 @@ pnpm-debug.log*
 
 # vscode setting folder
 .vscode/
+
+# ai tooling (local config, not for remote)
+.agents/
+.kilo/
+AGENTS.md
+DESIGN.md
+GEMINI.md
+skills-lock.json
