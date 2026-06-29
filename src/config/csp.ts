@@ -11,6 +11,8 @@ const CSP = {
     "'unsafe-inline'",
     "https://www.googletagmanager.com",
     "https://static.cloudflareinsights.com",
+    "https://pagead2.googlesyndication.com",
+    "https://ep2.adtrafficquality.google",
   ],
 
   styleSrc: [
@@ -25,26 +27,35 @@ const CSP = {
   connectSrc: [
     // Speed test infrastructure (direct browser connection)
     "https://speed.cloudflare.com",
-
-    // IP geolocation APIs
-    "https://api.bigdatacloud.net",
     "https://api-bdc.io",
+
+    // IP geolocation APIs (server-side fallback chain)
     "https://freeipapi.com",
     "https://ipapi.co",
     "https://ipinfo.io",
     "https://api.ipify.org",
     "https://ifconfig.me",
     "https://icanhazip.com",
+    "http://ip-api.com",
+
+    // Reverse geocoding
+    "https://api.bigdatacloud.net",
 
     // Google Analytics
     "https://www.google-analytics.com",
     "https://analytics.google.com",
     "https://www.googletagmanager.com",
     "https://www.google.com",
+    "https://stats.g.doubleclick.net",
 
     // WebRTC STUN servers
     // "stun:stun.l.google.com:19302",
     // "stun:stun1.l.google.com:19302",
+
+    // Google AdSense
+    "https://pagead2.googlesyndication.com",
+    "https://csi.gstatic.com",
+    "https://ep1.adtrafficquality.google",
   ],
 
   fontSrc: [] as string[],
@@ -52,6 +63,13 @@ const CSP = {
   manifestSrc: [] as string[],
 
   workerSrc: [] as string[],
+
+  frameSrc: [
+    "https://googleads.g.doubleclick.net",
+    "https://pagead2.googlesyndication.com",
+    "https://ep2.adtrafficquality.google",
+    "https://www.google.com",
+  ],
 } as const;
 
 // Build the CSP header string from the config above.
@@ -75,6 +93,7 @@ export function buildCspHeader(): string {
   add("font-src", CSP.fontSrc);
   add("manifest-src", CSP.manifestSrc);
   add("worker-src", CSP.workerSrc);
+  add("frame-src", CSP.frameSrc);
 
   return directives.join('; ') + ';';
 }

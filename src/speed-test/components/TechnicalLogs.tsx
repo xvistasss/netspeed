@@ -52,7 +52,7 @@ export default function TechnicalLogs({
                 <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
                 GPS
                 {clientInfo.gpsAccuracy != null && (
-                  <span className="text-mute">({clientInfo.gpsAccuracy}m)</span>
+                  <span className="text-mute">(Accuracy: {clientInfo.gpsAccuracy}m)</span>
                 )}
               </span>
             )}
