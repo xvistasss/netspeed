@@ -88,6 +88,7 @@ export interface UseSpeedTestReturn {
   icmpOffsetApplied: number;
   skipLocationPrompt: () => void;
   allowLocationPrompt: () => void;
+  resetLocationPrompt: () => void;
   locationPrePromptWaiting: boolean;
   locationPrePromptTimeLeft: number | null;
 }
@@ -189,6 +190,13 @@ export function useSpeedTest(): UseSpeedTestReturn {
     locationActionRef.current = "allow";
   }, []);
 
+  const resetLocationPrompt = useCallback(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("location-prompt-dismissed");
+    }
+    appendLogs(["[INFO] Location prompt reset. GPS will be offered on next test."]);
+  }, [appendLogs]);
+
   // Consolidated mutable refs — single object to avoid stale closures in worker callbacks
   const stateRef = useRef({
     downloadStats: { current: 0, avg: 0, peak: 0 } as SpeedStats,
@@ -220,6 +228,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
   const ulDynamicRampMs = useRef<number>(CONFIG.UPLOAD_RAMP_MS);
   const dlLoadedIcmpEstimate = useRef<number>(0);
   const ulLoadedIcmpEstimate = useRef<number>(0);
+  const cooldownTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll terminal
   useEffect(() => {
@@ -277,6 +286,10 @@ export function useSpeedTest(): UseSpeedTestReturn {
 
     return () => {
       if (workerRef.current) workerRef.current.terminate();
+      if (cooldownTimeoutRef.current) {
+        clearTimeout(cooldownTimeoutRef.current);
+        cooldownTimeoutRef.current = null;
+      }
       destroyCharts();
       window.removeEventListener("theme-changed", handleThemeChange);
       window.removeEventListener("toggle-terminal", handleTerminalToggle);
@@ -991,8 +1004,14 @@ export function useSpeedTest(): UseSpeedTestReturn {
         currentClientInfo = upgraded;
         clientLat = upgraded.latitude || 0;
         clientLon = upgraded.longitude || 0;
+        setStatusMessage(`Precise location: ${upgraded.city || "Unknown"}, ${upgraded.country || "Unknown"}`);
+        if (!stateRef.current.clientInfo?.isPrecise) {
+          console.warn("[useSpeedTest] Defensive: upgradeToPreciseLocation returned but stateRef not updated. Syncing.");
+          stateRef.current.clientInfo = upgraded;
+        }
       } else {
-        appendLogs(["[INFO] Using IP-based approximate location for edge selection."]);
+        appendLogs(["[INFO] GPS location unavailable. Using IP-based approximate location for edge selection."]);
+        setStatusMessage("GPS unavailable. Using approximate location.");
       }
     }
 
@@ -1277,7 +1296,8 @@ export function useSpeedTest(): UseSpeedTestReturn {
           ]);
           setActiveProgressLine(null);
           // Add 2 second cooldown before packet loss test to let network recover from congestion
-          setTimeout(() => {
+          cooldownTimeoutRef.current = setTimeout(() => {
+            cooldownTimeoutRef.current = null;
             const lossNetworkType = stateRef.current.clientInfo?.connectionType || stateRef.current.clientInfo?.effectiveType;
             const lossInterval = lossNetworkType === "cellular" || lossNetworkType?.startsWith("cellular-") || lossNetworkType === "4g" || lossNetworkType === "3g" || lossNetworkType === "2g"
               ? CONFIG.PACKET_LOSS_INTERVAL_CELLULAR_MS
@@ -1369,6 +1389,12 @@ export function useSpeedTest(): UseSpeedTestReturn {
     setIsCancelling(true);
     isCancelledRef.current = true;
 
+    // Clear the upload-to-packetLoss cooldown timeout if pending
+    if (cooldownTimeoutRef.current) {
+      clearTimeout(cooldownTimeoutRef.current);
+      cooldownTimeoutRef.current = null;
+    }
+
     // Clear location timer if active
     if (locationIntervalRef.current) {
       clearInterval(locationIntervalRef.current);
@@ -1431,6 +1457,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
         "  run, speedtest  - Start the network speed test",
         "  stop, cancel    - Stop the running speed test",
         "  skip            - Skip the location permission prompt and use approximate location",
+        "  location        - Reset location prompt so GPS is offered on next test",
         "  clear           - Clear the terminal screen",
         "  help            - Show this help message"
       ]);
@@ -1452,10 +1479,12 @@ export function useSpeedTest(): UseSpeedTestReturn {
       } else {
         appendLogs(["No active location prompt to skip."]);
       }
+    } else if (cmd === "location") {
+      resetLocationPrompt();
     } else {
       appendLogs([`Unknown command: ${cmd}. Type 'help' for options.`]);
     }
-  }, [cliInput, phase, isStarting, appendLogs, startSpeedTest, cancelSpeedTest, locationPrePromptWaiting, skipLocationPrompt]);
+  }, [cliInput, phase, isStarting, appendLogs, startSpeedTest, cancelSpeedTest, locationPrePromptWaiting, skipLocationPrompt, resetLocationPrompt]);
 
   return {
     phase, statusMessage, isCancelling, isStarting, activeTab, setActiveTab,
@@ -1469,7 +1498,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     isTerminalOpen,
     terminalBodyRef, downloadChartRef, uploadChartRef,
     icmpEstimate, webrtcLatency, icmpSource, icmpOffsetApplied,
-    skipLocationPrompt, allowLocationPrompt,
+    skipLocationPrompt, allowLocationPrompt, resetLocationPrompt,
     locationPrePromptWaiting, locationPrePromptTimeLeft,
   };
 }
