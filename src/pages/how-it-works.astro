@@ -1,0 +1,230 @@
+---
+export const prerender = true;
+
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="How It Works — NetSpeed Testing Methodology"
+  description="Learn how NetSpeed measures your network performance. A technical overview of server selection, parallel streams, loaded latency, and quality scoring."
+>
+  <main class="flex-1 py-16 px-4 md:px-8">
+    <div class="max-w-4xl mx-auto flex flex-col gap-12">
+      {/* Header */}
+      <div class="flex flex-col gap-4 border-b border-hairline pb-8">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+        >
+          Methodology
+        </span>
+        <h1
+          class="text-4xl md:text-6xl font-semibold tracking-tighter text-ink font-sans leading-none"
+        >
+          How the testing engine works.
+        </h1>
+        <p
+          class="text-base md:text-lg text-body max-w-3xl leading-relaxed mt-2"
+        >
+          A detailed look at every stage of a NetSpeed test — from the moment
+          you click Start to the final quality score. Each step is designed for
+          accuracy, transparency, and real-world relevance.
+        </p>
+      </div>
+
+      {/* Step 1: Server Selection */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            1
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Server selection via Anycast BGP
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          When you start a test, your browser sends a request to Cloudflare's
+          network. Cloudflare uses Anycast BGP routing to direct that request to
+          the nearest edge data center based on real-time network topology — not
+          just geographic distance. This means you are connected to the server
+          that offers the best network path, which is more accurate than
+          connecting to the geographically closest server that might have poor
+          routing.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          Cloudflare operates hundreds of data centers worldwide, so in most
+          locations the nearest edge is within a few hundred kilometers. The
+          engine displays which edge it connected to and the estimated distance,
+          giving you full visibility into where your measurements are taken.
+        </p>
+      </section>
+
+      {/* Step 2: Download Test */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            2
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Download test with parallel streams
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          The download test opens six parallel streams, each running in its own
+          Web Worker. Web Workers are background threads that operate outside the
+          main page thread, allowing the test to manage multiple connections
+          simultaneously without affecting the user interface.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          Each stream downloads randomly generated binary data that cannot be
+          cached by your ISP or compressed by intermediate networks. This forces
+          your ISP to handle real, unoptimized data transit. The streams are
+          adaptive — the engine monitors performance and adjusts the number of
+          active connections based on what the network can handle. Once all
+          streams complete, the total downloaded bytes and elapsed time produce
+          your download speed.
+        </p>
+      </section>
+
+      {/* Step 3: Upload Test */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            3
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Upload test with adaptive streams
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          The upload test works in reverse. Your browser pushes randomly
+          generated binary data to the Cloudflare edge through multiple parallel
+          streams. Upload testing is more challenging than download testing
+          because browsers and operating systems typically prioritize download
+          traffic, and many residential internet plans have much lower upload
+          bandwidth.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          The engine calibrates the upload streams based on observed performance
+          and adapts in real time. The result reflects the sustained upload
+          capacity of your connection, not a momentary burst.
+        </p>
+      </section>
+
+      {/* Step 4: Latency Measurement */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            4
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Latency and bufferbloat measurement
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          Latency is measured in two phases. First, the engine sends ping
+          packets while the network is idle to measure unloaded latency — the
+          baseline responsiveness of your connection. Then, during both the
+          download and upload phases, it sends ping packets while the network is
+          under heavy load to measure loaded latency.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          The difference between unloaded and loaded latency reveals
+          bufferbloat — a condition where oversized buffers in your router or ISP
+          equipment cause packets to queue up instead of being processed
+          promptly. A connection with 15 ms unloaded latency that jumps to 300 ms
+          under load has significant bufferbloat, which will cause lag spikes
+          during gaming, choppy video calls, and general sluggishness whenever
+          the network is busy.
+        </p>
+      </section>
+
+      {/* Step 5: Jitter and Packet Loss */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            5
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Jitter and packet loss
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          Jitter is calculated by analyzing the variance in latency across
+          multiple ping samples during the test. Consistent ping times indicate a
+          stable connection. Wide fluctuations indicate instability, which causes
+          audio dropouts on calls, stuttering in games, and inconsistent
+          streaming quality.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          Packet loss is measured by tracking how many ping packets fail to reach
+          the server and return. Even small amounts of packet loss — 1-2% — can
+          noticeably degrade real-time applications. High packet loss usually
+          indicates a problem with your physical connection, router, or ISP
+          infrastructure.
+        </p>
+      </section>
+
+      {/* Step 6: Quality Score */}
+      <section class="flex flex-col gap-4 border-t border-hairline pt-12">
+        <div class="flex items-center gap-3">
+          <span
+            class="font-mono text-xs bg-primary text-on-primary w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          >
+            6
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Quality score
+          </h2>
+        </div>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          All metrics are combined into a single quality score that reflects how
+          the connection actually feels. The score weighs not just raw speed but
+          also latency, jitter, packet loss, and loaded latency. A connection
+          with fast speeds but terrible bufferbloat will score lower than a
+          connection with moderate speeds and excellent stability.
+        </p>
+        <p class="text-sm text-body leading-relaxed max-w-3xl">
+          The goal is to give you a single number that captures the overall
+          quality of your connection for everyday use — streaming, gaming, video
+          calls, browsing, and remote work. Every metric is also displayed
+          individually so you can see exactly where your connection excels and
+          where it falls short.
+        </p>
+      </section>
+
+      {/* CTA */}
+      <section class="border-t border-hairline pt-12">
+        <div
+          class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-canvas-soft-2 p-8 rounded-lg border border-hairline"
+        >
+          <div class="flex flex-col gap-2 max-w-xl">
+            <h3 class="text-lg font-semibold tracking-tight text-ink">
+              Try it yourself.
+            </h3>
+            <p class="text-xs text-body leading-relaxed">
+              Run a complete test to see every metric in action. The results
+              dashboard shows download, upload, latency, jitter, packet loss,
+              loaded latency, and your overall quality score.
+            </p>
+          </div>
+          <a
+            href="/"
+            class="bg-primary text-on-primary font-medium text-xs rounded-full py-2 px-6 hover:opacity-90 active:scale-95 transition-[opacity,transform] text-center select-none cursor-pointer inline-block whitespace-nowrap shadow-xs"
+          >
+            Run Speed Test
+          </a>
+        </div>
+      </section>
+    </div>
+  </main>
+</Layout>

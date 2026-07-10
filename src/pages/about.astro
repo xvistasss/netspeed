@@ -116,20 +116,188 @@ import Layout from "../layouts/Layout.astro";
         </div>
       </div>
 
-      {/* Corporate stats or details banner */}
+      {/* Why NetSpeed Exists */}
+      <section class="border-t border-hairline pt-12">
+        <div class="flex flex-col gap-4">
+          <span
+            class="font-mono text-[10px] uppercase tracking-wider text-mute block"
+          >
+            Background
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Why NetSpeed exists.
+          </h2>
+          <p class="text-sm text-body leading-relaxed max-w-3xl">
+            Most speed test tools have a blind spot. They download a static file
+            from a server, measure how fast it arrives, and report a number. The
+            problem is that ISPs and content delivery networks can cache those
+            files locally. When that happens, the test measures the speed from the
+            cache to your device — not from the internet to your device. The
+            result looks good on paper, but it does not reflect what you actually
+            experience when streaming, gaming, or working from home.
+          </p>
+          <p class="text-sm text-body leading-relaxed max-w-3xl">
+            NetSpeed was built to solve this. Every test uses randomly generated
+            binary data that cannot be cached or compressed. The data is served
+            from Cloudflare's nearest edge data center, and six parallel streams
+            stress the connection to find its real ceiling. The engine also
+            measures loaded latency — your ping while the network is under heavy
+            load — which reveals bufferbloat that most tools ignore entirely. The
+            goal is not to show you the biggest possible number. It is to show
+            you the truth about your connection.
+          </p>
+        </div>
+      </section>
+
+      {/* Who Built This */}
+      <section class="border-t border-hairline pt-12">
+        <div class="flex flex-col gap-4">
+          <span
+            class="font-mono text-[10px] uppercase tracking-wider text-mute block"
+          >
+            The team
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Who built this.
+          </h2>
+          <p class="text-sm text-body leading-relaxed max-w-3xl">
+            NetSpeed is built and maintained by a single developer based in
+            Assam, India. It started as a side project to understand how network
+            measurement actually works and grew into a tool that people around
+            the world use to diagnose their connections. The entire codebase is
+            open source — you can inspect it, contribute to it, or fork it for
+            your own use.
+          </p>
+          <div class="flex flex-wrap gap-3 mt-2">
+            <a
+              href="https://github.com/xvistasss/netspeed"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-2 bg-canvas text-ink border border-hairline hover:border-hairline-strong font-medium text-xs rounded-full py-2 px-5 transition-[border-color] cursor-pointer select-none"
+            >
+              <svg
+                class="w-3.5 h-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"
+                ></path>
+              </svg>
+              View on GitHub
+            </a>
+            <a
+              href="/contact"
+              class="inline-flex items-center gap-2 bg-canvas text-ink border border-hairline hover:border-hairline-strong font-medium text-xs rounded-full py-2 px-5 transition-[border-color] cursor-pointer select-none"
+            >
+              Get in touch
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Differs */}
+      <section class="border-t border-hairline pt-12">
+        <div class="flex flex-col gap-4">
+          <span
+            class="font-mono text-[10px] uppercase tracking-wider text-mute block"
+          >
+            Comparison
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            How it differs from other speed tests.
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
+            <div class="vercel-card p-5 flex flex-col gap-2">
+              <h3 class="text-sm font-semibold tracking-tight text-ink font-sans">
+                Non-compressible payloads
+              </h3>
+              <p class="text-xs text-body leading-relaxed">
+                Traditional tools download static files that ISPs can cache
+                locally. NetSpeed generates unique binary data on every test,
+                forcing your ISP to handle real internet traffic.
+              </p>
+            </div>
+            <div class="vercel-card p-5 flex flex-col gap-2">
+              <h3 class="text-sm font-semibold tracking-tight text-ink font-sans">
+                Six parallel streams
+              </h3>
+              <p class="text-xs text-body leading-relaxed">
+                A single download connection often cannot saturate your
+                connection. Six Web Worker streams running simultaneously find
+                the real ceiling of your bandwidth.
+              </p>
+            </div>
+            <div class="vercel-card p-5 flex flex-col gap-2">
+              <h3 class="text-sm font-semibold tracking-tight text-ink font-sans">
+                Loaded latency measurement
+              </h3>
+              <p class="text-xs text-body leading-relaxed">
+                Most tools only measure idle ping. NetSpeed measures latency
+                while the network is under heavy load, revealing bufferbloat
+                that idle tests miss.
+              </p>
+            </div>
+            <div class="vercel-card p-5 flex flex-col gap-2">
+              <h3 class="text-sm font-semibold tracking-tight text-ink font-sans">
+                Cloudflare edge routing
+              </h3>
+              <p class="text-xs text-body leading-relaxed">
+                Anycast BGP routing connects you to the nearest Cloudflare edge
+                automatically. No manual server selection, no misleading
+                results from distant servers.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Open Source & Transparency */}
+      <section class="border-t border-hairline pt-12">
+        <div class="flex flex-col gap-4">
+          <span
+            class="font-mono text-[10px] uppercase tracking-wider text-mute block"
+          >
+            Open source
+          </span>
+          <h2 class="text-xl font-semibold tracking-tight text-ink font-sans">
+            Open source and transparent.
+          </h2>
+          <p class="text-sm text-body leading-relaxed max-w-3xl">
+            The entire NetSpeed codebase is publicly available on GitHub. You can
+            see exactly how every measurement is calculated, how the server
+            selection works, and how the quality score is derived. There are no
+            hidden trackers, no data selling, and no dark patterns. If you find a
+            bug, want to contribute a feature, or just want to understand how
+            network measurement works, the code is there for you to explore.
+          </p>
+          <p class="text-sm text-body leading-relaxed max-w-3xl">
+            Transparency is not just a feature — it is the foundation. When you
+            run a speed test, you deserve to know how the result was calculated
+            and what it actually means. NetSpeed shows you every metric, every
+            server detail, and every raw measurement so you can draw your own
+            conclusions.
+          </p>
+        </div>
+      </section>
+
+      {/* CTA Banner */}
       <section class="border-t border-hairline pt-12">
         <div
           class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-canvas-soft-2 p-8 rounded-lg border border-hairline"
         >
           <div class="flex flex-col gap-2 max-w-xl">
             <h3 class="text-lg font-semibold tracking-tight text-ink">
-              Looking for our diagnostic details?
+              Ready to see your real numbers?
             </h3>
             <p class="text-xs text-body leading-relaxed">
-              We compile detailed network packets, routing distances, and raw
-              connection logs for every benchmark run. You can export these
-              reports directly from the home screen dashboard in standard
-              format.
+              Run a detailed speed test to measure your download, upload,
+              latency, jitter, and bufferbloat. Every metric is explained so
+              you know exactly what the results mean.
             </p>
           </div>
           <a

@@ -42,7 +42,7 @@ export default function SpeedTest() {
       {/* Hero Section */}
       <div className="flex flex-col gap-2 mt-4 md:mt-8 border-b border-hairline pb-6">
         <span className="font-mono text-xs uppercase tracking-wider text-mute">
-          Network Speed Engine
+          Network Speed Engine @ &copy;NetSpeed
         </span>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink">
           Network Speed Test

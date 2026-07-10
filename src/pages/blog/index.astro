@@ -1,0 +1,88 @@
+---
+export const prerender = true;
+
+import Layout from "../../layouts/Layout.astro";
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("blog")).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
+);
+---
+
+<Layout
+  title="Blog — NetSpeed Network Diagnostics"
+  description="Technical guides, troubleshooting tips, and deep dives into network performance, speed testing, and internet connectivity."
+>
+  <main class="flex-1 py-16 px-4 md:px-8">
+    <div class="max-w-4xl mx-auto flex flex-col gap-12">
+      {/* Page Header */}
+      <div class="flex flex-col gap-4 border-b border-hairline pb-8">
+        <span
+          class="font-mono text-xs uppercase tracking-wider text-mute block"
+        >
+          Learn
+        </span>
+        <h1
+          class="text-4xl md:text-6xl font-semibold tracking-tighter text-ink font-sans leading-none"
+        >
+          Network insights & guides.
+        </h1>
+        <p
+          class="text-base md:text-lg text-body max-w-3xl leading-relaxed mt-2"
+        >
+          Practical explanations of how your internet connection works, how to
+          diagnose problems, and how to get the most out of your network.
+        </p>
+      </div>
+
+      {/* Blog Post Grid */}
+      <div class="flex flex-col gap-6">
+        {
+          posts.map((post) => (
+            <a
+              href={`/blog/${post.id}`}
+              class="group flex flex-col gap-3 p-6 rounded-lg border border-hairline bg-canvas hover:border-hairline-strong hover:bg-canvas-soft transition-[border-color,background-color] duration-150"
+            >
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono text-mute">
+                <time datetime={post.data.pubDate.toISOString()}>
+                  {post.data.pubDate.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </time>
+                {post.data.tags.length > 0 && (
+                  <>
+                    <span class="text-hairline-strong">·</span>
+                    <span>{post.data.tags.join(", ")}</span>
+                  </>
+                )}
+              </div>
+              <h2 class="text-xl font-semibold tracking-tight text-ink font-sans group-hover:text-link transition-colors duration-150">
+                {post.data.title}
+              </h2>
+              <p class="text-sm text-body leading-relaxed">
+                {post.data.description}
+              </p>
+              <span class="font-mono text-xs text-link group-hover:text-link-deep transition-colors duration-150 inline-flex items-center gap-1.5 mt-1">
+                Read article
+                <svg
+                  class="w-3 h-3 group-hover:translate-x-0.5 transition-transform duration-150"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M5 12h14"></path>
+                  <path d="M12 5l7 7-7 7"></path>
+                </svg>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </main>
+</Layout>

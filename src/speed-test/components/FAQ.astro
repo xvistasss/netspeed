@@ -8,7 +8,7 @@ const faqJsonLd = {
       name: "What is a good internet speed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "A good internet speed is typically defined as a download speed of 100 Mbps or higher and an upload speed of at least 10 Mbps. At these rates, a standard household can comfortably stream 4K Ultra HD video, participate in high-definition Zoom meetings, and play online multiplayer games simultaneously. For light usage, 25 Mbps is sufficient, while power users and remote workers utilizing large cloud transfers may benefit from fiber-optic gigabit connections (1,000 Mbps).",
+        text: "A good internet speed depends on what you do online. For general browsing, 25 Mbps is enough. For HD streaming, you need about 15 Mbps. For 4K streaming, aim for 25 Mbps per stream. A household with multiple people should aim for 100-300 Mbps to ensure everyone has enough bandwidth.",
       },
     },
     {
@@ -16,15 +16,7 @@ const faqJsonLd = {
       name: "Why is my internet speed so slow?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Slow internet speeds can stem from various network issues. Common culprits include: local network congestion (too many devices sharing your bandwidth), WiFi signal interference or physical distance from the router, outdated hardware (older modems or routers), background processes (unseen application downloads or backups), and ISP limitations (such as routing degradation or throttling).",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How can I make my internet faster?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "You can optimize your network speed by performing several adjustments: power cycle your modem and router, connect critical devices directly via an Ethernet cable to eliminate wireless interference, position your router in an open, elevated location, disconnect inactive devices from your network, and ensure your router's firmware is up to date.",
+        text: "Slow speeds can come from many sources: WiFi interference and distance from the router, background applications consuming bandwidth, outdated equipment, or network congestion during peak hours. Try restarting your router, connecting via Ethernet, and closing background apps to diagnose the issue.",
       },
     },
     {
@@ -32,71 +24,15 @@ const faqJsonLd = {
       name: "Why doesn't my speed test match the plan I pay for?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Speed tests reflect the real-time capacity of your connection, which is often lower than your ISP's advertised plan due to protocol overhead (which consumes about 5-10% of total bandwidth for routing headers), WiFi bottlenecks, active background network usage by other devices, and physical distance from the optimal speed test server.",
+        text: "ISPs advertise speeds as 'up to' a number measured under ideal conditions. Real-world speeds are lower due to protocol overhead, WiFi limitations, your router's capabilities, and network congestion. Test on Ethernet to see what your ISP actually delivers to your home.",
       },
     },
     {
       "@type": "Question",
-      name: "What is the best netspeed test?",
+      name: "What is bufferbloat?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The best netspeed test is one that uses non-compressible binary data payloads processed across concurrent network connections. A professional speed test service like NetSpeed measures raw, un-cached network performance, providing an unbiased diagnostic profile of your real-world internet capability.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How to test internet speed?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "To test your internet speed accurately: disconnect any active VPNs, close background downloads or active streaming apps, connect via Ethernet if testing your line capacity (or WiFi for local wireless performance), open a reliable speed testing tool like NetSpeed, and click the start button.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Whats my speed test?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Your speed test measures the real-time upload speed, download speed, and overall connection quality (including latency and jitter) between your current browser session and a nearby data center. This allows you to evaluate your current network throughput and check if your ISP is delivering promised performance.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is an internet speed test?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "An internet speed test is a digital tool that measures the transfer rate of data between your device and a test server. It does this by downloading and uploading specific data payloads, recording the speeds achieved, and measuring the responsiveness (latency/ping) of the connection.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is Latency?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Latency (or ping) is the time delay (measured in milliseconds) it takes for a data packet to travel from your device to a destination server and return. Low latency (under 30 ms) is essential for lag-free online gaming, video conferencing, and real-time interactive services.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is ping on speed test?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "On a network speed test, the 'ping' value represents the round-trip latency time in milliseconds (ms) for a small packet of data to navigate to the test server and return. A lower ping indicates a highly responsive, immediate connection.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is jitter on speed test?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Jitter represents the variance or fluctuation in latency over time. Low jitter (ideally under 5 ms) is a critical indicator of connection stability; high jitter causes voice drops, video buffering, and sudden lag spikes.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "How to read an internet speed test?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "When reading your speed test, look at four primary metrics: Download Speed (how fast you retrieve files; higher is better), Upload Speed (how fast you send files; higher is better), Latency/Ping (connection responsiveness; lower is better), and Jitter (signal stability; lower is better).",
+        text: "Bufferbloat is a condition where latency spikes dramatically under network load due to oversized buffers in your router or ISP equipment. Your ping might be 15 ms when idle but jump to 300 ms during a download. Enabling Smart Queue Management (SQM) on your router is the most effective fix.",
       },
     },
   ],
@@ -118,9 +54,6 @@ const mainEntity = faqJsonLd.mainEntity;
 >
   <div class="max-w-4xl mx-auto px-4 md:px-8">
     <div class="flex flex-col gap-8">
-      {
-        /* Title block using design principles (sentence case, period terminated) */
-      }
       <div class="flex flex-col gap-2">
         <span
           class="font-mono text-xs uppercase tracking-wider text-mute block"
@@ -128,12 +61,32 @@ const mainEntity = faqJsonLd.mainEntity;
         >
           Frequently Asked Questions
         </span>
-        <h2
-          class="text-2xl md:text-3xl font-semibold tracking-tight text-ink font-sans"
-          id="faq-heading"
-        >
-          Frequently asked questions.
-        </h2>
+        <div class="flex items-center justify-between gap-4">
+          <h2
+            class="text-2xl md:text-3xl font-semibold tracking-tight text-ink font-sans"
+            id="faq-heading"
+          >
+            Frequently asked questions.
+          </h2>
+          <a
+            href="/faq"
+            class="font-mono text-xs text-link hover:text-link-deep transition-colors duration-150 inline-flex items-center gap-1.5 shrink-0"
+          >
+            View all
+            <svg
+              class="w-3 h-3"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14"></path>
+              <path d="M12 5l7 7-7 7"></path>
+            </svg>
+          </a>
+        </div>
         <p class="text-sm md:text-base text-body leading-relaxed max-w-2xl">
           Find answers to common questions about network metrics, speed
           diagnostic performance, and how to optimize your internet connection.
