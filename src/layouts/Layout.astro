@@ -13,6 +13,8 @@ const {
   description = "Run a highly accurate network speed test tool to check your internet download, upload, and latency speeds via optimal server selection. Clean, ads-free, and professional.",
   showMeshGradient = false,
 } = Astro.props;
+
+const isProd = import.meta.env.PROD;
 ---
 
 <!doctype html>
@@ -62,12 +64,16 @@ const {
       })();
     </script>
 
-    <!-- Google AdSense -->
-    <script
-      async
-      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5638352527724874"
-      crossorigin="anonymous"
-    ></script>
+    <!-- Google AdSense — production only, skipped in local dev -->
+    {
+      isProd && (
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5638352527724874"
+          crossorigin="anonymous"
+        ></script>
+      )
+    }
 
     <!-- Canonical URL -->
     <link rel="canonical" href={Astro.url} />
