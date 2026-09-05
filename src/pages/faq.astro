@@ -65,12 +65,29 @@ const faqs = [
       "No. NetSpeed operates with a strict no-collection policy. Your test results are processed in your browser and displayed to you. We do not store speed histories, personal details, or tracking profiles. The only data temporarily processed is your approximate geolocation (for server selection) and network metrics during the test, both of which are ephemeral. See our privacy policy for full details.",
   },
 ];
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: faq.answer,
+    },
+  })),
+};
 ---
 
 <Layout
   title="Frequently Asked Questions — NetSpeed"
   description="Answers to common questions about internet speed, network metrics, speed testing, and how to diagnose connection problems."
 >
+  <script
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify(faqSchema)}
+  />
   <main class="flex-1 py-16 px-4 md:px-8">
     <div class="max-w-3xl mx-auto flex flex-col gap-10">
       {/* Header */}

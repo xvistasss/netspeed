@@ -1,11 +1,32 @@
 ---
 import Layout from "../layouts/Layout.astro";
+
+const aboutSchema = {
+  "@context": "https://schema.org",
+  "@type": "AboutPage",
+  "name": "About NetSpeed",
+  "description": "Learn about the design, methodology, and engineering behind NetSpeed. Our speed test engine provides uncompromised network telemetry.",
+  "mainEntity": {
+    "@type": "Organization",
+    "name": "NetSpeed",
+    "url": "https://freenetspeed.com",
+    "founder": {
+      "@type": "Person",
+      "name": "Apurba"
+    }
+  }
+};
 ---
 
 <Layout
   title="About Us — NetSpeed Internet Telemetry & Diagnostics"
   description="Learn about the design, methodology, and engineering behind NetSpeed. Our speed test engine provides uncompromised telemetry via optimal server selection."
 >
+  <script
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify(aboutSchema)}
+  />
   <main class="flex-1 py-16 px-4 md:px-8">
     <div class="max-w-4xl mx-auto flex flex-col gap-12">
       {/* Hero Header Block */}
@@ -23,11 +44,11 @@ import Layout from "../layouts/Layout.astro";
         <p
           class="text-base md:text-lg text-body max-w-3xl leading-relaxed mt-2"
         >
-          NetSpeed was founded with a singular objective: to provide developers,
-          network administrators, and everyday users with an accurate, ads-free,
+          NetSpeed was created with a singular objective: to provide developers,
+          network administrators, and everyday users with an accurate, reliable,
           and high-fidelity telemetry platform. By deploying concurrent streams
           and measuring real-time latency variance, we expose the true
-          limitations of your internet routing.
+          capabilities and limitations of your internet connection.
         </p>
       </div>
 

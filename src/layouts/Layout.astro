@@ -9,12 +9,35 @@ interface Props {
   showMeshGradient?: boolean;
 }
 const {
-  title = "Network Speed Test — NetSpeed Professional Internet Speed Test",
-  description = "Run a highly accurate network speed test tool to check your internet download, upload, and latency speeds via optimal server selection. Clean, ads-free, and professional.",
+  title = "Free Internet Speed Test — Accurate Broadband & Latency Check | NetSpeed",
+  description = "Test your internet download, upload, ping latency, jitter, and bufferbloat with uncompressed payloads and global edge routing. Accurate, fast, and transparent network diagnostics.",
   showMeshGradient = false,
 } = Astro.props;
 
 const isProd = import.meta.env.PROD;
+
+const siteSchema = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "name": "NetSpeed",
+      "url": Astro.url.origin,
+      "description": "High-precision network speed test and latency diagnostic tool.",
+    },
+    {
+      "@type": "WebApplication",
+      "name": "NetSpeed Internet Speed Test",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "All",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+      },
+    },
+  ],
+};
 ---
 
 <!doctype html>
@@ -32,6 +55,13 @@ const isProd = import.meta.env.PROD;
     <title>{title}</title>
     <meta name="title" content={title} />
     <meta name="description" content={description} />
+
+    <!-- Schema.org JSON-LD Structured Data -->
+    <script
+      type="application/ld+json"
+      is:inline
+      set:html={JSON.stringify(siteSchema)}
+    />
 
     <!-- Google Analytics — deferred until page load + browser idle -->
     <script is:inline>
@@ -68,6 +98,7 @@ const isProd = import.meta.env.PROD;
     {
       isProd && (
         <script
+          is:inline
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5638352527724874"
           crossorigin="anonymous"

@@ -30,6 +30,7 @@ export default defineConfig({
     },
     optimizeDeps: {
       include: ['chart.js'],
+      exclude: ['@astrojs/cloudflare'],
     },
   }
 });
