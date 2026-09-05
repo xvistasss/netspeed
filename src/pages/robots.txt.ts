@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 
-export const GET: APIRoute = async ({ url }) => {
-  const origin = url.origin;
+export const GET: APIRoute = async ({ site }) => {
+  const origin = site ? new URL(site).origin : "https://freenetspeed.com";
 
   const robots = `User-agent: *
 Allow: /
