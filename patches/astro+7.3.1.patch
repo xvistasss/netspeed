@@ -1,0 +1,35 @@
+diff --git a/node_modules/astro/dist/core/app/base.js b/node_modules/astro/dist/core/app/base.js
+index 61fa4b1..4a0fd51 100644
+--- a/node_modules/astro/dist/core/app/base.js
++++ b/node_modules/astro/dist/core/app/base.js
+@@ -104,7 +104,7 @@ class BaseApp {
+    */
+   setFetchHandler(handler) {
+     this.#fetchHandler = handler;
+-    this.#hasCustomFetchHandler = !(handler instanceof DefaultFetchHandler);
++    this.#hasCustomFetchHandler = !(handler instanceof DefaultFetchHandler || handler?.constructor?.name === "DefaultFetchHandler" || handler?.isDefaultFetchHandler);
+   }
+   /**
+    * Returns the error handler used by this app. The default is a thin
+@@ -257,7 +257,7 @@ class BaseApp {
+       waitUntil
+     };
+     let response;
+-    if (this.#fetchHandler instanceof DefaultFetchHandler) {
++    if (this.#fetchHandler instanceof DefaultFetchHandler || this.#fetchHandler?.constructor?.name === "DefaultFetchHandler" || this.#fetchHandler?.isDefaultFetchHandler) {
+       response = await handleRequest(
+         new FetchState(this.manifest, request, resolvedOptions, {
+           streaming: this.resolveStreaming(),
+diff --git a/node_modules/astro/dist/vite-plugin-app/handle-request.js b/node_modules/astro/dist/vite-plugin-app/handle-request.js
+index 9a91c1f..fffc82a 100644
+--- a/node_modules/astro/dist/vite-plugin-app/handle-request.js
++++ b/node_modules/astro/dist/vite-plugin-app/handle-request.js
+@@ -23,7 +23,7 @@ async function loadFetchHandler(app, loader) {
+   }
+   try {
+     const mod = await loader.import("virtual:astro:fetchable");
+-    if (mod?.default && !mod.isDefaultFetchHandler) {
++    if (mod?.default && !mod.isDefaultFetchHandler && mod.default?.constructor?.name !== "DefaultFetchHandler") {
+       app.setFetchHandler(mod.default);
+     }
+   } catch {
