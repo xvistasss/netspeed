@@ -12,6 +12,7 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 
 // https://astro.build/config
 export default defineConfig({
+  site: 'https://freenetspeed.com',
   output: 'server',
   integrations: [react()],
 

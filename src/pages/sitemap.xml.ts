@@ -1,8 +1,8 @@
 import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
 
-export const GET: APIRoute = async ({ url }) => {
-  const origin = url.origin;
+export const GET: APIRoute = async ({ site }) => {
+  const origin = site ? new URL(site).origin : "https://freenetspeed.com";
   const lastmod = new Date().toISOString().split("T")[0];
 
   const staticPages = [
