@@ -2,12 +2,28 @@
 export const prerender = true;
 
 import Layout from "../layouts/Layout.astro";
+
+const howItWorksSchema = {
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "How the NetSpeed Network Telemetry Engine Works",
+  "description": "Technical guide explaining Anycast BGP server routing, concurrent Web Worker streams, loaded latency, bufferbloat detection, and quality scoring.",
+  "author": {
+    "@type": "Organization",
+    "name": "NetSpeed"
+  }
+};
 ---
 
 <Layout
   title="How It Works — NetSpeed Testing Methodology"
   description="Learn how NetSpeed measures your network performance. A technical overview of server selection, parallel streams, loaded latency, and quality scoring."
 >
+  <script
+    type="application/ld+json"
+    is:inline
+    set:html={JSON.stringify(howItWorksSchema)}
+  />
   <main class="flex-1 py-16 px-4 md:px-8">
     <div class="max-w-4xl mx-auto flex flex-col gap-12">
       {/* Header */}

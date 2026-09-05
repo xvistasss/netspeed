@@ -15,86 +15,104 @@ const posts = (await getCollection("blog"))
     <SpeedTest client:only="react" />
   </main>
 
-  {/* About the Tool */}
+  {/* About the Tool & Real-World Network Benchmarks */}
   <section
     id="seo-content-section"
     class="border-t border-hairline bg-canvas-soft-2 py-16 relative overflow-hidden"
   >
     <div class="max-w-4xl mx-auto px-4 md:px-8">
-      <div class="flex flex-col gap-8">
+      <div class="flex flex-col gap-10">
         <div class="flex flex-col gap-3">
           <span
             class="font-mono text-xs uppercase tracking-wider text-mute block"
           >
-            How it works
+            Network Telemetry Guide
           </span>
           <h2
-            class="text-2xl md:text-3xl font-semibold tracking-tight text-ink font-sans"
+            class="text-2xl md:text-4xl font-semibold tracking-tight text-ink font-sans"
           >
-            What this tool measures and why it matters.
+            Understanding your internet speed & connection health.
           </h2>
           <p class="text-sm md:text-base text-body leading-relaxed max-w-3xl">
-            This tool measures four key properties of your internet connection:
-            download speed, upload speed, latency, and jitter. Each one tells
-            you something different about how your connection performs in the
-            real world. Download speed determines how quickly you can pull data
-            from the internet — streaming video, loading web pages, downloading
-            files. Upload speed determines how fast you can send data — video
-            calls, posting content, backing up files. Latency measures the delay
-            between your device and the server, which affects how responsive
-            everything feels. Jitter measures how stable that delay is over
-            time.
+            A comprehensive speed test measures more than just peak download rates. True connection quality depends on five core telemetry dimensions: <strong>download bandwidth</strong>, <strong>upload bandwidth</strong>, <strong>idle latency</strong>, <strong>loaded latency (bufferbloat)</strong>, and <strong>packet jitter</strong>.
           </p>
         </div>
 
+        {/* Speed Requirement Comparison Table */}
+        <div class="flex flex-col gap-4 border-t border-hairline pt-8">
+          <h3 class="text-lg font-semibold tracking-tight text-ink font-sans">
+            Recommended Speeds by Activity
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs md:text-sm border border-hairline rounded-lg overflow-hidden bg-canvas">
+              <thead>
+                <tr class="bg-canvas-soft-2 border-b border-hairline text-ink font-mono text-[11px] uppercase tracking-wider">
+                  <th class="p-3.5 md:p-4">Activity</th>
+                  <th class="p-3.5 md:p-4">Min. Download</th>
+                  <th class="p-3.5 md:p-4">Min. Upload</th>
+                  <th class="p-3.5 md:p-4">Target Ping</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-hairline text-body">
+                <tr>
+                  <td class="p-3.5 md:p-4 font-medium text-ink">4K Ultra HD Streaming</td>
+                  <td class="p-3.5 md:p-4">25–50 Mbps</td>
+                  <td class="p-3.5 md:p-4">3–5 Mbps</td>
+                  <td class="p-3.5 md:p-4 font-mono">&lt; 100 ms</td>
+                </tr>
+                <tr>
+                  <td class="p-3.5 md:p-4 font-medium text-ink">Competitive Online Gaming</td>
+                  <td class="p-3.5 md:p-4">15–25 Mbps</td>
+                  <td class="p-3.5 md:p-4">5–10 Mbps</td>
+                  <td class="p-3.5 md:p-4 font-mono text-emerald-600 dark:text-emerald-400">&lt; 30 ms</td>
+                </tr>
+                <tr>
+                  <td class="p-3.5 md:p-4 font-medium text-ink">HD Zoom & Video Conferencing</td>
+                  <td class="p-3.5 md:p-4">10–20 Mbps</td>
+                  <td class="p-3.5 md:p-4">10–15 Mbps</td>
+                  <td class="p-3.5 md:p-4 font-mono">&lt; 50 ms</td>
+                </tr>
+                <tr>
+                  <td class="p-3.5 md:p-4 font-medium text-ink">Cloud Backup & Large File Uploads</td>
+                  <td class="p-3.5 md:p-4">50+ Mbps</td>
+                  <td class="p-3.5 md:p-4">50–100+ Mbps</td>
+                  <td class="p-3.5 md:p-4 font-mono">&lt; 80 ms</td>
+                </tr>
+                <tr>
+                  <td class="p-3.5 md:p-4 font-medium text-ink">Multi-User Smart Household (4+ users)</td>
+                  <td class="p-3.5 md:p-4">200–500+ Mbps</td>
+                  <td class="p-3.5 md:p-4">50+ Mbps</td>
+                  <td class="p-3.5 md:p-4 font-mono">&lt; 40 ms</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div
           class="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-hairline pt-8"
         >
           <div class="flex flex-col gap-4">
             <h3 class="text-lg font-semibold tracking-tight text-ink font-sans">
-              Why test your connection?
+              Why test your connection regularly?
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Most people only think about their internet speed when something
-              feels broken — a video call keeps freezing, a game feels laggy, or
-              a webpage takes forever to load. Running a speed test gives you
-              concrete numbers instead of guesswork. If your download speed is
-              well below what your ISP promised, you have evidence to show them.
-              If your latency spikes when someone else in the house starts a
-              large download, you know the problem is bufferbloat, not your
-              plan.
+              Most people only test their internet speed when a video call stutters, a game lags, or video buffering begins. Running diagnostic tests reveals whether your Internet Service Provider (ISP) is delivering the bandwidth promised in your contract tier.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Regular testing also helps you track changes over time. A
-              connection that worked fine six months ago might be degrading due
-              to aging equipment, increased neighborhood congestion, or ISP
-              routing changes. Comparing results from different times of day and
-              different days of the week gives you a clearer picture of your
-              typical experience.
+              Periodic testing helps you diagnose performance degradation caused by router buffer bloat, localized Wi-Fi radio interference, outdated modem firmware, or ISP routing saturation during peak evening congestion hours (7 PM – 11 PM).
             </p>
           </div>
 
           <div class="flex flex-col gap-4">
             <h3 class="text-lg font-semibold tracking-tight text-ink font-sans">
-              How it works under the hood
+              How our measurement engine works
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Unlike traditional speed tests that download static files from a
-              single server, this engine uses Cloudflare's edge network to serve
-              randomly generated binary payloads. The data cannot be cached by
-              your ISP or compressed by intermediate networks, so the test
-              reflects your actual connection capacity rather than a cached
-              local copy.
+              Unlike legacy speed tests that fetch static assets prone to ISP proxy caching, this telemetry engine streams non-compressible cryptographic binary chunks directly from high-speed edge nodes. This ensures every byte traverses your actual connection pipe.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              The download test opens six parallel streams through Web Workers,
-              each pulling data simultaneously to stress your connection. The
-              upload test does the same in reverse. Throughout both phases, the
-              engine measures loaded latency — your ping while the network is
-              under heavy load — which reveals bufferbloat that idle ping tests
-              miss entirely. The final quality score weighs all of these metrics
-              together to reflect how the connection actually feels, not just
-              how fast it is on paper.
+              Concurrent Web Worker threads saturate both download and upload paths while continuously sampling round-trip ping. By capturing latency under full load versus idle state, the engine calculates real-time bufferbloat and jitter metrics.
             </p>
           </div>
         </div>
@@ -104,53 +122,35 @@ const posts = (await getCollection("blog"))
         >
           <div class="flex flex-col gap-4">
             <h3 class="text-lg font-semibold tracking-tight text-ink font-sans">
-              Tips for accurate results
+              Best practices for accurate test results
             </h3>
             <ul
-              class="list-decimal pl-5 text-xs md:text-sm text-body flex flex-col gap-1"
+              class="list-decimal pl-5 text-xs md:text-sm text-body flex flex-col gap-2"
             >
               <li>
-                <strong>Disconnect VPNs.</strong> Virtual private networks route your
-                traffic through extra servers, adding latency and reducing throughput.
+                <strong>Temporarily pause VPNs:</strong> Encrypted tunnels introduce routing overhead and geographic detours that skew throughput numbers.
               </li>
               <li>
-                <strong>Close background apps.</strong> Cloud backups, streaming on
-                other devices, and system updates consume bandwidth and skew your
-                results.
+                <strong>Halt background transfers:</strong> Cloud backups, OS updates, and torrent clients consume bandwidth in the background.
               </li>
               <li>
-                <strong>Use Ethernet for baseline.</strong> WiFi introduces variability
-                from interference and distance. A wired connection gives you the truest
-                picture of your ISP's delivery.
+                <strong>Use wired Gigabit Ethernet:</strong> Testing over a Cat6 cable isolates ISP line delivery from wireless Wi-Fi attenuation.
               </li>
               <li>
-                <strong>Test at different times.</strong> Network congestion changes
-                throughout the day. Testing in the morning and evening on different
-                days shows you the range of your real experience.
+                <strong>Sample across multiple time slots:</strong> Network demand fluctuates; testing during off-peak and peak hours provides an accurate baseline.
               </li>
             </ul>
           </div>
 
           <div class="flex flex-col gap-4">
             <h3 class="text-lg font-semibold tracking-tight text-ink font-sans">
-              Understanding your results
+              Diagnosing slow speed issues
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              A download speed of 25 Mbps is enough for a single 4K stream. A
-              household with multiple people streaming and video calling at the
-              same time needs considerably more. For video calls, latency under
-              50 ms and jitter under 10 ms matter more than raw speed — a fast
-              connection with high latency will still feel choppy on a call. For
-              gaming, latency under 30 ms gives you a noticeable edge. For
-              general browsing, a balanced connection with reasonable numbers
-              across all metrics provides the smoothest experience.
+              If your speed test results consistently underperform your plan, check whether your router's Ethernet ports are rated for Gigabit (1000 Mbps) rather than Fast Ethernet (100 Mbps). In wireless environments, switching from crowded 2.4 GHz channels to 5 GHz or Wi-Fi 6 dramatically improves throughput.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              If your results consistently fall short of what you need, the
-              problem could be your equipment, your WiFi setup, or your internet
-              plan. Check out our{" "}
-              <a href="/blog" class="text-link hover:underline">blog</a> for detailed
-              guides on diagnosing and fixing common connection issues.
+              Explore our comprehensive <a href="/blog" class="text-link hover:underline font-medium">Network Guides</a> for in-depth tutorials on configuring router SQM, reducing bufferbloat, and troubleshooting ISP throttling.
             </p>
           </div>
         </div>

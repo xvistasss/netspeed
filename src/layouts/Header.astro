@@ -1,15 +1,23 @@
 ---
 import { version } from "../../package.json";
+
+const navLinks = [
+  { href: "/", label: "Speed Test" },
+  { href: "/how-it-works", label: "How It Works" },
+  { href: "/blog", label: "Guides" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/about", label: "About" },
+];
 ---
 
 <header
-  class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-14 md:h-16 flex items-center z-50"
+  class="sticky top-0 bg-canvas/80 backdrop-blur-md border-b border-hairline h-14 md:h-16 flex items-center z-50 transition-colors"
 >
   <div
-    class="w-full max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between gap-2 md:gap-4"
+    class="w-full max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between gap-3 md:gap-6"
   >
-    <!-- Left: Logo + Brand + Version Badge -->
-    <div class="flex items-center gap-3 min-w-0">
+    <!-- Left: Logo + Brand + Desktop Nav -->
+    <div class="flex items-center gap-6 md:gap-8 min-w-0">
       <a
         href="/"
         class="flex items-center gap-2.5 hover:opacity-90 transition-opacity shrink-0"
@@ -19,28 +27,40 @@ import { version } from "../../package.json";
           alt="NetSpeed Logo"
           width="32"
           height="32"
-          class="md:w-10 md:h-10 dark:invert-0 shrink-0"
+          class="md:w-9 md:h-9 dark:invert-0 shrink-0"
         />
         <span
-          class="font-bold tracking-tight text-sm font-sans text-ink leading-tight"
+          class="font-bold tracking-tight text-base font-sans text-ink leading-tight"
         >
           NetSpeed
         </span>
-      </a>
-      <nav class="hidden md:block">
         <span
-          class="text-xs font-mono bg-canvas-soft-2 px-2.5 py-1 rounded border border-hairline text-mute"
+          class="hidden sm:inline-block text-[11px] font-mono bg-canvas-soft-2 px-2 py-0.5 rounded border border-hairline text-mute"
         >
           v{version}
         </span>
+      </a>
+
+      <!-- Desktop Primary Navigation -->
+      <nav class="hidden lg:flex items-center gap-1">
+        {
+          navLinks.map((link) => (
+            <a
+              href={link.href}
+              class="text-xs font-medium text-body hover:text-ink hover:bg-canvas-soft-2 px-3 py-1.5 rounded-md transition-colors"
+            >
+              {link.label}
+            </a>
+          ))
+        }
       </nav>
     </div>
 
-    <!-- Right: Terminal Toggle + Theme Toggle -->
-    <div class="flex items-center gap-1.5 md:gap-3 shrink-0">
+    <!-- Right: Actions & Mobile Menu -->
+    <div class="flex items-center gap-1.5 md:gap-2 shrink-0">
       <button
         id="header-terminal-toggle"
-        class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
+        class="min-w-[36px] min-h-[36px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
         title="Toggle Terminal"
         aria-label="Toggle terminal panel"
       >
@@ -56,13 +76,14 @@ import { version } from "../../package.json";
           ></path>
         </svg>
       </button>
+
       <button
         id="header-theme-toggle"
-        class="min-w-[44px] min-h-[44px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
+        class="min-w-[36px] min-h-[36px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
         title="Switch Theme"
         aria-label="Toggle dark mode"
       >
-        <!-- Sun icon for light mode (hidden in dark mode) -->
+        <!-- Sun icon for light mode -->
         <svg
           id="sun-icon"
           class="w-3.5 h-3.5 md:w-4 md:h-4 fill-none stroke-current block dark:hidden"
@@ -75,7 +96,7 @@ import { version } from "../../package.json";
             d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"
           ></path>
         </svg>
-        {/* Moon icon for dark mode (hidden in light mode) */}
+        <!-- Moon icon for dark mode -->
         <svg
           id="moon-icon"
           class="w-3.5 h-3.5 md:w-4 md:h-4 fill-none stroke-current hidden dark:block"
@@ -89,8 +110,91 @@ import { version } from "../../package.json";
           ></path>
         </svg>
       </button>
+
+      <!-- Mobile Menu Button -->
+      <button
+        id="header-mobile-menu-toggle"
+        class="lg:hidden min-w-[36px] min-h-[36px] w-8 h-8 md:w-9 md:h-9 rounded-full border border-hairline bg-canvas hover:bg-canvas-soft hover:text-ink text-mute active:scale-95 transition-[background-color,color,transform] shadow-xs flex items-center justify-center cursor-pointer select-none"
+        title="Open Menu"
+        aria-label="Toggle navigation menu"
+        aria-expanded="false"
+      >
+        <svg
+          id="mobile-menu-icon"
+          class="w-4 h-4 fill-none stroke-current"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 6h16M4 12h16M4 18h16"
+          ></path>
+        </svg>
+        <svg
+          id="mobile-close-icon"
+          class="w-4 h-4 fill-none stroke-current hidden"
+          viewBox="0 0 24 24"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 18L18 6M6 6l12 12"
+          ></path>
+        </svg>
+      </button>
     </div>
   </div>
+
+  <!-- Mobile Dropdown Drawer -->
+  <div
+    id="mobile-menu-drawer"
+    class="hidden lg:hidden absolute top-full left-0 w-full bg-canvas/95 backdrop-blur-md border-b border-hairline px-4 py-4 shadow-lg flex-col gap-2"
+  >
+    {
+      navLinks.map((link) => (
+        <a
+          href={link.href}
+          class="text-sm font-medium text-ink hover:text-link hover:bg-canvas-soft-2 px-3 py-2.5 rounded-md transition-colors block"
+        >
+          {link.label}
+        </a>
+      ))
+    }
+  </div>
 </header>
+
+<script>
+  const setupMobileMenu = () => {
+    const toggleBtn = document.getElementById("header-mobile-menu-toggle");
+    const drawer = document.getElementById("mobile-menu-drawer");
+    const menuIcon = document.getElementById("mobile-menu-icon");
+    const closeIcon = document.getElementById("mobile-close-icon");
+
+    if (toggleBtn && drawer && menuIcon && closeIcon) {
+      toggleBtn.addEventListener("click", () => {
+        const isHidden = drawer.classList.contains("hidden");
+        if (isHidden) {
+          drawer.classList.remove("hidden");
+          drawer.classList.add("flex");
+          menuIcon.classList.add("hidden");
+          closeIcon.classList.remove("hidden");
+          toggleBtn.setAttribute("aria-expanded", "true");
+        } else {
+          drawer.classList.add("hidden");
+          drawer.classList.remove("flex");
+          menuIcon.classList.remove("hidden");
+          closeIcon.classList.add("hidden");
+          toggleBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+  };
+
+  setupMobileMenu();
+  document.addEventListener("astro:after-swap", setupMobileMenu);
+</script>
+
 
 
