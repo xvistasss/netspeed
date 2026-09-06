@@ -134,6 +134,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
         i
       </button>
       {visible &&
+        typeof document !== "undefined" &&
         createPortal(
           <div
             ref={tooltipRef}

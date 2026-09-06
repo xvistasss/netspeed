@@ -191,6 +191,17 @@
   transform-origin: center center;
 }
 
+@media (max-width: 768px) {
+  .mesh-gradient-container {
+    height: 340px;
+    opacity: 0.5;
+  }
+  .mesh-gradient {
+    filter: blur(40px);
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mesh-gradient {
     animation: none;

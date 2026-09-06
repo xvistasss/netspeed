@@ -14,12 +14,15 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const pathname = context.url.pathname;
   const isApiEndpoint = pathname.startsWith('/api/');
 
-  // Every response gets anti-cache headers — pages AND API endpoints.
-  // This prevents Chrome from serving stale HTML from disk cache on reload,
-  // and prevents any intermediate proxy from caching API responses.
-  response.headers.set('Cache-Control', ANTI_CACHE);
-  response.headers.set('Pragma', 'no-cache');
-  response.headers.set('Expires', '0');
+  if (isApiEndpoint) {
+    // API endpoints (speedtest payloads, telemetry) must never be cached by CDN or browser
+    response.headers.set('Cache-Control', ANTI_CACHE);
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+  } else {
+    // Page responses: allow Cloudflare edge caching with mandatory browser revalidation
+    response.headers.set('Cache-Control', 'public, max-age=0, must-revalidate, s-maxage=600');
+  }
 
   // Security headers for all responses
   response.headers.set('X-Content-Type-Options', 'nosniff');
