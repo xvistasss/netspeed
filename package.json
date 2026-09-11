@@ -34,6 +34,6 @@
     "@types/nodemailer": "^8.0.0",
     "patch-package": "^8.0.1",
     "prettier-plugin-astro": "^0.14.1",
-    "wrangler": "^4.114.0"
+    "wrangler": "^4.131.0"
   }
 }
