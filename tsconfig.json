@@ -9,10 +9,10 @@
     "dist"
   ],
   "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
     "plugins": [
-      { "name": "@astrojs/ts-plugin" }
+      {
+        "name": "@astrojs/ts-plugin"
+      }
     ]
   }
 }

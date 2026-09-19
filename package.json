@@ -1,7 +1,7 @@
 {
   "name": "net-speed-test",
   "type": "module",
-  "version": "1.1.24",
+  "version": "1.1.26",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -11,8 +11,7 @@
     "preview": "astro preview --host",
     "astro": "astro",
     "generate-types": "wrangler types",
-    "speedtest": "node scripts/speedtest-cli.js",
-    "postinstall": "patch-package"
+    "speedtest": "node scripts/speedtest-cli.js"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
@@ -34,6 +33,6 @@
     "@types/nodemailer": "^8.0.0",
     "patch-package": "^8.0.1",
     "prettier-plugin-astro": "^0.14.1",
-    "wrangler": "^4.114.0"
+    "wrangler": "^4.131.0"
   }
 }
