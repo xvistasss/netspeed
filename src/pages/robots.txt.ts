@@ -5,6 +5,7 @@ export const GET: APIRoute = async ({ site }) => {
 
   const robots = `User-agent: *
 Allow: /
+Disallow: /api/
 
 Sitemap: ${origin}/sitemap.xml
 `.trim();

@@ -12,6 +12,8 @@ const CSP = {
     "https://www.googletagmanager.com",
     "https://static.cloudflareinsights.com",
     "https://pagead2.googlesyndication.com",
+    "https://tpc.googlesyndication.com",
+    "https://adservice.google.com",
     "https://ep2.adtrafficquality.google",
   ],
 
@@ -54,8 +56,11 @@ const CSP = {
 
     // Google AdSense
     "https://pagead2.googlesyndication.com",
+    "https://tpc.googlesyndication.com",
+    "https://adservice.google.com",
     "https://csi.gstatic.com",
     "https://ep1.adtrafficquality.google",
+    "https://ep2.adtrafficquality.google",
   ],
 
   fontSrc: [] as string[],
@@ -67,6 +72,8 @@ const CSP = {
   frameSrc: [
     "https://googleads.g.doubleclick.net",
     "https://pagead2.googlesyndication.com",
+    "https://tpc.googlesyndication.com",
+    "https://adservice.google.com",
     "https://ep2.adtrafficquality.google",
     "https://www.google.com",
   ],

@@ -17,7 +17,8 @@ const {
 const isProd = import.meta.env.PROD;
 
 const siteOrigin = Astro.site?.origin || "https://freenetspeed.com";
-const canonicalUrl = new URL(Astro.url.pathname, siteOrigin).href;
+const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
+const canonicalUrl = new URL(pathname, siteOrigin).href;
 const ogImageUrl = new URL("/og-image.png", siteOrigin).href;
 
 const siteSchema = {
@@ -25,19 +26,20 @@ const siteSchema = {
   "@graph": [
     {
       "@type": "WebSite",
-      "name": "NetSpeed",
-      "url": siteOrigin,
-      "description": "High-precision network speed test and latency diagnostic tool.",
+      name: "NetSpeed",
+      url: siteOrigin,
+      description:
+        "High-precision network speed test and latency diagnostic tool.",
     },
     {
       "@type": "WebApplication",
-      "name": "NetSpeed Internet Speed Test",
-      "applicationCategory": "UtilitiesApplication",
-      "operatingSystem": "All",
-      "offers": {
+      name: "NetSpeed Internet Speed Test",
+      applicationCategory: "UtilitiesApplication",
+      operatingSystem: "All",
+      offers: {
         "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD",
+        price: "0",
+        priceCurrency: "USD",
       },
     },
   ],
@@ -88,7 +90,9 @@ const siteSchema = {
           s.src = "https://www.googletagmanager.com/gtag/js?id=G-341P014VS4";
           document.head.appendChild(s);
           window.dataLayer = window.dataLayer || [];
-          function gtag() { dataLayer.push(arguments); }
+          function gtag() {
+            dataLayer.push(arguments);
+          }
           gtag("js", new Date());
           gtag("config", "G-341P014VS4");
         }
