@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 
 export const GET: APIRoute = async ({ site }) => {
   const origin = site ? new URL(site).origin : "https://freenetspeed.com";
-  const lastmod = new Date().toISOString().split("T")[0];
+  const defaultLastmod = new Date().toISOString().split("T")[0];
 
   const staticPages = [
     { loc: "", priority: "1.0", changefreq: "daily" },
@@ -19,34 +19,36 @@ export const GET: APIRoute = async ({ site }) => {
   let blogPages: { loc: string; priority: string; changefreq: string; lastmod: string }[] = [];
   try {
     const posts = await getCollection("blog");
-    blogPages = posts.map((post) => ({
-      loc: `/blog/${post.id}`,
-      priority: "0.8",
-      changefreq: "monthly",
-      lastmod: (post.data.updatedDate || post.data.pubDate).toISOString().split("T")[0],
-    }));
-  } catch {
-    // Fallback if content collection read fails
+    blogPages = posts.map((post) => {
+      const rawDate = post?.data?.updatedDate || post?.data?.pubDate;
+      const validDate = rawDate instanceof Date && !isNaN(rawDate.getTime()) ? rawDate : new Date();
+      return {
+        loc: `/blog/${post.id}`,
+        priority: "0.8",
+        changefreq: "monthly",
+        lastmod: validDate.toISOString().split("T")[0],
+      };
+    });
+  } catch (err) {
+    console.error("[Sitemap Generation Error]", err);
   }
 
   const allPages = [
-    ...staticPages.map((p) => ({ ...p, lastmod })),
+    ...staticPages.map((p) => ({ ...p, lastmod: defaultLastmod })),
     ...blogPages,
   ];
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${allPages
-  .map(
-    (page) => `  <url>
-    <loc>${origin}${page.loc}</loc>
-    <lastmod>${page.lastmod}</lastmod>
-    <changefreq>${page.changefreq}</changefreq>
-    <priority>${page.priority}</priority>
-  </url>`,
-  )
-  .join("\n")}
-</urlset>`.trim();
+  <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    ${allPages.map((page) => `
+      <url>
+        <loc>${origin}${page.loc}</loc>
+        <lastmod>${page.lastmod}</lastmod>
+        <changefreq>${page.changefreq}</changefreq>
+        <priority>${page.priority}</priority>
+      </url>`,
+  ).join("\n")}
+  </urlset>`.trim();
 
   return new Response(xml, {
     headers: {
@@ -55,4 +57,3 @@ ${allPages
     },
   });
 };
-

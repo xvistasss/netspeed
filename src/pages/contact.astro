@@ -166,96 +166,94 @@ import Layout from "../layouts/Layout.astro";
   </main>
 
   <script>
-    const form = document.getElementById("contact-form") as HTMLFormElement;
-    const successView = document.getElementById("success-view");
-    const submitBtn = document.getElementById(
-      "submit-button",
-    ) as HTMLButtonElement;
-    const resetBtn = document.getElementById("reset-button");
+    const setupContactForm = () => {
+      const form = document.getElementById("contact-form");
+      const successView = document.getElementById("success-view");
+      const submitBtn = document.getElementById("submit-button");
+      const resetBtn = document.getElementById("reset-button");
 
-    if (form && successView && submitBtn && resetBtn) {
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
+      if (form instanceof HTMLFormElement && successView && submitBtn instanceof HTMLButtonElement && resetBtn) {
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
 
-        // Start button transition loading feedback
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Transmitting telemetry…";
-        submitBtn.classList.add("opacity-80");
+          // Start button transition loading feedback
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Transmitting telemetry…";
+          submitBtn.classList.add("opacity-80");
 
-        const name = (document.getElementById("name") as HTMLInputElement)
-          .value;
-        const email = (document.getElementById("email") as HTMLInputElement)
-          .value;
-        const subject = (
-          document.getElementById("subject") as HTMLSelectElement
-        ).value;
-        const message = (
-          document.getElementById("message") as HTMLTextAreaElement
-        ).value;
+          const formData = new FormData(form);
+          const name = formData.get("name");
+          const email = formData.get("email");
+          const subject = formData.get("subject");
+          const message = formData.get("message");
 
-        try {
-          const res = await fetch("/api/contact", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ name, email, subject, message }),
-          });
+          try {
+            const res = await fetch("/api/contact", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ name, email, subject, message }),
+            });
 
-          if (!res.ok) {
-            const errData = await res.json().catch(() => null);
-            throw new Error(errData?.error || "Submission failed. Please try again.");
+            if (!res.ok) {
+              const errData = await res.json().catch(() => null);
+              throw new Error(errData?.error || "Submission failed. Please try again.");
+            }
+
+            // Hide form
+            form.classList.add("opacity-0", "pointer-events-none");
+
+            setTimeout(() => {
+              form.classList.add("hidden");
+              successView.classList.remove("hidden");
+
+              // Force browser layout repaint
+              void successView.offsetHeight;
+
+              // Transition success screen in
+              successView.classList.remove("opacity-0", "scale-95");
+              successView.classList.add("opacity-100", "scale-100");
+            }, 300);
+          } catch (err) {
+            console.error(err);
+            const errorEl = document.getElementById("form-error");
+            if (errorEl) {
+              errorEl.textContent = "Submission failed. Please check your internet connection and try again.";
+              errorEl.classList.remove("hidden");
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Send Message";
+            submitBtn.classList.remove("opacity-80");
           }
+        });
 
-          // Hide form
-          form.classList.add("opacity-0", "pointer-events-none");
-
-          setTimeout(() => {
-            form.classList.add("hidden");
-            successView.classList.remove("hidden");
-
-            // Force browser layout repaint
-            successView.offsetHeight;
-
-            // Transition success screen in
-            successView.classList.remove("opacity-0", "scale-95");
-            successView.classList.add("opacity-100", "scale-100");
-          }, 300);
-        } catch (err) {
-          console.error(err);
-          const errorEl = document.getElementById("form-error");
-          if (errorEl) {
-            errorEl.textContent = "Submission failed. Please check your internet connection and try again.";
-            errorEl.classList.remove("hidden");
-          }
+        resetBtn.addEventListener("click", () => {
+          // Clear inputs
+          form.reset();
           submitBtn.disabled = false;
           submitBtn.textContent = "Send Message";
           submitBtn.classList.remove("opacity-80");
-        }
-      });
 
-      resetBtn.addEventListener("click", () => {
-        // Clear inputs
-        form.reset();
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Send Message";
-        submitBtn.classList.remove("opacity-80");
+          // Transition out success screen
+          successView.classList.remove("opacity-100", "scale-100");
+          successView.classList.add("opacity-0", "scale-95");
 
-        // Transition out success screen
-        successView.classList.remove("opacity-100", "scale-100");
-        successView.classList.add("opacity-0", "scale-95");
+          setTimeout(() => {
+            successView.classList.add("hidden");
+            form.classList.remove("hidden");
 
-        setTimeout(() => {
-          successView.classList.add("hidden");
-          form.classList.remove("hidden");
+            // Force layout repaint
+            void form.offsetHeight;
 
-          // Force layout repaint
-          form.offsetHeight;
+            form.classList.remove("opacity-0", "pointer-events-none");
+            form.classList.add("opacity-100");
+          }, 300);
+        });
+      }
+    };
 
-          form.classList.remove("opacity-0", "pointer-events-none");
-          form.classList.add("opacity-100");
-        }, 300);
-      });
-    }
+    setupContactForm();
+    document.addEventListener("astro:after-swap", setupContactForm);
   </script>
 </Layout>

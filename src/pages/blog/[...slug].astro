@@ -5,15 +5,30 @@ import BlogPost from "../../layouts/BlogPost.astro";
 export const prerender = true;
 
 export async function getStaticPaths() {
-  const posts = await getCollection("blog");
-  return posts.map((post) => ({
-    params: { slug: post.id },
-    props: { post },
-  }));
+  try {
+    const posts = await getCollection("blog");
+    return posts.map((post) => ({
+      params: { slug: post.id },
+      props: { post },
+    }));
+  } catch (err) {
+    console.error("[getStaticPaths Blog Error]", err);
+    return [];
+  }
 }
 
 const { post } = Astro.props;
-const { Content } = await render(post);
+
+if (!post || !post.data) {
+  return Astro.redirect("/404");
+}
+
+const rendered = await render(post).catch((err) => {
+  console.error("[Blog Render Error]", err);
+  return null;
+});
+
+const Content = rendered?.Content;
 ---
 
 <BlogPost
@@ -21,8 +36,14 @@ const { Content } = await render(post);
   description={post.data.description}
   pubDate={post.data.pubDate}
   updatedDate={post.data.updatedDate}
-  author={post.data.author}
-  tags={post.data.tags}
+  author={post.data.author || "NetSpeed"}
+  tags={post.data.tags || []}
 >
-  <Content />
+  {
+    Content ? (
+      <Content />
+    ) : (
+      <p class="text-mute italic">Content could not be loaded.</p>
+    )
+  }
 </BlogPost>

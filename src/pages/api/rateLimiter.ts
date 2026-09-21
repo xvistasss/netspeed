@@ -3,9 +3,6 @@
 // across requests. This rate limiter uses a best-effort approach with generous
 // limits to avoid false positives. For strict rate limiting, use Cloudflare's
 // built-in rate limiting or Durable Objects.
-//
-// Strategy: Use generous limits that work across Worker instances.
-// The rate limiter is mainly a safety net against abuse, not a strict limiter.
 
 interface RateLimitEntry {
   count: number;
@@ -18,29 +15,26 @@ interface RateLimiterConfig {
 }
 
 const rateLimitStore = new Map<string, RateLimitEntry>();
+let lastCleanup = Date.now();
 
-// Clean up expired entries every 5 minutes
-// NOTE: This only cleans the current isolate's memory. Other isolates
-// will have their own cleanup cycles.
-if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of rateLimitStore.entries()) {
-      if (now > entry.resetTime) {
-        rateLimitStore.delete(key);
-      }
+/**
+ * Perform lazy cleanup of expired rate limit entries without persistent setInterval timers
+ * (compliant with Cloudflare Workers / workerd runtime constraints).
+ */
+function cleanupExpiredEntries(now: number) {
+  if (now - lastCleanup < 60000 && rateLimitStore.size < 500) {
+    return;
+  }
+  lastCleanup = now;
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitStore.delete(key);
     }
-  }, 5 * 60 * 1000);
+  }
 }
 
 /**
  * Check if a request is allowed under the rate limit.
- *
- * IMPORTANT: In Cloudflare Workers, this is per-isolate, not global.
- * Each Worker isolate has its own rateLimitStore. This means:
- * - A user hitting different isolates may get separate rate limit buckets
- * - The rate limit is best-effort, not strict
- * - For strict limits, use Cloudflare's built-in rate limiting rules
  *
  * @param identifier - Unique identifier (e.g., IP address)
  * @param config - Rate limit configuration
@@ -51,17 +45,20 @@ export function checkRateLimit(
   config: RateLimiterConfig = { maxRequests: 100, windowMs: 60000 }
 ): { allowed: boolean; remaining: number; resetTime: number } {
   const now = Date.now();
-  const entry = rateLimitStore.get(identifier);
+  cleanupExpiredEntries(now);
+
+  const safeId = identifier || "unknown";
+  const entry = rateLimitStore.get(safeId);
 
   if (!entry || now > entry.resetTime) {
     // New window or expired window
-    rateLimitStore.set(identifier, {
+    rateLimitStore.set(safeId, {
       count: 1,
       resetTime: now + config.windowMs,
     });
     return {
       allowed: true,
-      remaining: config.maxRequests - 1,
+      remaining: Math.max(0, config.maxRequests - 1),
       resetTime: now + config.windowMs,
     };
   }
@@ -79,7 +76,7 @@ export function checkRateLimit(
   entry.count++;
   return {
     allowed: true,
-    remaining: config.maxRequests - entry.count,
+    remaining: Math.max(0, config.maxRequests - entry.count),
     resetTime: entry.resetTime,
   };
 }
@@ -94,7 +91,7 @@ export function createRateLimitResponse(
 ): Response | null {
   if (rateLimit.allowed) return null;
 
-  const retryAfter = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+  const retryAfter = Math.max(1, Math.ceil((rateLimit.resetTime - Date.now()) / 1000));
   return new Response("Rate limit exceeded", {
     status: 429,
     headers: {
@@ -106,32 +103,44 @@ export function createRateLimitResponse(
 }
 
 /**
- * Get client IP from request headers
+ * Get client IP from request headers safely
  * @param headers - Request headers
  * @returns Client IP address
  */
-export function getClientIP(headers: Headers): string {
-  // Check for forwarded headers first (for proxies)
-  const forwarded = headers.get("x-forwarded-for");
-  if (forwarded) {
-    // Take the first IP in the list
-    return forwarded.split(",")[0].trim();
+export function getClientIP(headers?: Headers | null): string {
+  if (!headers || typeof headers.get !== "function") {
+    return "127.0.0.1";
   }
 
-  // Check for real IP header
-  const realIP = headers.get("x-real-ip");
-  if (realIP) {
-    return realIP;
+  try {
+    // Check for forwarded headers first (for proxies)
+    const forwarded = headers.get("x-forwarded-for");
+    if (forwarded) {
+      const firstIp = forwarded.split(",")[0]?.trim();
+      if (firstIp) return firstIp;
+    }
+
+    // Check for real IP header
+    const realIP = headers.get("x-real-ip");
+    if (realIP) {
+      return realIP.trim();
+    }
+
+    // Fallback to CF-Connecting-IP (Cloudflare)
+    const cfIP = headers.get("cf-connecting-ip");
+    if (cfIP) {
+      return cfIP.trim();
+    }
+
+    const vercelIP = headers.get("x-vercel-forwarded-for");
+    if (vercelIP) {
+      return vercelIP.split(",")[0]?.trim() || vercelIP.trim();
+    }
+  } catch {
+    // Fallback in case header parsing fails
   }
 
-  // Fallback to CF-Connecting-IP (Cloudflare)
-  const cfIP = headers.get("cf-connecting-ip");
-  if (cfIP) {
-    return cfIP;
-  }
-
-  // Default fallback
-  return "unknown";
+  return "127.0.0.1";
 }
 
 /**
@@ -145,7 +154,7 @@ export function createRateLimitHeaders(
   resetTime: number
 ): Headers {
   const headers = new Headers();
-  headers.set("X-RateLimit-Remaining", remaining.toString());
+  headers.set("X-RateLimit-Remaining", Math.max(0, remaining).toString());
   headers.set("X-RateLimit-Reset", Math.ceil(resetTime / 1000).toString());
   headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return headers;
