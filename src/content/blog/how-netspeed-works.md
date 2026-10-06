@@ -2,7 +2,7 @@
 title: "How NetSpeed's Testing Engine Works"
 description: "A technical deep dive into how NetSpeed measures your network performance — from Cloudflare edge routing to Web Worker parallel streams and loaded latency measurement."
 pubDate: 2026-07-08
-author: "NetSpeed"
+author: "Apurba"
 tags: ["technical", "netspeed", "speed-test", "engineering"]
 ---
 

@@ -1,7 +1,7 @@
 {
   "name": "net-speed-test",
   "type": "module",
-  "version": "1.1.26",
+  "version": "1.2.1",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -23,7 +23,7 @@
     "astro": "^7.3.1",
     "chart.js": "^4.5.1",
     "lucide-react": "^1.17.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^10.0.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.0",
@@ -31,8 +31,7 @@
   },
   "devDependencies": {
     "@types/nodemailer": "^8.0.0",
-    "patch-package": "^8.0.1",
     "prettier-plugin-astro": "^0.14.1",
-    "wrangler": "^4.131.0"
+    "wrangler": "^4.146.0"
   }
 }

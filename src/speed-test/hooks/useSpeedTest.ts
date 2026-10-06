@@ -1442,24 +1442,64 @@ export function useSpeedTest(): UseSpeedTestReturn {
     URL.revokeObjectURL(url);
   }, []);
 
-  const handleCliSubmit = useCallback((e: React.SubmitEvent) => {
+  const handleCliSubmit = useCallback(async (e: React.SubmitEvent) => {
     e.preventDefault();
-    const cmd = cliInput.trim().toLowerCase();
-    if (!cmd) return;
-    appendLogs([`$ ${cliInput}`]);
+    const rawInput = cliInput.trim();
+    if (!rawInput) return;
+    appendLogs([`$ ${rawInput}`]);
     setCliInput("");
+
+    const parts = rawInput.toLowerCase().split(/\s+/);
+    const cmd = parts[0];
+    const subCmd = parts[1];
+
+    const printLocationInfo = (info: ClientInfo | null) => {
+      if (!info) {
+        appendLogs(["[ERROR] No location information currently available."]);
+        return;
+      }
+      const locationParts = [info.city, info.region, info.country].filter(Boolean);
+      const locationStr = locationParts.length > 0 ? locationParts.join(", ") : "Unknown";
+      const coordsStr = (info.latitude || info.longitude)
+        ? `${info.latitude.toFixed(4)}°, ${info.longitude.toFixed(4)}°`
+        : "Unavailable";
+      const precisionStr = info.isPrecise
+        ? `Precise GPS (±${info.gpsAccuracy ?? 0}m)`
+        : "Approximate (IP Geolocation)";
+
+      const lines = [
+        "[OK] Client Location Information:",
+        `  • IP Address:   ${info.ip || "Unknown"}`,
+        `  • Location:     ${locationStr}`,
+        `  • Coordinates:  ${coordsStr}`,
+        `  • Provider/Org: ${info.org || "Unknown"}`,
+        `  • Precision:    ${precisionStr}`,
+      ];
+
+      if (info.connectionType || info.effectiveType) {
+        lines.push(`  • Connection:   ${info.connectionType || "unknown"} (${info.effectiveType || "N/A"}${info.rtt ? `, ${info.rtt}ms RTT` : ""})`);
+      }
+
+      if (!info.isPrecise) {
+        lines.push(`[INFO] Type 'location gps' to request high-precision hardware GPS coordinates.`);
+      }
+
+      appendLogs(lines);
+    };
+
     if (cmd === "clear") {
       setTerminalLogs([]);
       setActiveProgressLine(null);
     } else if (cmd === "help") {
       appendLogs([
         "Available commands:",
-        "  run, speedtest  - Start the network speed test",
-        "  stop, cancel    - Stop the running speed test",
-        "  skip            - Skip the location permission prompt and use approximate location",
-        "  location        - Reset location prompt so GPS is offered on next test",
-        "  clear           - Clear the terminal screen",
-        "  help            - Show this help message"
+        "  run, speedtest    - Start the network speed test",
+        "  stop, cancel      - Stop the running speed test",
+        "  location [subcmd] - View or manage location (info, gps, refresh, reset)",
+        "  allow, skip       - Allow or skip location permission prompt",
+        "  ip, whoami        - Display client IP and GeoIP details",
+        "  clear             - Clear the terminal screen",
+        "  help              - Show this help message"
       ]);
     } else if (cmd === "run" || cmd === "speedtest") {
       if (phase !== "idle" && phase !== "complete" && phase !== "error") {
@@ -1479,12 +1519,88 @@ export function useSpeedTest(): UseSpeedTestReturn {
       } else {
         appendLogs(["No active location prompt to skip."]);
       }
-    } else if (cmd === "location") {
-      resetLocationPrompt();
+    } else if (cmd === "allow") {
+      if (locationPrePromptWaiting) {
+        allowLocationPrompt();
+        appendLogs(["[INFO] Location permission prompt accepted. Requesting GPS..."]);
+      } else if (!stateRef.current.clientInfo?.isPrecise) {
+        appendLogs(["[INFO] Requesting browser GPS geolocation..."]);
+        const upgraded = await upgradeToPreciseLocation();
+        if (upgraded) {
+          printLocationInfo(upgraded);
+        } else {
+          appendLogs(["[WARN] GPS geolocation unavailable or denied."]);
+        }
+      } else {
+        appendLogs(["[INFO] Precise location is already active."]);
+      }
+    } else if (cmd === "location" || cmd === "ip" || cmd === "whoami" || cmd === "geoip") {
+      if (subCmd === "reset" || subCmd === "--reset" || subCmd === "-r") {
+        resetLocationPrompt();
+      } else if (subCmd === "gps" || subCmd === "precise" || subCmd === "--gps" || subCmd === "-g") {
+        if (!("geolocation" in navigator)) {
+          appendLogs(["[ERROR] Geolocation API is not supported in this browser."]);
+        } else {
+          appendLogs(["[INFO] Requesting high-precision device GPS coordinates..."]);
+          const upgraded = await upgradeToPreciseLocation();
+          if (upgraded) {
+            printLocationInfo(upgraded);
+          } else {
+            appendLogs(["[WARN] GPS location could not be obtained. Showing current location:"]);
+            if (!stateRef.current.clientInfo) {
+              await detectClientLocation();
+            }
+            printLocationInfo(stateRef.current.clientInfo);
+          }
+        }
+      } else if (subCmd === "refresh" || subCmd === "reload" || subCmd === "detect" || subCmd === "--refresh") {
+        appendLogs(["[INFO] Refreshing client IP and location data..."]);
+        await detectClientLocation();
+        printLocationInfo(stateRef.current.clientInfo);
+      } else if (subCmd === "allow") {
+        if (locationPrePromptWaiting) {
+          allowLocationPrompt();
+          appendLogs(["[INFO] Location permission prompt accepted."]);
+        } else if (!stateRef.current.clientInfo?.isPrecise) {
+          appendLogs(["[INFO] Requesting browser GPS geolocation..."]);
+          const upgraded = await upgradeToPreciseLocation();
+          if (upgraded) {
+            printLocationInfo(upgraded);
+          }
+        } else {
+          appendLogs(["[INFO] Precise location is already active."]);
+        }
+      } else if (subCmd === "skip") {
+        if (locationPrePromptWaiting) {
+          skipLocationPrompt();
+        } else {
+          appendLogs(["No active location prompt to skip."]);
+        }
+      } else if (subCmd === "help" || subCmd === "--help" || subCmd === "-h") {
+        appendLogs([
+          "Location commands:",
+          "  location            - View current detected location and network info",
+          "  location gps        - Request high-precision device GPS coordinates",
+          "  location refresh    - Re-detect IP geolocation & network info",
+          "  location reset      - Reset location prompt preferences",
+          "  location allow|skip - Respond to active location permission prompt"
+        ]);
+      } else {
+        // Default: display location info (fetch if not yet present)
+        if (!stateRef.current.clientInfo) {
+          appendLogs(["[INFO] Detecting client location..."]);
+          await detectClientLocation();
+        }
+        printLocationInfo(stateRef.current.clientInfo);
+      }
     } else {
       appendLogs([`Unknown command: ${cmd}. Type 'help' for options.`]);
     }
-  }, [cliInput, phase, isStarting, appendLogs, startSpeedTest, cancelSpeedTest, locationPrePromptWaiting, skipLocationPrompt, resetLocationPrompt]);
+  }, [
+    cliInput, phase, isStarting, appendLogs, startSpeedTest, cancelSpeedTest,
+    locationPrePromptWaiting, skipLocationPrompt, allowLocationPrompt, resetLocationPrompt,
+    detectClientLocation, upgradeToPreciseLocation
+  ]);
 
   return {
     phase, statusMessage, isCancelling, isStarting, activeTab, setActiveTab,

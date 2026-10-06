@@ -2,7 +2,7 @@
 title: "What Is Bufferbloat and Why It Matters"
 description: "Bufferbloat is one of the most common and least understood network problems. Learn what causes it, how to detect it, and what you can do about it."
 pubDate: 2026-07-03
-author: "NetSpeed"
+author: "Apurba"
 tags: ["bufferbloat", "networking", "latency", "guide"]
 ---
 

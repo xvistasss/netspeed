@@ -10,6 +10,7 @@ const CSP = {
   scriptSrc: [
     "'unsafe-inline'",
     "https://www.googletagmanager.com",
+    "https://*.googletagmanager.com",
     "https://static.cloudflareinsights.com",
     "https://pagead2.googlesyndication.com",
     "https://tpc.googlesyndication.com",
@@ -43,11 +44,15 @@ const CSP = {
     // Reverse geocoding
     "https://api.bigdatacloud.net",
 
-    // Google Analytics
+    // Google Analytics & Google Tag Manager
+    "https://*.google-analytics.com",
+    "https://*.analytics.google.com",
+    "https://*.googletagmanager.com",
     "https://www.google-analytics.com",
     "https://analytics.google.com",
     "https://www.googletagmanager.com",
     "https://www.google.com",
+    "https://*.g.doubleclick.net",
     "https://stats.g.doubleclick.net",
 
     // WebRTC STUN servers

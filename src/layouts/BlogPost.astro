@@ -4,29 +4,41 @@ import Layout from "./Layout.astro";
 interface Props {
   title: string;
   description: string;
-  pubDate: Date;
-  updatedDate?: Date;
+  pubDate: Date | string;
+  updatedDate?: Date | string;
   author?: string;
   tags?: string[];
 }
 
 const {
-  title,
-  description,
-  pubDate,
+  title = "Blog Article",
+  description = "",
+  pubDate = new Date(),
   updatedDate,
   author = "NetSpeed",
   tags = [],
 } = Astro.props;
 
-const formattedPubDate = pubDate.toLocaleDateString("en-US", {
+const safePubDate = pubDate instanceof Date && !isNaN(pubDate.getTime())
+  ? pubDate
+  : typeof pubDate === "string" && !isNaN(new Date(pubDate).getTime())
+    ? new Date(pubDate)
+    : new Date();
+
+const safeUpdatedDate = updatedDate instanceof Date && !isNaN(updatedDate.getTime())
+  ? updatedDate
+  : typeof updatedDate === "string" && !isNaN(new Date(updatedDate).getTime())
+    ? new Date(updatedDate)
+    : null;
+
+const formattedPubDate = safePubDate.toLocaleDateString("en-US", {
   year: "numeric",
   month: "long",
   day: "numeric",
 });
 
-const formattedUpdatedDate = updatedDate
-  ? updatedDate.toLocaleDateString("en-US", {
+const formattedUpdatedDate = safeUpdatedDate
+  ? safeUpdatedDate.toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -39,13 +51,28 @@ const jsonLd = {
   headline: title,
   description: description,
   author: {
-    "@type": "Organization",
+    "@type": "Person",
     name: author,
+    url: "https://apurba-dev.netlify.app/",
+    jobTitle: "Network Telemetry Engineer & Founder",
   },
-  datePublished: pubDate.toISOString(),
-  dateModified: updatedDate
-    ? updatedDate.toISOString()
-    : pubDate.toISOString(),
+  publisher: {
+    "@type": "Organization",
+    name: "NetSpeed",
+    url: "https://freenetspeed.com",
+    logo: {
+      "@type": "ImageObject",
+      url: "https://freenetspeed.com/favicon.svg",
+    },
+  },
+  datePublished: safePubDate.toISOString(),
+  dateModified: safeUpdatedDate
+    ? safeUpdatedDate.toISOString()
+    : safePubDate.toISOString(),
+  mainEntityOfPage: {
+    "@type": "WebPage",
+    "@id": Astro.url.href,
+  },
 };
 ---
 
@@ -90,15 +117,20 @@ const jsonLd = {
         </h1>
 
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono text-mute">
-          <span>{author}</span>
+          <span class="text-ink font-medium">Written by {author}</span>
           <span class="text-hairline-strong">·</span>
-          <time datetime={pubDate.toISOString()}>{formattedPubDate}</time>
+          <time datetime={safePubDate.toISOString()}>{formattedPubDate}</time>
           {formattedUpdatedDate && (
             <>
               <span class="text-hairline-strong">·</span>
               <span>Updated {formattedUpdatedDate}</span>
             </>
           )}
+          <span class="text-hairline-strong">·</span>
+          <span class="text-emerald-600 dark:text-emerald-400 font-sans text-[11px] font-medium inline-flex items-center gap-1">
+            <svg class="w-3 h-3 stroke-current" viewBox="0 0 24 24" fill="none" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Technical Review Verified
+          </span>
         </div>
 
         <p class="text-base md:text-lg text-body leading-relaxed max-w-3xl mt-1">
@@ -113,7 +145,39 @@ const jsonLd = {
         <slot />
       </div>
 
-      {/* Article Footer */}
+      {/* Author Bio Card for E-EAT Credibility */}
+      <section class="border-t border-hairline pt-8">
+        <div class="bg-canvas-soft-2 p-6 md:p-7 rounded-lg border border-hairline flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <div class="w-14 h-14 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-lg shrink-0 shadow-xs">
+            AG
+          </div>
+          <div class="flex flex-col gap-1.5 flex-1">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm md:text-base font-semibold text-ink">
+                  {author}
+                </h3>
+                <p class="text-xs text-mute font-mono">
+                  Network Systems Engineer &amp; Founder of NetSpeed
+                </p>
+              </div>
+              <a
+                href="https://apurba-dev.netlify.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-xs font-mono text-link hover:text-link-deep transition-colors inline-flex items-center gap-1"
+              >
+                Portfolio &amp; Research &rarr;
+              </a>
+            </div>
+            <p class="text-xs text-body leading-relaxed mt-1">
+              Specializing in low-latency distributed network benchmarks, edge socket routing, and bufferbloat mitigation. Published diagnostic telemetry guides to help broadband users verify real connection performance.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Article Footer CTA */}
       <footer class="border-t border-hairline pt-8">
         <div
           class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 bg-canvas-soft-2 p-8 rounded-lg border border-hairline"

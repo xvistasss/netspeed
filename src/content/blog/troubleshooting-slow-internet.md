@@ -2,7 +2,7 @@
 title: "How to Troubleshoot Slow Internet at Home"
 description: "A step-by-step diagnostic guide to finding and fixing the cause of slow internet — from simple restarts to identifying whether the problem is your WiFi, equipment, or ISP."
 pubDate: 2026-07-06
-author: "NetSpeed"
+author: "Apurba"
 tags: ["troubleshooting", "internet", "guide"]
 ---
 
