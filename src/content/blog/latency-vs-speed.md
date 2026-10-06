@@ -2,7 +2,7 @@
 title: "Latency vs Speed: Which Matters More for Your Connection"
 description: "Most people focus on download speed, but latency often has a bigger impact on how your internet actually feels. Learn when each metric matters most."
 pubDate: 2026-07-07
-author: "NetSpeed"
+author: "Apurba"
 tags: ["latency", "speed", "networking", "guide"]
 ---
 

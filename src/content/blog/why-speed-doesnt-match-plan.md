@@ -2,7 +2,7 @@
 title: "Why Your Speed Test Doesn't Match Your ISP's Advertised Speed"
 description: "Your speed test shows 80 Mbps but you pay for 300 Mbps? Here is why advertised speeds rarely match real-world results and what you can do about it."
 pubDate: 2026-07-05
-author: "NetSpeed"
+author: "Apurba"
 tags: ["isp", "speed-test", "internet", "guide"]
 ---
 

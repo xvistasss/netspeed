@@ -2,7 +2,7 @@
 title: "How to Choose the Right Internet Plan for Your Needs"
 description: "Not sure how much internet speed you actually need? This guide breaks down speed requirements by activity and household size so you can pick the right plan."
 pubDate: 2026-07-04
-author: "NetSpeed"
+author: "Apurba"
 tags: ["internet", "guide", "planning"]
 ---
 

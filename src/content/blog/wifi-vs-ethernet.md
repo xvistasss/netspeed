@@ -2,7 +2,7 @@
 title: "Why Your WiFi Speed Differs from Ethernet"
 description: "Understand the real reasons WiFi is slower than a wired Ethernet connection — from signal interference to protocol overhead — and learn when each makes sense."
 pubDate: 2026-07-02
-author: "NetSpeed"
+author: "Apurba"
 tags: ["wifi", "ethernet", "networking", "guide"]
 ---
 

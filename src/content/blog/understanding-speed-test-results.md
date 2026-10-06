@@ -2,7 +2,7 @@
 title: "How to Read and Understand Your Speed Test Results"
 description: "A plain-English guide to every metric a network speed test shows — download speed, upload speed, latency, jitter, and packet loss — and what counts as a good result."
 pubDate: 2026-07-01
-author: "NetSpeed"
+author: "Apurba"
 tags: ["speed-test", "internet", "guide"]
 ---
 

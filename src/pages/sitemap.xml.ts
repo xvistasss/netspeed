@@ -6,7 +6,7 @@ export const GET: APIRoute = async ({ site }) => {
   const defaultLastmod = new Date().toISOString().split("T")[0];
 
   const staticPages = [
-    { loc: "", priority: "1.0", changefreq: "daily" },
+    { loc: "/", priority: "1.0", changefreq: "daily" },
     { loc: "/how-it-works", priority: "0.9", changefreq: "weekly" },
     { loc: "/blog", priority: "0.9", changefreq: "daily" },
     { loc: "/faq", priority: "0.8", changefreq: "weekly" },
@@ -40,14 +40,16 @@ export const GET: APIRoute = async ({ site }) => {
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
   <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-    ${allPages.map((page) => `
+    ${allPages.map((page) => {
+      const locUrl = page.loc === "/" ? `${origin}/` : `${origin}${page.loc}`;
+      return `
       <url>
-        <loc>${origin}${page.loc}</loc>
+        <loc>${locUrl}</loc>
         <lastmod>${page.lastmod}</lastmod>
         <changefreq>${page.changefreq}</changefreq>
         <priority>${page.priority}</priority>
-      </url>`,
-  ).join("\n")}
+      </url>`;
+    }).join("\n")}
   </urlset>`.trim();
 
   return new Response(xml, {
