@@ -7,9 +7,9 @@ export const GET: APIRoute = async ({ site }) => {
 
   const staticPages = [
     { loc: "/", priority: "1.0", changefreq: "daily" },
-    { loc: "/how-it-works", priority: "0.9", changefreq: "weekly" },
+    { loc: "/how-it-works", priority: "0.9", changefreq: "monthly" },
     { loc: "/blog", priority: "0.9", changefreq: "daily" },
-    { loc: "/faq", priority: "0.8", changefreq: "weekly" },
+    { loc: "/faq", priority: "0.8", changefreq: "monthly" },
     { loc: "/about", priority: "0.8", changefreq: "monthly" },
     { loc: "/contact", priority: "0.7", changefreq: "monthly" },
     { loc: "/privacy", priority: "0.5", changefreq: "monthly" },
@@ -25,7 +25,7 @@ export const GET: APIRoute = async ({ site }) => {
       return {
         loc: `/blog/${post.id}`,
         priority: "0.8",
-        changefreq: "monthly",
+        changefreq: "daily",
         lastmod: validDate.toISOString().split("T")[0],
       };
     });
@@ -41,15 +41,15 @@ export const GET: APIRoute = async ({ site }) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
   <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     ${allPages.map((page) => {
-      const locUrl = page.loc === "/" ? `${origin}/` : `${origin}${page.loc}`;
-      return `
+    const locUrl = page.loc === "/" ? `${origin}/` : `${origin}${page.loc}`;
+    return `
       <url>
         <loc>${locUrl}</loc>
         <lastmod>${page.lastmod}</lastmod>
         <changefreq>${page.changefreq}</changefreq>
         <priority>${page.priority}</priority>
       </url>`;
-    }).join("\n")}
+  }).join("\n")}
   </urlset>`.trim();
 
   return new Response(xml, {
