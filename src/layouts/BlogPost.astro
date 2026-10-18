@@ -284,4 +284,45 @@ const jsonLd = {
     border-top: 1px solid var(--color-hairline);
     margin: 1.5rem 0;
   }
+
+  .prose :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    text-align: left;
+    border: 1px solid var(--color-hairline);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .prose :global(thead) {
+    background-color: var(--color-canvas-soft-2);
+    border-bottom: 1px solid var(--color-hairline);
+  }
+
+  .prose :global(th) {
+    padding: 0.625rem 0.875rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: var(--font-mono);
+    color: var(--color-ink);
+  }
+
+  .prose :global(td) {
+    padding: 0.625rem 0.875rem;
+    border-bottom: 1px solid var(--color-hairline);
+    color: var(--color-body);
+  }
+
+  .prose :global(tbody tr:last-child td) {
+    border-bottom: none;
+  }
+
+  .prose :global(tbody tr:hover) {
+    background-color: var(--color-canvas-soft);
+  }
 </style>

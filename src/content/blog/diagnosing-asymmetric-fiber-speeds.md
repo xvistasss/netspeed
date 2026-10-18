@@ -73,15 +73,23 @@ High-speed, high-bandwidth-delay-product (BDP) connections require large TCP rec
 
 The formula for the required TCP buffer size is:
 
-$$\text{BDP (Bits)} = \text{Bandwidth (bps)} \times \text{Round-Trip Time (seconds)}$$
+```
+BDP (Bits) = Bandwidth (bps) * Round-Trip Time (seconds)
+```
 
 For a 1 Gbps connection to a server with a 30 ms ping:
 
-$$\text{BDP} = 1{,}000{,}000{,}000 \times 0.030 = 30{,}000{,}000 \text{ bits} \approx 3.75 \text{ MB}$$
+```
+BDP = 1,000,000,000 * 0.030 = 30,000,000 bits (approx. 3.75 MB)
+```
 
 If your operating system caps its TCP send buffer at 64 KB or 256 KB, your maximum theoretical upload throughput over that 30 ms latency path is capped:
 
-$$\text{Max Throughput} = \frac{\text{Buffer Size (Bits)}}{\text{RTT (Seconds)}} = \frac{256 \times 1024 \times 8}{0.030} \approx 69.9 \text{ Mbps}$$
+```
+Max Throughput = Buffer Size (Bits) / RTT (Seconds)
+              = (256 * 1024 * 8) / 0.030
+              = approx. 69.9 Mbps
+```
 
 ### Verify TCP Window Scaling on Windows
 
