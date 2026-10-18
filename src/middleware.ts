@@ -29,6 +29,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
       response.headers.set('Cache-Control', 'public, max-age=0, must-revalidate, s-maxage=600');
     }
 
+    // Ensure HTML responses declare charset=utf-8 explicitly in Content-Type
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.toLowerCase().includes('text/html') && !contentType.toLowerCase().includes('charset')) {
+      response.headers.set('Content-Type', `${contentType}; charset=utf-8`);
+    }
+
     // Security headers for all responses
     response.headers.set('X-Content-Type-Options', 'nosniff');
 
