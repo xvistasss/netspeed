@@ -12,8 +12,8 @@ interface Props {
   structuredData?: Record<string, any> | Array<Record<string, any>>;
 }
 const {
-  title = "NetSpeed: Free Internet Speed Test & Latency Checker",
-  description = "Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's free online internet speed test.",
+  title = "NetSpeed: Internet Speed Test & Latency Checker",
+  description = "Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's online internet speed test.",
   showMeshGradient = false,
   ogType = "website",
   noindex = false,
@@ -22,17 +22,17 @@ const {
 
 const siteOrigin = Astro.site?.origin || "https://freenetspeed.com";
 const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
-const canonicalUrl = new URL(pathname === "/" ? "/" : pathname, siteOrigin).href;
+const canonicalUrl = new URL(pathname === "/" ? "/" : pathname, siteOrigin)
+  .href;
 const ogImageUrl = new URL("/og-image.png", siteOrigin).href;
 
 const baseSchemaGraph: any[] = [
   {
     "@type": "WebSite",
     "@id": `${siteOrigin}/#website`,
-    name: "NetSpeed",
+    name: "NetSpeed - Internet Speed Test",
     url: `${siteOrigin}/`,
-    description:
-      "Free internet speed test and network diagnostics measuring download, upload, ping latency, jitter, and bufferbloat.",
+    description: description,
     publisher: {
       "@id": `${siteOrigin}/#organization`,
     },
@@ -53,7 +53,7 @@ const baseSchemaGraph: any[] = [
   {
     "@type": "WebApplication",
     "@id": `${siteOrigin}/#webapp`,
-    name: "NetSpeed Free Internet Speed Test",
+    name: "NetSpeed - Internet Speed Test",
     url: `${siteOrigin}/`,
     applicationCategory: "UtilitiesApplication",
     operatingSystem: "All",
@@ -63,8 +63,7 @@ const baseSchemaGraph: any[] = [
       price: "0",
       priceCurrency: "USD",
     },
-    description:
-      "Free online speed test measuring real-time download speed, upload speed, latency, jitter, and bufferbloat with uncompressed cryptographic payloads.",
+    description: description,
   },
 ];
 

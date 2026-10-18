@@ -42,10 +42,10 @@ export default function SpeedTest() {
       {/* Hero Section */}
       <div className="flex flex-col gap-2 mt-4 md:mt-8 border-b border-hairline pb-6">
         <span className="font-mono text-xs uppercase tracking-wider text-mute">
-          Free Internet Speed Test &bull; Network Diagnostics
+          Speed Test &bull; Network Diagnostics
         </span>
         <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
-          Free Internet Speed Test &amp; Network Diagnostics
+          NetSpeed — Accurate Broadband Latency Check
         </h1>
         <p className="text-sm md:text-base text-body max-w-2xl mt-1 leading-relaxed">
           Test your internet download speed, upload speed, ping latency, jitter, and bufferbloat with NetSpeed's free online speed test and latency checker.

@@ -9,11 +9,7 @@ const posts = (await getCollection("blog"))
   .slice(0, 4);
 ---
 
-<Layout
-  title="NetSpeed: Free Internet Speed Test & Latency Checker"
-  description="Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's free online internet speed test."
-  showMeshGradient={true}
->
+<Layout showMeshGradient={true}>
   {/* Main Speed Test Island */}
   <main class="flex-1 flex flex-col justify-center min-h-[480px]">
     <SpeedTest client:load />
@@ -38,7 +34,13 @@ const posts = (await getCollection("blog"))
             Understanding your internet speed & connection health.
           </h2>
           <p class="text-sm md:text-base text-body leading-relaxed max-w-3xl">
-            A comprehensive internet speed test measures more than just peak download rates. True connection quality depends on five core telemetry dimensions: <strong>download speed bandwidth</strong>, <strong>upload speed bandwidth</strong>, <strong>idle latency</strong>, <strong>loaded latency (bufferbloat)</strong>, and <strong>packet jitter</strong>.
+            A comprehensive internet speed test measures more than just peak
+            download rates. True connection quality depends on five core
+            telemetry dimensions: <strong>download speed bandwidth</strong>, <strong
+              >upload speed bandwidth</strong
+            >, <strong>idle latency</strong>, <strong
+              >loaded latency (bufferbloat)</strong
+            >, and <strong>packet jitter</strong>.
           </p>
         </div>
 
@@ -48,9 +50,13 @@ const posts = (await getCollection("blog"))
             Recommended Speeds by Activity
           </h3>
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs md:text-sm border border-hairline rounded-lg overflow-hidden bg-canvas">
+            <table
+              class="w-full text-left text-xs md:text-sm border border-hairline rounded-lg overflow-hidden bg-canvas"
+            >
               <thead>
-                <tr class="bg-canvas-soft-2 border-b border-hairline text-ink font-mono text-[11px] uppercase tracking-wider">
+                <tr
+                  class="bg-canvas-soft-2 border-b border-hairline text-ink font-mono text-[11px] uppercase tracking-wider"
+                >
                   <th class="p-3.5 md:p-4">Activity</th>
                   <th class="p-3.5 md:p-4">Min. Download</th>
                   <th class="p-3.5 md:p-4">Min. Upload</th>
@@ -59,31 +65,44 @@ const posts = (await getCollection("blog"))
               </thead>
               <tbody class="divide-y divide-hairline text-body">
                 <tr>
-                  <td class="p-3.5 md:p-4 font-medium text-ink">4K Ultra HD Streaming</td>
+                  <td class="p-3.5 md:p-4 font-medium text-ink"
+                    >4K Ultra HD Streaming</td
+                  >
                   <td class="p-3.5 md:p-4">25–50 Mbps</td>
                   <td class="p-3.5 md:p-4">3–5 Mbps</td>
                   <td class="p-3.5 md:p-4 font-mono">&lt; 100 ms</td>
                 </tr>
                 <tr>
-                  <td class="p-3.5 md:p-4 font-medium text-ink">Competitive Online Gaming</td>
+                  <td class="p-3.5 md:p-4 font-medium text-ink"
+                    >Competitive Online Gaming</td
+                  >
                   <td class="p-3.5 md:p-4">15–25 Mbps</td>
                   <td class="p-3.5 md:p-4">5–10 Mbps</td>
-                  <td class="p-3.5 md:p-4 font-mono text-emerald-600 dark:text-emerald-400">&lt; 30 ms</td>
+                  <td
+                    class="p-3.5 md:p-4 font-mono text-emerald-600 dark:text-emerald-400"
+                    >&lt; 30 ms</td
+                  >
                 </tr>
                 <tr>
-                  <td class="p-3.5 md:p-4 font-medium text-ink">HD Zoom & Video Conferencing</td>
+                  <td class="p-3.5 md:p-4 font-medium text-ink"
+                    >HD Zoom & Video Conferencing</td
+                  >
                   <td class="p-3.5 md:p-4">10–20 Mbps</td>
                   <td class="p-3.5 md:p-4">10–15 Mbps</td>
                   <td class="p-3.5 md:p-4 font-mono">&lt; 50 ms</td>
                 </tr>
                 <tr>
-                  <td class="p-3.5 md:p-4 font-medium text-ink">Cloud Backup & Large File Uploads</td>
+                  <td class="p-3.5 md:p-4 font-medium text-ink"
+                    >Cloud Backup & Large File Uploads</td
+                  >
                   <td class="p-3.5 md:p-4">50+ Mbps</td>
                   <td class="p-3.5 md:p-4">50–100+ Mbps</td>
                   <td class="p-3.5 md:p-4 font-mono">&lt; 80 ms</td>
                 </tr>
                 <tr>
-                  <td class="p-3.5 md:p-4 font-medium text-ink">Multi-User Smart Household (4+ users)</td>
+                  <td class="p-3.5 md:p-4 font-medium text-ink"
+                    >Multi-User Smart Household (4+ users)</td
+                  >
                   <td class="p-3.5 md:p-4">200–500+ Mbps</td>
                   <td class="p-3.5 md:p-4">50+ Mbps</td>
                   <td class="p-3.5 md:p-4 font-mono">&lt; 40 ms</td>
@@ -101,10 +120,16 @@ const posts = (await getCollection("blog"))
               Why test your connection regularly?
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Most people only test their internet speed when a video call stutters, a game lags, or video buffering begins. Running diagnostic tests reveals whether your Internet Service Provider (ISP) is delivering the bandwidth promised in your contract tier.
+              Most people only test their internet speed when a video call
+              stutters, a game lags, or video buffering begins. Running
+              diagnostic tests reveals whether your Internet Service Provider
+              (ISP) is delivering the bandwidth promised in your contract tier.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Periodic testing helps you diagnose performance degradation caused by router buffer bloat, localized Wi-Fi radio interference, outdated modem firmware, or ISP routing saturation during peak evening congestion hours (7 PM – 11 PM).
+              Periodic testing helps you diagnose performance degradation caused
+              by router buffer bloat, localized Wi-Fi radio interference,
+              outdated modem firmware, or ISP routing saturation during peak
+              evening congestion hours (7 PM – 11 PM).
             </p>
           </div>
 
@@ -113,10 +138,16 @@ const posts = (await getCollection("blog"))
               How our measurement engine works
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Unlike legacy speed tests that fetch static assets prone to ISP proxy caching, this telemetry engine streams non-compressible cryptographic binary chunks directly from high-speed edge nodes. This ensures every byte traverses your actual connection pipe.
+              Unlike legacy speed tests that fetch static assets prone to ISP
+              proxy caching, this telemetry engine streams non-compressible
+              cryptographic binary chunks directly from high-speed edge nodes.
+              This ensures every byte traverses your actual connection pipe.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Concurrent Web Worker threads saturate both download and upload paths while continuously sampling round-trip ping. By capturing latency under full load versus idle state, the engine calculates real-time bufferbloat and jitter metrics.
+              Concurrent Web Worker threads saturate both download and upload
+              paths while continuously sampling round-trip ping. By capturing
+              latency under full load versus idle state, the engine calculates
+              real-time bufferbloat and jitter metrics.
             </p>
           </div>
         </div>
@@ -132,16 +163,21 @@ const posts = (await getCollection("blog"))
               class="list-decimal pl-5 text-xs md:text-sm text-body flex flex-col gap-2"
             >
               <li>
-                <strong>Temporarily pause VPNs:</strong> Encrypted tunnels introduce routing overhead and geographic detours that skew throughput numbers.
+                <strong>Temporarily pause VPNs:</strong> Encrypted tunnels introduce
+                routing overhead and geographic detours that skew throughput numbers.
               </li>
               <li>
-                <strong>Halt background transfers:</strong> Cloud backups, OS updates, and torrent clients consume bandwidth in the background.
+                <strong>Halt background transfers:</strong> Cloud backups, OS updates,
+                and torrent clients consume bandwidth in the background.
               </li>
               <li>
-                <strong>Use wired Gigabit Ethernet:</strong> Testing over a Cat6 cable isolates ISP line delivery from wireless Wi-Fi attenuation.
+                <strong>Use wired Gigabit Ethernet:</strong> Testing over a Cat6 cable
+                isolates ISP line delivery from wireless Wi-Fi attenuation.
               </li>
               <li>
-                <strong>Sample across multiple time slots:</strong> Network demand fluctuates; testing during off-peak and peak hours provides an accurate baseline.
+                <strong>Sample across multiple time slots:</strong> Network demand
+                fluctuates; testing during off-peak and peak hours provides an accurate
+                baseline.
               </li>
             </ul>
           </div>
@@ -151,10 +187,18 @@ const posts = (await getCollection("blog"))
               Diagnosing slow speed issues
             </h3>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              If your speed test results consistently underperform your plan, check whether your router's Ethernet ports are rated for Gigabit (1000 Mbps) rather than Fast Ethernet (100 Mbps). In wireless environments, switching from crowded 2.4 GHz channels to 5 GHz or Wi-Fi 6 dramatically improves throughput.
+              If your speed test results consistently underperform your plan,
+              check whether your router's Ethernet ports are rated for Gigabit
+              (1000 Mbps) rather than Fast Ethernet (100 Mbps). In wireless
+              environments, switching from crowded 2.4 GHz channels to 5 GHz or
+              Wi-Fi 6 dramatically improves throughput.
             </p>
             <p class="text-xs md:text-sm text-body leading-relaxed">
-              Explore our comprehensive <a href="/blog" class="text-link hover:underline font-medium">Network Guides</a> for in-depth tutorials on configuring router SQM, reducing bufferbloat, and troubleshooting ISP throttling.
+              Explore our comprehensive <a
+                href="/blog"
+                class="text-link hover:underline font-medium">Network Guides</a
+              > for in-depth tutorials on configuring router SQM, reducing bufferbloat,
+              and troubleshooting ISP throttling.
             </p>
           </div>
         </div>
@@ -185,7 +229,7 @@ const posts = (await getCollection("blog"))
               class="font-mono text-xs text-link hover:text-link-deep transition-colors duration-150 inline-flex items-center gap-1.5 shrink-0"
               aria-label="View all networking guides and articles"
             >
-              View all
+              View all articles
               <svg
                 class="w-3 h-3"
                 viewBox="0 0 24 24"
@@ -206,9 +250,7 @@ const posts = (await getCollection("blog"))
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           {
             posts.map((post) => (
-              <article
-                class="group relative flex flex-col gap-3 p-5 rounded-lg border border-hairline bg-canvas hover:border-hairline-strong hover:bg-canvas-soft transition-[border-color,background-color] duration-150"
-              >
+              <article class="group relative flex flex-col gap-3 p-5 rounded-lg border border-hairline bg-canvas hover:border-hairline-strong hover:bg-canvas-soft transition-[border-color,background-color] duration-150">
                 <time
                   datetime={post.data.pubDate.toISOString()}
                   class="font-mono text-[10px] uppercase tracking-wider text-mute"
