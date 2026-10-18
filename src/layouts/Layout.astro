@@ -7,40 +7,92 @@ interface Props {
   title?: string;
   description?: string;
   showMeshGradient?: boolean;
+  ogType?: string;
+  noindex?: boolean;
+  structuredData?: Record<string, any> | Array<Record<string, any>>;
 }
 const {
-  title = "NetSpeed — Accurate Broadband & Latency Check",
-  description = "Test your internet download, upload, ping latency, jitter, and bufferbloat with uncompressed payloads and global edge routing. Accurate, fast, and transparent network diagnostics.",
+  title = "NetSpeed: Free Internet Speed Test & Latency Checker",
+  description = "Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's free online internet speed test.",
   showMeshGradient = false,
+  ogType = "website",
+  noindex = false,
+  structuredData,
 } = Astro.props;
 
 const siteOrigin = Astro.site?.origin || "https://freenetspeed.com";
 const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
-const canonicalUrl = new URL(pathname, siteOrigin).href;
+const canonicalUrl = new URL(pathname === "/" ? "/" : pathname, siteOrigin).href;
 const ogImageUrl = new URL("/og-image.png", siteOrigin).href;
+
+const baseSchemaGraph: any[] = [
+  {
+    "@type": "WebSite",
+    "@id": `${siteOrigin}/#website`,
+    name: "NetSpeed",
+    url: `${siteOrigin}/`,
+    description:
+      "Free internet speed test and network diagnostics measuring download, upload, ping latency, jitter, and bufferbloat.",
+    publisher: {
+      "@id": `${siteOrigin}/#organization`,
+    },
+  },
+  {
+    "@type": "Organization",
+    "@id": `${siteOrigin}/#organization`,
+    name: "NetSpeed",
+    url: `${siteOrigin}/`,
+    logo: {
+      "@type": "ImageObject",
+      url: `${siteOrigin}/favicon.svg`,
+      width: "900",
+      height: "900",
+    },
+    sameAs: ["https://github.com/xvistasss/netspeed"],
+  },
+  {
+    "@type": "WebApplication",
+    "@id": `${siteOrigin}/#webapp`,
+    name: "NetSpeed Free Internet Speed Test",
+    url: `${siteOrigin}/`,
+    applicationCategory: "UtilitiesApplication",
+    operatingSystem: "All",
+    browserRequirements: "Requires JavaScript. Requires HTML5.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    description:
+      "Free online speed test measuring real-time download speed, upload speed, latency, jitter, and bufferbloat with uncompressed cryptographic payloads.",
+  },
+];
+
+if (pathname !== "/") {
+  const pageTitleClean = title.split("—")[0].split(":")[0].trim();
+  baseSchemaGraph.push({
+    "@type": "BreadcrumbList",
+    "@id": `${canonicalUrl}#breadcrumb`,
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: `${siteOrigin}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: pageTitleClean,
+        item: canonicalUrl,
+      },
+    ],
+  });
+}
 
 const siteSchema = {
   "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "WebSite",
-      name: "NetSpeed",
-      url: siteOrigin,
-      description:
-        "High-precision network speed test and latency diagnostic tool.",
-    },
-    {
-      "@type": "WebApplication",
-      name: "NetSpeed Internet Speed Test",
-      applicationCategory: "UtilitiesApplication",
-      operatingSystem: "All",
-      offers: {
-        "@type": "Offer",
-        price: "0",
-        priceCurrency: "USD",
-      },
-    },
-  ],
+  "@graph": baseSchemaGraph,
 };
 ---
 
@@ -50,7 +102,9 @@ const siteSchema = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="sitemap" href="/sitemap.xml" />
     <meta name="generator" content={Astro.generator} />
@@ -66,6 +120,15 @@ const siteSchema = {
       is:inline
       set:html={JSON.stringify(siteSchema)}
     />
+    {
+      structuredData && (
+        <script
+          type="application/ld+json"
+          is:inline
+          set:html={JSON.stringify(structuredData)}
+        />
+      )
+    }
 
     <!-- Preload Primary Font for immediate render without layout shift -->
     <link
@@ -127,14 +190,14 @@ const siteSchema = {
       is:inline
       async
       src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5638352527724874"
-      crossorigin="anonymous"
-    ></script>
+      crossorigin="anonymous"></script>
 
     <!-- Canonical URL -->
     <link rel="canonical" href={canonicalUrl} />
 
     <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content="NetSpeed" />
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

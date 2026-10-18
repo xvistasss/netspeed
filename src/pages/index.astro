@@ -9,7 +9,11 @@ const posts = (await getCollection("blog"))
   .slice(0, 4);
 ---
 
-<Layout showMeshGradient={true}>
+<Layout
+  title="NetSpeed: Free Internet Speed Test & Latency Checker"
+  description="Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's free online internet speed test."
+  showMeshGradient={true}
+>
   {/* Main Speed Test Island */}
   <main class="flex-1 flex flex-col justify-center min-h-[480px]">
     <SpeedTest client:load />
@@ -26,7 +30,7 @@ const posts = (await getCollection("blog"))
           <span
             class="font-mono text-xs uppercase tracking-wider text-mute block"
           >
-            Network Telemetry Guide
+            Internet Speed Test &amp; Latency Guide
           </span>
           <h2
             class="text-2xl md:text-4xl font-semibold tracking-tight text-ink font-sans"
@@ -34,7 +38,7 @@ const posts = (await getCollection("blog"))
             Understanding your internet speed & connection health.
           </h2>
           <p class="text-sm md:text-base text-body leading-relaxed max-w-3xl">
-            A comprehensive speed test measures more than just peak download rates. True connection quality depends on five core telemetry dimensions: <strong>download bandwidth</strong>, <strong>upload bandwidth</strong>, <strong>idle latency</strong>, <strong>loaded latency (bufferbloat)</strong>, and <strong>packet jitter</strong>.
+            A comprehensive internet speed test measures more than just peak download rates. True connection quality depends on five core telemetry dimensions: <strong>download speed bandwidth</strong>, <strong>upload speed bandwidth</strong>, <strong>idle latency</strong>, <strong>loaded latency (bufferbloat)</strong>, and <strong>packet jitter</strong>.
           </p>
         </div>
 
@@ -179,6 +183,7 @@ const posts = (await getCollection("blog"))
             <a
               href="/blog"
               class="font-mono text-xs text-link hover:text-link-deep transition-colors duration-150 inline-flex items-center gap-1.5 shrink-0"
+              aria-label="View all networking guides and articles"
             >
               View all
               <svg
@@ -189,6 +194,7 @@ const posts = (await getCollection("blog"))
                 stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
+                aria-hidden="true"
               >
                 <path d="M5 12h14"></path>
                 <path d="M12 5l7 7-7 7"></path>
@@ -200,9 +206,8 @@ const posts = (await getCollection("blog"))
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           {
             posts.map((post) => (
-              <a
-                href={`/blog/${post.id}`}
-                class="group flex flex-col gap-3 p-5 rounded-lg border border-hairline bg-canvas hover:border-hairline-strong hover:bg-canvas-soft transition-[border-color,background-color] duration-150"
+              <article
+                class="group relative flex flex-col gap-3 p-5 rounded-lg border border-hairline bg-canvas hover:border-hairline-strong hover:bg-canvas-soft transition-[border-color,background-color] duration-150"
               >
                 <time
                   datetime={post.data.pubDate.toISOString()}
@@ -215,12 +220,17 @@ const posts = (await getCollection("blog"))
                   })}
                 </time>
                 <h3 class="text-base font-semibold tracking-tight text-ink font-sans group-hover:text-link transition-colors duration-150 leading-snug">
-                  {post.data.title}
+                  <a
+                    href={`/blog/${post.id}`}
+                    class="focus:outline-hidden after:absolute after:inset-0"
+                  >
+                    {post.data.title}
+                  </a>
                 </h3>
                 <p class="text-xs text-body leading-relaxed line-clamp-2">
                   {post.data.description}
                 </p>
-              </a>
+              </article>
             ))
           }
         </div>

@@ -42,29 +42,17 @@ export default function SpeedTest() {
       {/* Hero Section */}
       <div className="flex flex-col gap-2 mt-4 md:mt-8 border-b border-hairline pb-6">
         <span className="font-mono text-xs uppercase tracking-wider text-mute">
-          Network Speed Engine @ &copy;NetSpeed
+          Free Internet Speed Test &bull; Network Diagnostics
         </span>
-        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink">
-          Network Speed Test
+        <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-ink font-sans">
+          Free Internet Speed Test &amp; Network Diagnostics
         </h1>
-        <p className="text-sm md:text-base text-body max-w-2xl mt-1">
-          A professional-grade speed test measuring packet jitters, concurrent
-          downloads, and uploads via optimal server selection.
+        <p className="text-sm md:text-base text-body max-w-2xl mt-1 leading-relaxed">
+          Test your internet download speed, upload speed, ping latency, jitter, and bufferbloat with NetSpeed's free online speed test and latency checker.
         </p>
         <p className="text-xs text-mute mt-1">
-          Measures near ICMP latency. Results approximate real-world
-          network performance.
+          Uncompressed cryptographic edge payloads for accurate, real-world connection diagnostics.
         </p>
-
-        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 mb-4">
-          <a href="/about" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">About</a>
-          <span className="text-hairline-strong text-[10px] select-none">·</span>
-          <a href="/contact" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Contact</a>
-          <span className="text-hairline-strong text-[10px] select-none">·</span>
-          <a href="/privacy" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Privacy</a>
-          <span className="text-hairline-strong text-[10px] select-none">·</span>
-          <a href="/terms" className="font-mono text-xs uppercase tracking-wider text-mute hover:text-ink transition-colors">Terms</a>
-        </nav>
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
