@@ -1464,7 +1464,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
         ? `${info.latitude.toFixed(4)}°, ${info.longitude.toFixed(4)}°`
         : "Unavailable";
       const precisionStr = info.isPrecise
-        ? `Precise GPS (±${info.gpsAccuracy ?? 0}m)`
+        ? `Precise GPS (+/-${info.gpsAccuracy ?? 0}m)`
         : "Approximate (IP Geolocation)";
 
       const lines = [

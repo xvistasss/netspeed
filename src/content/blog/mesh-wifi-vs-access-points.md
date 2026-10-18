@@ -25,8 +25,8 @@ To understand why mesh pods reduce throughput, you must understand how Wi-Fi rad
 3. **Node-to-Router Traffic (Backhaul):** The satellite mesh pod must now re-transmit that exact same data wirelessly back to your main base router.
 
 ```
-[Laptop] ──(500 Mbps Wi-Fi)──> [Satellite Pod] ──(500 Mbps Wi-Fi)──> [Main Router]
-                                    ▲
+[Laptop] --(500 Mbps Wi-Fi)--> [Satellite Pod] --(500 Mbps Wi-Fi)--> [Main Router]
+                                    ^
                    (Single radio must split time 50/50,
                     cutting effective throughput in half)
 ```
@@ -35,7 +35,9 @@ In a **Dual-Band Mesh System** (which has one 2.4 GHz radio and one 5 GHz radio)
 
 Because the radio must divide its broadcast airtime between listening and retransmitting:
 
-$$\text{Effective Throughput} \approx \frac{\text{Link Rate}}{2} - \text{Retransmission Overhead}$$
+```
+Effective Throughput = (Link Rate / 2) - Retransmission Overhead
+```
 
 Your real-world speed drops by roughly **50% at the first wireless hop**. If you daisy-chain through a third mesh pod, throughput drops by another 50% (down to 25% of baseline speed).
 
@@ -47,8 +49,8 @@ Not all multi-room Wi-Fi setups are created equal. The table below breaks down t
 
 | Architecture | Radio Configuration | Backhaul Type | Real-World Speed at Satellite Node | Added Latency |
 | :--- | :--- | :--- | :--- | :--- |
-| **Budget Dual-Band Mesh** | 2.4 GHz + 5 GHz (Shared) | Wireless (Shared 5 GHz) | ~35%–50% of base speed (120–180 Mbps) | +15 to +35 ms |
-| **Premium Tri-Band Mesh** | 2.4 GHz + 5 GHz + 5 GHz (Dedicated) | Wireless (Isolated 5 GHz channel) | ~70%–85% of base speed (350–450 Mbps) | +5 to +10 ms |
+| **Budget Dual-Band Mesh** | 2.4 GHz + 5 GHz (Shared) | Wireless (Shared 5 GHz) | ~35% to 50% of base speed (120-180 Mbps) | +15 to +35 ms |
+| **Premium Tri-Band Mesh** | 2.4 GHz + 5 GHz + 5 GHz (Dedicated) | Wireless (Isolated 5 GHz channel) | ~70% to 85% of base speed (350-450 Mbps) | +5 to +10 ms |
 | **Mesh with Ethernet Backhaul** | 2.4 GHz + 5 GHz | Wired Gigabit Ethernet cable | **100% of line speed (900+ Mbps)** | **< 1 ms** |
 | **Dedicated PoE Access Points** | 2.4 GHz + 5 GHz (e.g. UniFi, Omada) | Direct Gigabit / 2.5G PoE Cable | **100% of line speed (Full Gigabit)** | **< 1 ms** |
 

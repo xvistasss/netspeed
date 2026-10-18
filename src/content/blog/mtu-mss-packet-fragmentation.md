@@ -23,9 +23,9 @@ Every network link layer protocol defines a maximum frame size that can be trans
   * PPPoE (Point-to-Point Protocol over Ethernet) MTU: **1492 bytes** (8 bytes reserved for the PPPoE header)
   * WireGuard VPN MTU: Typically **1420 bytes** (80 bytes reserved for IPv6/IPv4 and crypto encapsulation)
 * **MSS (Maximum Segment Size):** The largest amount of data that a device can accept in a single unfragmented TCP segment.
-  * Formula: $\text{MSS} = \text{MTU} - (\text{IP Header [20 bytes]} + \text{TCP Header [20 bytes]})$
-  * For standard Ethernet (1500 MTU): $\text{MSS} = 1500 - 40 = \mathbf{1460\text{ bytes}}$
-  * For PPPoE (1492 MTU): $\text{MSS} = 1492 - 40 = \mathbf{1452\text{ bytes}}$
+  * Formula: MSS = MTU - (IP Header [20 bytes] + TCP Header [20 bytes])
+  * For standard Ethernet (1500 MTU): MSS = 1500 - 40 = 1460 bytes
+  * For PPPoE (1492 MTU): MSS = 1492 - 40 = 1452 bytes
 
 ```
 +--------------------------------------------------------------+
@@ -65,8 +65,8 @@ ping 1.1.1.1 -f -l 1472
 ```
 
 > **Note on calculation:** The ping buffer payload (`-l`) excludes the 20-byte IP header and 8-byte ICMP header.  
-> $\text{Total MTU} = \text{Ping Payload} + 28\text{ bytes}$.  
-> Testing 1472 bytes tests an MTU of $1472 + 28 = 1500$.
+> Total MTU = Ping Payload + 28 bytes.  
+> Testing 1472 bytes tests an MTU of 1472 + 28 = 1500.
 
 #### Interpreting Results:
 * If you receive: `Packet needs to be fragmented but DF set.`  
@@ -76,7 +76,10 @@ ping 1.1.1.1 -f -l 1472
   ping 1.1.1.1 -f -l 1464
   ```
   If 1464 succeeds, test upwards to find the exact boundary. If `1464` is the highest value that returns a reply:  
-  $$\text{Optimal MTU} = 1464 + 28 = \mathbf{1492}$$
+  
+  ```
+  Optimal MTU = 1464 + 28 = 1492
+  ```
 
 ### Method on Linux and macOS
 
@@ -100,7 +103,7 @@ ping -D -s 1472 -c 4 1.1.1.1
 
 Rather than manually changing the MTU on every smartphone, laptop, and console in your house, configure **TCP MSS Clamping** on your main router.
 
-On OpenWrt or Linux-based firewalls, enable MSS clamping on the WAN firewall zone. In OpenWrt, navigate to **Network → Firewall**, edit the WAN zone, and ensure **MSS Clamping** is checked:
+On OpenWrt or Linux-based firewalls, enable MSS clamping on the WAN firewall zone. In OpenWrt, navigate to **Network -> Firewall**, edit the WAN zone, and ensure **MSS Clamping** is checked:
 
 ```bash
 # In /etc/config/firewall

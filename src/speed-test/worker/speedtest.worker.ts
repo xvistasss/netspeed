@@ -997,7 +997,7 @@ async function runUploadTest(
 
               // Dynamically adjust chunk size based on measured speed.
               // Target ~500ms per chunk for accurate sizing on slow connections.
-              // Dampening: limit change to ±30% per iteration to prevent oscillation
+              // Dampening: limit change to +/- 30% per iteration to prevent oscillation
               // on variable-bandwidth networks (cellular handovers, congestion spikes).
               const chunkDuration = uploadCompleteTime - chunkStart;
               if (chunkDuration > 0) {
@@ -1005,7 +1005,7 @@ async function runUploadTest(
                 streamSpeedEstimate = streamSpeedEstimate * 0.3 + chunkSpeed * 0.7;
                 const targetDurationSec = 0.5;
                 const rawNextChunk = Math.floor((streamSpeedEstimate * targetDurationSec) / 8);
-                // Apply ±30% dampening to prevent oscillation
+                // Apply +/- 30% dampening to prevent oscillation
                 const minDampened = Math.floor(streamNextChunkSize * 0.7);
                 const maxDampened = Math.floor(streamNextChunkSize * 1.3);
                 streamNextChunkSize = Math.max(minDampened, Math.min(maxDampened, rawNextChunk));
@@ -1216,7 +1216,7 @@ async function runPacketLossTest(
   let sent = 0;
   let lost = 0;
 
-  // 1. Warm-up — establish connection before loss measurement
+  // 1. Warm-up - establish connection before loss measurement
   try {
     const warmupRes = await fetch(`${CONFIG.CLOUDFLARE_SPEED_ENDPOINT}/__down?bytes=1&cb=pl-warmup-${Date.now()}`, {
       method: "GET",

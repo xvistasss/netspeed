@@ -54,7 +54,7 @@ Cat6 cables feature thicker 23 AWG copper conductors, tighter pair twists, and a
 
 * **Up to 55 meters (180 ft):** Cat6 reliably carries **10 Gbps (10GBASE-T)**.
 * **Up to 100 meters (328 ft):** Cat6 carries 1 Gbps and 2.5 Gbps with near-zero cross-talk.
-* **Price:** Cat6 costs virtually the same as Cat5e today (often less than a $1–$2 difference per patch cable).
+* **Price:** Cat6 costs virtually the same as Cat5e today (often less than a $1 to $2 difference per patch cable).
 
 For new cable purchases, patch cords, or in-wall runs, **Cat6 is the universal gold standard**.
 

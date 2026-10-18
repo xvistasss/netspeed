@@ -138,14 +138,14 @@ export const CONFIG = {
   DYNAMIC_RAMP_MAX_MS: 8_000,
 
   // ── WebRTC UDP Latency Measurement ──
-  // 20 pings for statistical significance (95% CI ±4ms), trimmed mean for representativeness
+  // 20 pings for statistical significance (95% CI +/- 4ms), trimmed mean for representativeness
   WEBRTC_PING_COUNT: 20,
   WEBRTC_PING_INTERVAL_MS: 50,
   WEBRTC_TIMEOUT_MS: 8_000,
   WEBRTC_ECHO_TIMEOUT_MS: 2_000,
 
   // ── Synchronization Barrier ──
-  // Upload Phase 2→3 transition: wait for in-flight data to drain
+  // Upload Phase 2 -> 3 transition: wait for in-flight data to drain
   // Increased from 150ms to 250ms for slow connections
   SYNC_BARRIER_STABLE_MS: 250,
   SYNC_BARRIER_POLL_MS: 50,
