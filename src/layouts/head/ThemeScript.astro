@@ -1,0 +1,17 @@
+---
+// Synchronous theme initialization to prevent flash of unstyled content (FOUC)
+---
+
+<script is:inline>
+  (function () {
+    var savedTheme = localStorage.getItem("theme");
+    var prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+    if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  })();
+</script>

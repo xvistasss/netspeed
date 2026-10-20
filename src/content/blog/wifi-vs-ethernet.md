@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["wifi", "ethernet", "networking", "guide"]
 ---
 
-If you have ever run a speed test on WiFi and then plugged in an Ethernet cable and run it again, you have probably seen a noticeable difference. WiFi is convenient, but it rarely matches the speed and stability of a wired connection. Understanding why requires looking at how each technology works and what happens to your signal between your device and your router.
+If you have ever run a speed test on WiFi and then plugged in an Ethernet cable and run it again, you have probably seen a noticeable difference. WiFi is convenient, but it rarely matches the speed and stability of a wired connection. Understanding why your WiFi speed differs from Ethernet requires looking at how each technology works and what happens to your signal between your device and your router.
 
 ## How Ethernet works
 

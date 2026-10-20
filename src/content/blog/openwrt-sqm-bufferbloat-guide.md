@@ -10,7 +10,7 @@ Bufferbloat is the single biggest cause of unpredictable latency spikes, audio c
 
 While upgrading your internet bandwidth tier increases raw throughput, it does not solve queue congestion. The true engineering fix is **Smart Queue Management (SQM)**.
 
-In this guide, we walk through configuring the **CAKE** (Common Applications Kept Enhanced) and **FQ-CoDel** (Fair Queuing Controlled Delay) queue disciplines on an OpenWrt router to maintain single-digit loaded latency under 100% upload and download saturation.
+In this guide, we walk through configuring the **CAKE** (Common Applications Kept Enhanced) and **FQ-CoDel** (Fair Queuing Controlled Delay) queue disciplines on an OpenWrt router to eliminate bufferbloat and maintain single-digit loaded latency under 100% upload and download saturation.
 
 ---
 

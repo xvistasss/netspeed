@@ -36,12 +36,10 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
       const header = document.querySelector("header");
       const headerH = header ? header.getBoundingClientRect().height : 0;
 
-      // Horizontal: center on trigger, clamp to viewport
       let x = triggerRect.left + triggerRect.width / 2 - tooltipW / 2;
       if (x < margin) x = margin;
       if (x + tooltipW > vw - margin) x = vw - margin - tooltipW;
 
-      // Vertical: prefer above, flip below if not enough room
       const spaceAbove = triggerRect.top - gap - headerH;
       const spaceBelow = vh - triggerRect.bottom - gap;
 
@@ -53,11 +51,9 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
         y = triggerRect.bottom + gap;
       } else if (spaceBelow >= spaceAbove) {
         y = triggerRect.bottom + gap;
-        // Clamp so bottom edge stays in viewport
         if (y + tooltipH > vh - margin) y = vh - margin - tooltipH;
       } else {
         y = triggerRect.top - gap - tooltipH;
-        // Clamp so top edge stays below the header
         if (y < headerH + margin) y = headerH + margin;
       }
 
@@ -100,7 +96,6 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
     };
   }, [visible]);
 
-  // Close the tooltip automatically on scroll (prevents position jumping on mobile)
   useEffect(() => {
     if (!visible) return;
 
@@ -149,7 +144,7 @@ export default function InfoTooltip({ content }: InfoTooltipProps) {
           >
             {content}
           </div>,
-          document.body
+          document.body,
         )}
     </div>
   );

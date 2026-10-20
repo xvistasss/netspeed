@@ -14,7 +14,7 @@ Network routers have buffers — small pools of memory where packets wait to be 
 
 The problem arises when these buffers are too large. When a buffer fills up, packets sit in a queue waiting their turn. If the buffer is several hundred milliseconds deep, a packet might wait a quarter of a second or more before it gets transmitted. During that waiting time, everything on your network feels slow — not because your connection lacks speed, but because packets are stuck in a queue.
 
-This is bufferbloat: excessive latency caused by oversized buffers in networking equipment. The term was popularized by network engineer Jim Gettys, who noticed that his home network performed terribly under load despite having a fast connection.
+This is bufferbloat: excessive latency caused by oversized buffers in networking equipment. Understanding why bufferbloat matters is crucial for real-time applications like gaming, voice calls, and video streaming where packet delays ruin responsiveness. The term was popularized by network engineer Jim Gettys, who noticed that his home network performed terribly under load despite having a fast connection.
 
 ## Why buffers exist
 

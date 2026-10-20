@@ -10,7 +10,7 @@ You run an internet speed test on your phone and get 200 Mbps. A few minutes lat
 
 Your internet plan hasn't changed. Your router is the same. So why are the results different?
 
-This is a common situation, and it doesn't necessarily mean that your internet connection is faulty. Your phone and laptop may connect to the router differently, have different hardware capabilities, or measure the connection under different conditions.
+This is a common situation, and it doesn't necessarily mean that your internet connection is faulty. If you are wondering why your phone and laptop show different internet speeds on the same Wi-Fi, the two devices may connect to the router differently, have different hardware capabilities, or measure the connection under different conditions.
 
 Let's look at the most common causes and how to identify them.
 

@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["troubleshooting", "internet", "guide"]
 ---
 
-Slow internet is frustrating because the cause can be anywhere — your device, your WiFi, your router, your modem, your ISP, or even something outside everyone's control. Rather than guessing, a systematic approach will help you narrow down the problem quickly and find the right fix.
+Slow internet is frustrating because the cause can be anywhere — your device, your WiFi, your router, your modem, your ISP, or even something outside everyone's control. Rather than guessing, learning how to troubleshoot slow internet at home with a systematic approach will help you narrow down the problem quickly and find the right fix.
 
 ## Step one: establish a baseline
 

@@ -54,6 +54,10 @@
   --color-terminal-prompt: #29bc9b;
   --color-terminal-input-text: #171717;
   --color-terminal-title: #595959;
+
+  --color-accent-download: #eb6f20;
+  --color-accent-upload: #8b5cf6;
+  --color-accent-webrtc: #0070f3;
 }
 
 .dark {
@@ -90,6 +94,10 @@
   --color-terminal-prompt: #00dfd8;
   --color-terminal-input-text: #fafafa;
   --color-terminal-title: #888888;
+
+  --color-accent-download: #eb6f20;
+  --color-accent-upload: #a78bfa;
+  --color-accent-webrtc: #3291ff;
 }
 
 @theme {
@@ -125,6 +133,10 @@
   --color-terminal-prompt: var(--color-terminal-prompt);
   --color-terminal-input-text: var(--color-terminal-input-text);
   --color-terminal-title: var(--color-terminal-title);
+
+  --color-accent-download: var(--color-accent-download);
+  --color-accent-upload: var(--color-accent-upload);
+  --color-accent-webrtc: var(--color-accent-webrtc);
 
   --color-gradient-dev-start: #007cf0;
   --color-gradient-dev-end: #00dfd8;
@@ -389,3 +401,29 @@
 .prose tbody tr:hover {
   background-color: var(--color-canvas-soft);
 }
+
+/* ==========================================================================
+   FAQ & Accordion UI Utilities
+   ========================================================================== */
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary {
+  list-style: none;
+}
+
+details[open] .faq-answer {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

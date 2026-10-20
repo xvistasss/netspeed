@@ -1,0 +1,102 @@
+---
+interface Props {
+  siteOrigin: string;
+  canonicalUrl: string;
+  title: string;
+  description: string;
+  pathname: string;
+  structuredData?: Record<string, any> | Array<Record<string, any>>;
+}
+
+const {
+  siteOrigin,
+  canonicalUrl,
+  title,
+  description,
+  pathname,
+  structuredData,
+} = Astro.props;
+
+const baseSchemaGraph: any[] = [
+  {
+    "@type": "WebSite",
+    "@id": `${siteOrigin}/#website`,
+    name: "NetSpeed - Internet Speed Test",
+    url: `${siteOrigin}/`,
+    description: description,
+    publisher: {
+      "@id": `${siteOrigin}/#organization`,
+    },
+  },
+  {
+    "@type": "Organization",
+    "@id": `${siteOrigin}/#organization`,
+    name: "NetSpeed",
+    url: `${siteOrigin}/`,
+    logo: {
+      "@type": "ImageObject",
+      url: `${siteOrigin}/favicon.svg`,
+      width: "900",
+      height: "900",
+    },
+    sameAs: ["https://github.com/xvistasss/netspeed"],
+  },
+  {
+    "@type": "WebApplication",
+    "@id": `${siteOrigin}/#webapp`,
+    name: "NetSpeed - Internet Speed Test",
+    url: `${siteOrigin}/`,
+    applicationCategory: "UtilitiesApplication",
+    operatingSystem: "All",
+    browserRequirements: "Requires JavaScript. Requires HTML5.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    description: description,
+  },
+];
+
+if (pathname !== "/") {
+  const pageTitleClean = title.split("-")[0].split(":")[0].trim();
+  baseSchemaGraph.push({
+    "@type": "BreadcrumbList",
+    "@id": `${canonicalUrl}#breadcrumb`,
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: `${siteOrigin}/`,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: pageTitleClean,
+        item: canonicalUrl,
+      },
+    ],
+  });
+}
+
+const siteSchema = {
+  "@context": "https://schema.org",
+  "@graph": baseSchemaGraph,
+};
+---
+
+<script
+  type="application/ld+json"
+  is:inline
+  set:html={JSON.stringify(siteSchema)}
+/>
+{
+  structuredData && (
+    <script
+      type="application/ld+json"
+      is:inline
+      set:html={JSON.stringify(structuredData)}
+    />
+  )
+}

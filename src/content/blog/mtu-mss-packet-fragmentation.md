@@ -10,7 +10,7 @@ Have you ever encountered a strange network issue where internet speed tests rep
 
 The culprit is frequently a **Maximum Transmission Unit (MTU)** mismatch or a **Path MTU Discovery (PMTUD) black hole**.
 
-When packet sizes exceed the maximum allowable frame size of any intermediate router along a route, packets must either be fragmented into multiple smaller pieces or dropped entirely. Understanding how MTU and Maximum Segment Size (MSS) function allows you to eliminate packet overhead, prevent fragmentation, and restore snappy network responsiveness.
+When packet sizes exceed the maximum allowable frame size of any intermediate router along a route, packets must either be fragmented into multiple smaller pieces or dropped entirely. Understanding how MTU and Maximum Segment Size (MSS) function is key to finding the optimal packet size for your connection, eliminating overhead, and restoring snappy network responsiveness.
 
 ---
 

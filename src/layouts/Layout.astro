@@ -2,6 +2,10 @@
 import "../styles/global.css";
 import Header from "./Header.astro";
 import Footer from "./Footer.astro";
+import SeoMeta from "./head/SeoMeta.astro";
+import JsonLd from "./head/JsonLd.astro";
+import Analytics from "./head/Analytics.astro";
+import ThemeScript from "./head/ThemeScript.astro";
 
 interface Props {
   title?: string;
@@ -11,6 +15,7 @@ interface Props {
   noindex?: boolean;
   structuredData?: Record<string, any> | Array<Record<string, any>>;
 }
+
 const {
   title = "NetSpeed: Internet Speed Test & Latency Checker",
   description = "Test your internet download and upload speed, ping, jitter, and bufferbloat with NetSpeed's online internet speed test.",
@@ -22,219 +27,39 @@ const {
 
 const siteOrigin = Astro.site?.origin || "https://freenetspeed.com";
 const pathname = Astro.url.pathname.replace(/\/$/, "") || "/";
-const canonicalUrl = new URL(pathname === "/" ? "/" : pathname, siteOrigin)
-  .href;
+const canonicalUrl = new URL(pathname === "/" ? "/" : pathname, siteOrigin).href;
 const ogImageUrl = new URL("/og-image.png", siteOrigin).href;
-
-const baseSchemaGraph: any[] = [
-  {
-    "@type": "WebSite",
-    "@id": `${siteOrigin}/#website`,
-    name: "NetSpeed - Internet Speed Test",
-    url: `${siteOrigin}/`,
-    description: description,
-    publisher: {
-      "@id": `${siteOrigin}/#organization`,
-    },
-  },
-  {
-    "@type": "Organization",
-    "@id": `${siteOrigin}/#organization`,
-    name: "NetSpeed",
-    url: `${siteOrigin}/`,
-    logo: {
-      "@type": "ImageObject",
-      url: `${siteOrigin}/favicon.svg`,
-      width: "900",
-      height: "900",
-    },
-    sameAs: ["https://github.com/xvistasss/netspeed"],
-  },
-  {
-    "@type": "WebApplication",
-    "@id": `${siteOrigin}/#webapp`,
-    name: "NetSpeed - Internet Speed Test",
-    url: `${siteOrigin}/`,
-    applicationCategory: "UtilitiesApplication",
-    operatingSystem: "All",
-    browserRequirements: "Requires JavaScript. Requires HTML5.",
-    offers: {
-      "@type": "Offer",
-      price: "0",
-      priceCurrency: "USD",
-    },
-    description: description,
-  },
-];
-
-if (pathname !== "/") {
-  const pageTitleClean = title.split("—")[0].split(":")[0].trim();
-  baseSchemaGraph.push({
-    "@type": "BreadcrumbList",
-    "@id": `${canonicalUrl}#breadcrumb`,
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Home",
-        item: `${siteOrigin}/`,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: pageTitleClean,
-        item: canonicalUrl,
-      },
-    ],
-  });
-}
-
-const siteSchema = {
-  "@context": "https://schema.org",
-  "@graph": baseSchemaGraph,
-};
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
-    <link rel="sitemap" href="/sitemap.xml" />
-    <meta name="generator" content={Astro.generator} />
-
-    <!-- Primary Meta Tags -->
-    <title>{title}</title>
-    <meta name="title" content={title} />
-    <meta name="description" content={description} />
-
-    <!-- Schema.org JSON-LD Structured Data -->
-    <script
-      type="application/ld+json"
-      is:inline
-      set:html={JSON.stringify(siteSchema)}
+    <SeoMeta
+      title={title}
+      description={description}
+      canonicalUrl={canonicalUrl}
+      ogImageUrl={ogImageUrl}
+      ogType={ogType}
+      noindex={noindex}
     />
-    {
-      structuredData && (
-        <script
-          type="application/ld+json"
-          is:inline
-          set:html={JSON.stringify(structuredData)}
-        />
-      )
-    }
-
-    <!-- Preload Primary Font for immediate render without layout shift -->
-    <link
-      rel="preload"
-      href="/fonts/Inter-latin.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin="anonymous"
+    <JsonLd
+      siteOrigin={siteOrigin}
+      canonicalUrl={canonicalUrl}
+      title={title}
+      description={description}
+      pathname={pathname}
+      structuredData={structuredData}
     />
-
-    <!-- Google Analytics — non-blocking idle & interaction loader -->
-    <script is:inline>
-      window.dataLayer = window.dataLayer || [];
-      window.gtag = function () {
-        window.dataLayer.push(arguments);
-      };
-      gtag("js", new Date());
-      gtag("config", "G-341P014VS4");
-
-      (function () {
-        var loaded = false;
-        function loadGA() {
-          if (loaded) return;
-          loaded = true;
-          var s = document.createElement("script");
-          s.async = true;
-          s.src = "https://www.googletagmanager.com/gtag/js?id=G-341P014VS4";
-          document.head.appendChild(s);
-          // Clean up interaction listeners once loaded
-          ["pointerdown", "scroll", "keydown"].forEach(function (e) {
-            window.removeEventListener(e, loadGA, { passive: true });
-          });
-        }
-
-        // Trigger on first user interaction for instant capture
-        ["pointerdown", "scroll", "keydown"].forEach(function (e) {
-          window.addEventListener(e, loadGA, { once: true, passive: true });
-        });
-
-        // Or load automatically when browser is idle (max 2.5s fallback)
-        function onIdle() {
-          if ("requestIdleCallback" in window) {
-            requestIdleCallback(loadGA, { timeout: 2500 });
-          } else {
-            setTimeout(loadGA, 2000);
-          }
-        }
-
-        if (document.readyState === "complete") {
-          onIdle();
-        } else {
-          window.addEventListener("load", onIdle, { once: true });
-        }
-      })();
-    </script>
-
-    <!-- Google AdSense -->
-    <script
-      is:inline
-      async
-      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5638352527724874"
-      crossorigin="anonymous"></script>
-
-    <!-- Canonical URL -->
-    <link rel="canonical" href={canonicalUrl} />
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content={ogType} />
-    <meta property="og:site_name" content="NetSpeed" />
-    <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
-    <meta property="og:image" content={ogImageUrl} />
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content={canonicalUrl} />
-    <meta property="twitter:title" content={title} />
-    <meta property="twitter:description" content={description} />
-    <meta property="twitter:image" content={ogImageUrl} />
-    <!-- Fonts are self-hosted via @font-face in global.css -->
-
-    <!-- Inline theme initialization via localStorage — synchronous, no FOUC -->
-    <script is:inline>
-      (function () {
-        var savedTheme = localStorage.getItem("theme");
-        var prefersDark = window.matchMedia(
-          "(prefers-color-scheme: dark)",
-        ).matches;
-        if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
-      })();
-    </script>
+    <Analytics />
+    <ThemeScript />
   </head>
-  <body
-    class="bg-canvas-soft text-ink font-sans antialiased min-h-screen relative"
-  >
+  <body class="bg-canvas-soft text-ink font-sans antialiased min-h-screen relative">
     <a
       href="#main-content"
       class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-primary focus:text-on-primary focus:px-3 focus:py-1.5 focus:rounded focus:text-sm focus:font-medium"
     >
       Skip to content
     </a>
-    <!-- Mesh gradient overlay — homepage only for GPU savings -->
     {
       showMeshGradient && (
         <div class="mesh-gradient-container">
@@ -251,7 +76,6 @@ const siteSchema = {
     </div>
 
     <script>
-      // Theme toggle setup on page load
       const setupThemeToggle = () => {
         const themeToggle = document.getElementById("header-theme-toggle");
         if (themeToggle) {
@@ -265,11 +89,9 @@ const siteSchema = {
               document.documentElement.classList.remove("dark");
             }
 
-            // Persist in localStorage - enables synchronous FOUC prevention
             const themeValue = nextDark ? "dark" : "light";
             localStorage.setItem("theme", themeValue);
 
-            // Broadcast change event to React
             window.dispatchEvent(
               new CustomEvent("theme-changed", {
                 detail: { theme: themeValue },
@@ -283,11 +105,8 @@ const siteSchema = {
       document.addEventListener("astro:after-swap", setupThemeToggle);
 
       const setupTerminalToggle = () => {
-        const terminalToggle = document.getElementById(
-          "header-terminal-toggle",
-        );
+        const terminalToggle = document.getElementById("header-terminal-toggle");
         if (terminalToggle) {
-          // Seed localStorage on first visit so script and React agree on the default
           if (localStorage.getItem("terminal-open") === null) {
             localStorage.setItem("terminal-open", "false");
           }
@@ -299,12 +118,10 @@ const siteSchema = {
           terminalToggle.classList.toggle("text-primary", isOpen);
 
           terminalToggle.addEventListener("click", () => {
-            const currentlyOpen =
-              localStorage.getItem("terminal-open") === "true";
+            const currentlyOpen = localStorage.getItem("terminal-open") === "true";
             const nextOpen = !currentlyOpen;
             localStorage.setItem("terminal-open", String(nextOpen));
 
-            // Update button visual state
             terminalToggle.classList.toggle("bg-canvas-soft-2", nextOpen);
             terminalToggle.classList.toggle("text-ink", nextOpen);
             terminalToggle.classList.toggle("border-primary", nextOpen);

@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["latency", "speed", "networking", "guide"]
 ---
 
-When people talk about internet quality, they usually talk about speed. "I have 500 Mbps" sounds impressive. But speed is only one dimension of your connection, and for many activities, it is not the one that matters most. Latency — the delay between sending a request and getting a response — often has a bigger impact on how your internet actually feels.
+When people talk about internet quality, they usually talk about speed. "I have 500 Mbps" sounds impressive. But in the debate of latency vs speed: which matters more for your connection? Bandwidth is only one dimension of your network, and for many activities, it is not the one that matters most. Latency — the delay between sending a request and getting a response — often has a bigger impact on how your internet actually feels.
 
 ## Speed vs latency: what each measures
 
