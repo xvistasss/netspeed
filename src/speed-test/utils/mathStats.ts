@@ -50,7 +50,24 @@ export const calculateJitter = (arr: number[]): number => {
   return Math.sqrt(sumSquaredDiffs / (arr.length - 1));
 };
 
-// RFC 3550 RMS jitter calculation - more sensitive to large spikes
+// RFC 3550 Section 6.4.1 Interarrival Jitter Filter
+// J = J + (|D| - J) / 16
+// Standardized network jitter metric for real-time telemetry and VoIP.
+export const calculateJitterRFC3550 = (arr: number[]): number => {
+  if (arr.length <= 1) return 0;
+  let jitter = 0;
+  for (let i = 1; i < arr.length; i++) {
+    const diff = Math.abs(arr[i] - arr[i - 1]);
+    if (i === 1) {
+      jitter = diff;
+    } else {
+      jitter = jitter + (diff - jitter) / 16;
+    }
+  }
+  return jitter;
+};
+
+// RMS jitter calculation (Root Mean Square of successive differences)
 export const calculateJitterRMS = (arr: number[]): number => {
   if (arr.length <= 1) return 0;
   let sumSquaredDiffs = 0;
@@ -97,11 +114,11 @@ export const removeOutliers = (arr: number[], threshold: number = 3): number[] =
   return arr.filter((v) => Math.abs(v - med) <= madThreshold);
 };
 
-// Filtered RMS jitter - removes outliers before calculating RFC 3550 jitter.
+// Filtered jitter - removes transient outliers before calculating RFC 3550 jitter.
 export const calculateFilteredJitter = (arr: number[], outlierSigma: number = 3): number => {
-  if (arr.length <= 2) return calculateJitterRMS(arr);
+  if (arr.length <= 2) return calculateJitterRFC3550(arr);
   const filtered = removeOutliers(arr, outlierSigma);
-  return calculateJitterRMS(filtered);
+  return calculateJitterRFC3550(filtered);
 };
 
 // Percentile calculation using Nearest Rank method

@@ -75,6 +75,7 @@ export interface SpeedTestRequest {
   serverTime: number;
   responseSize: number;
   loadedLatencies: number[];
+  phaseName?: string;
   error?: string;
 }
 

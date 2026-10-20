@@ -25,7 +25,7 @@ export default function SpeedTable({ type, active, requests }: SpeedTableProps) 
         <thead>
           <tr className="bg-canvas-soft border-b border-hairline text-mute">
             <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
-              PAYLOAD SIZE
+              {type === "download" ? "STREAM PHASE" : "CHUNK PAYLOAD SIZE"}
             </th>
             <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
               AVG SPEED (MBPS)
@@ -58,7 +58,7 @@ export default function SpeedTable({ type, active, requests }: SpeedTableProps) 
                 className="hover:bg-canvas-soft/40 transition-colors duration-150"
               >
                 <td className="py-3 px-4 font-medium text-ink">
-                  {bin.name}
+                  {type === "download" && binReqs[0]?.phaseName ? binReqs[0].phaseName : bin.name}
                 </td>
                 <td className="py-3 px-4 font-mono text-body tabular-nums">
                   {hasData ? calculateMean(speeds).toFixed(1) : "-"}

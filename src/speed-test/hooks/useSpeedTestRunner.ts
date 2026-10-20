@@ -24,7 +24,7 @@ import { CONFIG } from "../constants";
 let CURRENT_EDGE: ServerSelectionResult | null = null;
 
 export interface UseSpeedTestRunnerOptions {
-  clientInfoRef: React.MutableRefObject<ClientInfo | null>;
+  clientInfoRef: React.RefObject<ClientInfo | null>;
   detectClientLocation: () => Promise<ClientInfo | null>;
   upgradeToPreciseLocation: () => Promise<ClientInfo | null>;
   skipLocationPrompt: () => void;
@@ -404,7 +404,7 @@ export function useSpeedTestRunner({
             ...prev,
             `--- ${edgeNode.name} ping statistics ---`,
             `${data.pingSent} packets transmitted, ${data.pingSent - data.pingLost} received, ${loss}% packet loss`,
-            `rtt min/avg/max/mdev = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
+            `rtt min/avg/max/jitter = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)}/${jitter.toFixed(1)} ms`,
             `[INFO] ICMP estimate: ${
               icmpResult.source === "webrtc"
                 ? `${icmpResult.value.toFixed(1)}ms (WebRTC UDP - closest to ICMP)`

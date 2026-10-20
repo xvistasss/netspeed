@@ -2,8 +2,12 @@ import { CONFIG } from "../constants";
 import { calculateTrimmedMean } from "./mathStats";
 
 /**
- * WebRTC Data Channel echo measurement - measures UDP round-trip time.
- * Uses STUN servers configured in CONFIG.STUN_SERVERS.
+ * WebRTC Telemetry Reference
+ *
+ * NOTE: Standard browser WebRTC requires a remote signaling peer to measure
+ * real over-the-network UDP round-trip times. In-browser loopback connects
+ * host ICE candidates locally. True Layer-3 ICMP is restricted by web security sandboxes;
+ * therefore, edge telemetry uses HTTP RTT calibrated with dynamic transport framing offsets.
  */
 export async function measureWebRTCSTUN(
   timeoutMs: number = CONFIG.WEBRTC_TIMEOUT_MS,

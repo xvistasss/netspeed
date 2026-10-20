@@ -39,8 +39,8 @@ export default function MetricsStack({
       <div className="bg-canvas border border-hairline p-4 rounded-lg shadow-xs flex-1">
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-            <span>LATENCY</span>
-            <InfoTooltip content="Round-trip HTTP response time. Lower is better for real-time applications." />
+            <span>LATENCY (HTTP RTT)</span>
+            <InfoTooltip content="Round-trip Application HTTP response time to Cloudflare edge. Browser sandboxing restricts raw ICMP sockets, so HTTP/TLS framing and edge processing add ~8-12ms above raw ISP ICMP ping." />
           </div>
           <Wifi className="w-4 h-4 text-mute" aria-hidden="true" />
         </div>
@@ -52,7 +52,7 @@ export default function MetricsStack({
         </div>
         {icmpEstimate > 0 && (
           <div className="text-[10px] text-mute font-mono mt-1">
-            Est. ICMP: ~{icmpEstimate.toFixed(1)} ms
+            Est. ICMP / Wire: ~{icmpEstimate.toFixed(1)} ms
             {icmpSource === "webrtc" ? (
               <span className="text-[9px] text-[#0070f3]"> (via WebRTC UDP)</span>
             ) : (
@@ -86,8 +86,8 @@ export default function MetricsStack({
       <div className="bg-canvas border border-hairline p-4 rounded-lg shadow-xs flex-1">
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-1.5 text-xs text-mute font-mono">
-            <span>JITTER (RMS)</span>
-            <InfoTooltip content="Root Mean Square of successive latency differences. Lower jitter means more stable connections." />
+            <span>JITTER (RFC 3550)</span>
+            <InfoTooltip content="Interarrival latency variance calculated per RFC 3550 Section 6.4.1. Measures statistical latency stability between successive packets. Lower is better." />
           </div>
           <Activity className="w-4 h-4 text-mute" aria-hidden="true" />
         </div>

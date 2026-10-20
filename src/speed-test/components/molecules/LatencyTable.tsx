@@ -1,10 +1,10 @@
 import type { DetailPingStats } from "../../types";
 import {
-  calculateMean,
+  calculateTrimmedMean,
   calculateMedian,
   calculateMin,
   calculateMax,
-  calculateJitterMASD,
+  calculateJitterRFC3550,
   calculateStdDev,
   calculatePercentile,
 } from "../../utils";
@@ -58,8 +58,8 @@ export default function LatencyTable({
             </th>
             <th scope="col" className="py-2.5 px-4 font-mono font-normal tracking-wider text-[10px]">
               <span className="flex items-center gap-1">
-                JITTER (MASD)
-                <InfoTooltip content="MASD (Mean Absolute Successive Differences) measures the average absolute difference between consecutive latency samples. This is more robust to outliers than RFC 3550 RMS jitter, making it suitable for browser-based measurements where GC pauses can cause spikes." />
+                JITTER (RFC 3550)
+                <InfoTooltip content="RFC 3550 Section 6.4.1 Interarrival Jitter Filter. Measures statistical latency variance between successive packets. Lower is better." />
               </span>
             </th>
           </tr>
@@ -73,7 +73,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {unloadedPingStats.latencies.length > 0
-                ? calculateMean(unloadedPingStats.latencies).toFixed(1)
+                ? calculateTrimmedMean(unloadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
@@ -103,7 +103,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {unloadedPingStats.latencies.length > 0
-                ? calculateJitterMASD(unloadedPingStats.latencies).toFixed(1)
+                ? calculateJitterRFC3550(unloadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
           </tr>
@@ -115,7 +115,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {dlLoadedPingStats.latencies.length > 0
-                ? calculateMean(dlLoadedPingStats.latencies).toFixed(1)
+                ? calculateTrimmedMean(dlLoadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
@@ -145,7 +145,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {dlLoadedPingStats.latencies.length > 0
-                ? calculateJitterMASD(dlLoadedPingStats.latencies).toFixed(1)
+                ? calculateJitterRFC3550(dlLoadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
           </tr>
@@ -157,7 +157,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {ulLoadedPingStats.latencies.length > 0
-                ? calculateMean(ulLoadedPingStats.latencies).toFixed(1)
+                ? calculateTrimmedMean(ulLoadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
@@ -187,7 +187,7 @@ export default function LatencyTable({
             </td>
             <td className="py-3 px-4 font-mono text-body tabular-nums">
               {ulLoadedPingStats.latencies.length > 0
-                ? calculateJitterMASD(ulLoadedPingStats.latencies).toFixed(1)
+                ? calculateJitterRFC3550(ulLoadedPingStats.latencies).toFixed(1)
                 : "-"}
             </td>
           </tr>

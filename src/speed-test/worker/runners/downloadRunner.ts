@@ -325,28 +325,32 @@ export async function runDownloadTest(options: DownloadRunnerOptions): Promise<v
   const phaseEntries: any[] = [];
   const phaseBoundaries = [
     {
-      name: "warmup",
+      id: "warmup",
+      name: "Warmup (TCP Slow-Start)",
       startBytes: warmupStartBytes,
       endBytes: warmupEndBytes,
       phaseSize: CONFIG.DOWNLOAD_PHASE_WARMUP_SIZE,
       durationMs: dynamicWarmupMs,
     },
     {
-      name: "ramp",
+      id: "ramp",
+      name: "Ramp-Up (Window Expansion)",
       startBytes: rampStartBytes,
       endBytes: rampEndBytes,
       phaseSize: CONFIG.DOWNLOAD_PHASE_RAMP_SIZE,
       durationMs: dynamicRampMs,
     },
     {
-      name: "measure",
+      id: "measure",
+      name: "Sustained (Steady-State)",
       startBytes: phase3StartBytes,
       endBytes: phase3EndBytes,
       phaseSize: CONFIG.DOWNLOAD_PHASE_MEASURE_SIZE,
       durationMs: CONFIG.DOWNLOAD_MEASURE_MS,
     },
     {
-      name: "peak",
+      id: "peak",
+      name: "Peak Burst",
       startBytes: peakStartBytes,
       endBytes: peakEndBytes,
       phaseSize: CONFIG.DOWNLOAD_PHASE_PEAK_SIZE,
@@ -360,11 +364,11 @@ export async function runDownloadTest(options: DownloadRunnerOptions): Promise<v
     const bps = durationSec > 0.1 && bytes > 0 ? (bytes * 8) / durationSec : 0;
 
     const phaseStartMs =
-      phase.name === "warmup"
+      phase.id === "warmup"
         ? startTime
-        : phase.name === "ramp"
+        : phase.id === "ramp"
           ? startTime + dynamicWarmupMs
-          : phase.name === "measure"
+          : phase.id === "measure"
             ? startTime + dynamicWarmupMs + dynamicRampMs
             : startTime + dynamicWarmupMs + dynamicRampMs + CONFIG.DOWNLOAD_MEASURE_MS;
     const phaseEndMs = phaseStartMs + phase.durationMs;
@@ -378,6 +382,7 @@ export async function runDownloadTest(options: DownloadRunnerOptions): Promise<v
       bytes,
       payloadSize: phase.phaseSize,
       phaseSize: phase.phaseSize,
+      phaseName: phase.name,
       latency: 0,
       bps,
       duration: phase.durationMs,
@@ -391,11 +396,20 @@ export async function runDownloadTest(options: DownloadRunnerOptions): Promise<v
   const finalRequests = hasPhaseData ? phaseEntries : downloadRequests;
 
   let finalAvgSpeedBps = 0;
-  if (measurementStartTime !== null && measurementEndTime !== null) {
-    const phase3Bytes = phase3EndBytes - phase3StartBytes;
-    const phase3ElapsedSec = (measurementEndTime - measurementStartTime) / 1000;
+  if (measurementStartTime !== null) {
+    const activeBytes = Math.max(
+      0,
+      peakEndBytes > phase3StartBytes ? peakEndBytes - phase3StartBytes : phase3EndBytes - phase3StartBytes,
+    );
+    const activeEndTime =
+      measurementEndTime !== null
+        ? peakEndBytes > phase3EndBytes
+          ? performance.now()
+          : measurementEndTime
+        : performance.now();
+    const activeElapsedSec = (activeEndTime - measurementStartTime) / 1000;
     finalAvgSpeedBps =
-      phase3ElapsedSec > 0.1 && phase3Bytes > 0 ? (phase3Bytes * 8) / phase3ElapsedSec : 0;
+      activeElapsedSec > 0.1 && activeBytes > 0 ? (activeBytes * 8) / activeElapsedSec : 0;
   } else {
     const elapsedSec = (performance.now() - startTime) / 1000;
     finalAvgSpeedBps = elapsedSec > 0.1 ? (totalBytesDownloaded * 8) / elapsedSec : 0;
