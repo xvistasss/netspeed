@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["isp", "speed-test", "internet", "guide"]
 ---
 
-You signed up for a 300 Mbps internet plan, but when you run a speed test, you get 80 Mbps. You call your ISP, and they tell you everything is working fine. Who is right? In most cases, both of you — because advertised speeds and real-world speeds are measured under very different conditions.
+You signed up for a 300 Mbps internet plan, but when you run a speed test, you get 80 Mbps. You call your ISP, and they tell you everything is working fine. Who is right? In most cases, both of you — because your actual speed test doesn't match your ISP's advertised speed due to protocol overhead, local hardware bottlenecks, and testing conditions.
 
 ## How ISPs advertise speed
 

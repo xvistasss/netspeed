@@ -14,7 +14,7 @@ Voice chat stutters, matchmaking takes forever, port forwarding rules fail, and 
 
 The root cause of these mysterious connection problems is almost always **Double NAT** (Network Address Translation).
 
-Here is what Double NAT actually is, how to identify it, and the three easiest ways to fix it.
+Here is what Double NAT actually is, how to identify it, and the three easiest ways to fix it by bridging ISP gateways with your own router.
 
 ---
 

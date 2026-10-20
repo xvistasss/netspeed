@@ -12,7 +12,7 @@ Many people looking to dodge neighbor interference think: *"Everyone is on Chann
 
 Doing this actually makes your Wi-Fi connection dramatically worse—for both you and your neighbors.
 
-In the 2.4 GHz spectrum, choosing any channel other than **1, 6, or 11** causes destructive radio collisions. Here is why the "1, 6, 11" rule exists, how channel overlap works, and how to select clean 5 GHz and 6 GHz channels for maximum throughput.
+In the 2.4 GHz spectrum, choosing any channel other than **1, 6, or 11** causes destructive radio collisions. Proper Wi-Fi channel selection is essential: here is why you should only ever use channels 1, 6, and 11 on 2.4 GHz, how spectrum overlap works, and how to select clean 5 GHz and 6 GHz channels for maximum throughput.
 
 ---
 

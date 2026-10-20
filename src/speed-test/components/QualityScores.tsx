@@ -1,5 +1,7 @@
-import InfoTooltip from "./InfoTooltip";
-import type { TestPhase } from "../utils/speedTestUtils";
+import InfoTooltip from "./atoms/InfoTooltip";
+
+import type { TestPhase } from "../types";
+import { computeQualityScore, getCategoryScores, type UseCase } from "../utils";
 import { Check, Minus, X } from "lucide-react";
 
 interface QualityScoresProps {
@@ -9,140 +11,9 @@ interface QualityScoresProps {
   latencyAvg: number; // ms
   latencyJitter: number; // ms
   packetLossPercent?: number; // %
-  useCase?: "gaming" | "streaming" | "general";
+  useCase?: UseCase;
 }
 
-// Compute a 0-100 network quality score from raw metrics.
-// Components: download (30), upload (30), latency (20), jitter (10), packet loss (10).
-// Supports useCase parameter for tailored scoring (gaming/streaming/general)
-function computeQualityScore(
-  dlMbps: number,
-  ulMbps: number,
-  latencyMs: number,
-  jitterMs: number,
-  lossPct: number,
-  useCase: "gaming" | "streaming" | "general" = "general",
-): { total: number; grade: string; gradeColor: string; dlScore: number; ulScore: number; latScore: number; jitScore: number; lossScore: number } {
-  // Weight adjustments based on use case
-  let dlWeight = 30, ulWeight = 30, latWeight = 20, jitWeight = 10, lossWeight = 10;
-  if (useCase === "gaming") {
-    dlWeight = 15; ulWeight = 10; latWeight = 40; jitWeight = 25; lossWeight = 10;
-  } else if (useCase === "streaming") {
-    dlWeight = 50; ulWeight = 10; latWeight = 15; jitWeight = 10; lossWeight = 15;
-  }
-
-  // Download: 100 Mbps = perfect
-  const dlScore = Math.min(dlWeight, (dlMbps / 100) * dlWeight);
-  // Upload: 50 Mbps = perfect
-  const ulScore = Math.min(ulWeight, (ulMbps / 50) * ulWeight);
-  // Latency: 0ms = full score, 200ms+ = 0
-  const latScore = Math.max(0, latWeight * (1 - latencyMs / 200));
-  // Jitter: 0ms = full score, 50ms+ = 0
-  const jitScore = Math.max(0, jitWeight * (1 - jitterMs / 50));
-  // Packet loss: 0% = full score, 5%+ = 0
-  const lossScore = Math.max(0, lossWeight * (1 - lossPct / 5));
-
-  const total = Math.round(dlScore + ulScore + latScore + jitScore + lossScore);
-
-  let grade: string;
-  let gradeColor: string;
-  if (total >= 90) { grade = "Excellent"; gradeColor = "text-link"; }
-  else if (total >= 70) { grade = "Good"; gradeColor = "text-link"; }
-  else if (total >= 50) { grade = "Fair"; gradeColor = "text-warning-deep"; }
-  else if (total >= 25) { grade = "Poor"; gradeColor = "text-error"; }
-  else { grade = "Critical"; gradeColor = "text-error"; }
-
-  return { total, grade, gradeColor, dlScore, ulScore, latScore, jitScore, lossScore };
-}
-
-// Compute per-category ratings using the same metrics.
-// Categories gate both "Great" and "Good" on the overall composite score so
-// ratings are consistent with the grade: Great requires ≥ 70 (Good tier),
-// Good requires ≥ 50 (Fair tier). Prevents the paradox of all categories
-// showing Good while the overall grade is Poor.
-function getCategoryScores(
-  dlMbps: number,
-  ulMbps: number,
-  latencyMs: number,
-  jitterMs: number,
-  lossPct: number,
-  overallScore: number,
-) {
-  const isGreatEligible = overallScore >= 70;
-  const isGoodEligible = overallScore >= 50;
-
-  // Video Streaming: needs download, low latency, stable connection
-  // Jitter causes rebuffering; packet loss degrades video quality.
-  let streamingRating = "Evaluating\u2026";
-  let streamingColor = "text-mute";
-  if (dlMbps > 0) {
-    if (
-      dlMbps >= 25 && latencyMs < 100 && jitterMs < 15 && lossPct < 2 &&
-      isGreatEligible
-    ) {
-      streamingRating = "Great";
-      streamingColor = "text-link";
-    } else if (dlMbps >= 5 && latencyMs < 150 && jitterMs < 30 && lossPct < 5 && isGoodEligible) {
-      streamingRating = "Good";
-      streamingColor = "text-link";
-    } else {
-      streamingRating = "Bad";
-      streamingColor = "text-error";
-    }
-  }
-
-  // Online Gaming: needs latency, jitter, and zero packet loss
-  // HTTP RTT includes ~5-10ms TLS+HTTP/2 overhead vs ICMP, so thresholds
-  // are adjusted upward to reflect real-world application performance.
-  // Packet loss causes rubber-banding and disconnects.
-  let gamingRating = "Evaluating\u2026";
-  let gamingColor = "text-mute";
-  if (latencyMs > 0 || jitterMs > 0) {
-    if (
-      latencyMs <= 40 && jitterMs <= 10 && lossPct < 1 &&
-      isGreatEligible
-    ) {
-      gamingRating = "Great";
-      gamingColor = "text-link";
-    } else if (latencyMs <= 90 && jitterMs <= 30 && lossPct < 3 && isGoodEligible) {
-      gamingRating = "Good";
-      gamingColor = "text-link";
-    } else {
-      gamingRating = "Bad";
-      gamingColor = "text-error";
-    }
-  }
-
-  // Video Chatting: needs both upload and download, low latency, stable line
-  // Jitter causes choppy audio/video; packet loss drops frames.
-  let chattingRating = "Evaluating\u2026";
-  let chattingColor = "text-mute";
-  if (dlMbps > 0 || ulMbps > 0 || latencyMs > 0) {
-    const meetsSpeed = dlMbps >= 4 && ulMbps >= 1.5;
-    const meetsLatency = latencyMs <= 120;
-    const meetsStability = lossPct < 3;
-    if (meetsSpeed && meetsLatency && meetsStability && isGoodEligible) {
-      if (
-        dlMbps >= 10 && ulMbps >= 3 && latencyMs <= 50 && jitterMs <= 15 &&
-        lossPct < 1 && isGreatEligible
-      ) {
-        chattingRating = "Great";
-      } else {
-        chattingRating = "Good";
-      }
-      chattingColor = "text-link";
-    } else {
-      chattingRating = "Bad";
-      chattingColor = "text-error";
-    }
-  }
-
-  return {
-    streaming: { rating: streamingRating, color: streamingColor, icon: streamingRating === "Great" ? "check" : streamingRating === "Good" ? "minus" : "x" },
-    gaming: { rating: gamingRating, color: gamingColor, icon: gamingRating === "Great" ? "check" : gamingRating === "Good" ? "minus" : "x" },
-    chatting: { rating: chattingRating, color: chattingColor, icon: chattingRating === "Great" ? "check" : chattingRating === "Good" ? "minus" : "x" },
-  };
-}
 
 export default function QualityScores({
   phase,
@@ -179,7 +50,7 @@ export default function QualityScores({
     <div className="bg-canvas border border-hairline p-6 rounded-lg shadow-xs">
       <div className="flex items-center gap-1.5 text-xs text-mute font-mono mb-4 pb-2 border-b border-hairline">
         <span>NETWORK QUALITY SCORE</span>
-        <InfoTooltip content="Composite score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical below 25. Category ratings gate Great on score ≥ 70 and Good on score ≥ 50 to stay consistent with the grade." />
+        <InfoTooltip content="Composite score from download (30), upload (30), latency (20), jitter (10), and packet loss (10). Grades: Excellent 90+, Good 70+, Fair 50+, Poor 25+, Critical below 25. Category ratings gate Great on score >= 70 and Good on score >= 50 to stay consistent with the grade." />
       </div>
 
       <div className="flex flex-col sm:flex-row items-center gap-8">
@@ -264,14 +135,14 @@ export default function QualityScores({
               <div className="flex items-center gap-2 text-[10px] font-mono text-mute">
                 <span className="w-16">Download</span>
                 <div className="flex-1 bg-canvas-soft-2 rounded-full h-1.5 overflow-hidden">
-                  <div className="h-full bg-[#eb6f20] rounded-full transition-[width] duration-500" style={{ width: `${(score.dlScore / 30) * 100}%` }} />
+                  <div className="h-full bg-accent-download rounded-full transition-[width] duration-500" style={{ width: `${(score.dlScore / 30) * 100}%` }} />
                 </div>
                 <span className="w-8 text-right tabular-nums">{Math.round(score.dlScore)}/30</span>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-mono text-mute">
                 <span className="w-16">Upload</span>
                 <div className="flex-1 bg-canvas-soft-2 rounded-full h-1.5 overflow-hidden">
-                  <div className="h-full bg-[#8b5cf6] rounded-full transition-[width] duration-500" style={{ width: `${(score.ulScore / 30) * 100}%` }} />
+                  <div className="h-full bg-accent-upload rounded-full transition-[width] duration-500" style={{ width: `${(score.ulScore / 30) * 100}%` }} />
                 </div>
                 <span className="w-8 text-right tabular-nums">{Math.round(score.ulScore)}/30</span>
               </div>

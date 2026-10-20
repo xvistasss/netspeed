@@ -10,9 +10,9 @@ You subscribed to a symmetrical Gigabit fiber plan (1000 Mbps download / 1000 Mb
 
 Because fiber optic cables possess virtually unlimited physical bandwidth, many users assume optical degradation or bad fiber patch cords are at fault. However, optical link faults almost always cause bidirectional packet loss or complete link loss.
 
-When download speeds are flawless but upload throughput drops by 80% to 90%, the root cause typically lies in one of three areas: **ISP optical line terminal (OLT) policer mismatch**, **TCP window scaling and buffer starvation**, or **network interface card (NIC) hardware offloading conflicts**.
+When download speeds are flawless but upload throughput drops drastically by 80% to 90%, the root cause typically lies in one of three areas: **ISP optical line terminal (OLT) policer mismatch**, **TCP window scaling and buffer starvation**, or **network interface card (NIC) hardware offloading conflicts**.
 
-Here is how to methodically diagnose and resolve asymmetrical fiber throughput issues.
+Here is how to methodically approach diagnosing and resolving asymmetrical fiber throughput issues.
 
 ---
 

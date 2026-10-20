@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["speed-test", "internet", "guide"]
 ---
 
-Running a speed test is simple. Click a button, wait a minute, and you get a handful of numbers. But what do those numbers actually mean? If you have ever stared at a result screen wondering whether 45 Mbps download is good or whether your ping of 28 ms is something to worry about, this guide will walk you through every metric, explain what affects it, and help you figure out whether your connection is performing the way it should.
+Running a speed test is simple. Click a button, wait a minute, and you get a handful of numbers. But what do those numbers actually mean? If you have ever stared at a result screen wondering whether 45 Mbps download is good or whether your ping of 28 ms is something to worry about, this guide will walk you through how to read and understand your speed test results, explain what affects each metric, and help you figure out whether your connection is performing the way it should.
 
 ## Download speed
 

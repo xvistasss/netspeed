@@ -1,4 +1,5 @@
-import type { ClientInfo, LatencyStats, IcmpSource } from "../utils/speedTestUtils";
+import type { ClientInfo, LatencyStats, IcmpSource } from "../types";
+
 
 interface TechnicalLogsProps {
   clientInfo: ClientInfo | null;

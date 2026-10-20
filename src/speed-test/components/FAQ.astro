@@ -1,41 +1,17 @@
 ---
+import { HOMEPAGE_FAQ_ITEMS } from "../constants";
+
 const faqJsonLd = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  mainEntity: [
-    {
-      "@type": "Question",
-      name: "What is a good internet speed?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "A good internet speed depends on what you do online. For general browsing, 25 Mbps is enough. For HD streaming, you need about 15 Mbps. For 4K streaming, aim for 25 Mbps per stream. A household with multiple people should aim for 100-300 Mbps to ensure everyone has enough bandwidth.",
-      },
+  mainEntity: HOMEPAGE_FAQ_ITEMS.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.answer,
     },
-    {
-      "@type": "Question",
-      name: "Why is my internet speed so slow?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Slow speeds can come from many sources: WiFi interference and distance from the router, background applications consuming bandwidth, outdated equipment, or network congestion during peak hours. Try restarting your router, connecting via Ethernet, and closing background apps to diagnose the issue.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "Why doesn't my speed test match the plan I pay for?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "ISPs advertise speeds as 'up to' a number measured under ideal conditions. Real-world speeds are lower due to protocol overhead, WiFi limitations, your router's capabilities, and network congestion. Test on Ethernet to see what your ISP actually delivers to your home.",
-      },
-    },
-    {
-      "@type": "Question",
-      name: "What is bufferbloat?",
-      acceptedAnswer: {
-        "@type": "Answer",
-        text: "Bufferbloat is a condition where latency spikes dramatically under network load due to oversized buffers in your router or ISP equipment. Your ping might be 15 ms when idle but jump to 300 ms during a download. Enabling Smart Queue Management (SQM) on your router is the most effective fix.",
-      },
-    },
-  ],
+  })),
 };
 
 const mainEntity = faqJsonLd.mainEntity;
@@ -129,29 +105,3 @@ const mainEntity = faqJsonLd.mainEntity;
     </div>
   </div>
 </section>
-
-<style>
-  /* Reset standard details arrow across all browsers */
-  summary::-webkit-details-marker {
-    display: none;
-  }
-  summary {
-    list-style: none;
-  }
-
-  /* Apply premium micro-animation to answer visibility */
-  details[open] .faq-answer {
-    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-</style>

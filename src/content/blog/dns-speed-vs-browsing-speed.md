@@ -10,7 +10,7 @@ One of the most common internet optimization tips is: *"Change your DNS to 1.1.1
 
 While switching from your Internet Service Provider's default DNS server to a high-speed public resolver often makes clicking through websites feel noticeably snappier, it will **not** increase your raw download or upload bandwidth.
 
-Understanding the difference between **DNS resolution time** and **data transfer throughput** helps you optimize your connection without falling for common myths.
+By testing 1.1.1.1, 8.8.8.8, and default ISP resolvers, we can understand the concrete difference between **DNS resolution time** and **data transfer throughput**, helping you optimize your connection without falling for common myths.
 
 ---
 

@@ -6,7 +6,7 @@ author: "Apurba"
 tags: ["internet", "guide", "planning"]
 ---
 
-Internet service providers love to advertise big numbers. "Get up to 500 Mbps!" sounds impressive, but do you actually need that much speed? The answer depends on what you do online, how many people share your connection, and how much you are willing to pay. Choosing the right plan means finding the balance between enough speed for your needs and not paying for bandwidth you will never use.
+Internet service providers love to advertise big numbers. "Get up to 500 Mbps!" sounds impressive, but do you actually need that much speed? The answer depends on what you do online, how many people share your connection, and how much you are willing to pay. Learning how to choose the right internet plan for your needs means finding the balance between enough speed and not paying for bandwidth you will never use.
 
 ## Understanding speed tiers
 

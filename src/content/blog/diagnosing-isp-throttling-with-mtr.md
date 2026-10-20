@@ -12,7 +12,7 @@ To hold your provider accountable and diagnose the true root cause, you need aut
 
 While standard `ping` and `traceroute` tools provide basic point-in-time snapshots, they fail to reveal intermittent packet loss or latency jitter over time. The industry-standard diagnostic tool for diagnosing routing problems is **MTR (My Traceroute)**, which combines the functionality of `traceroute` and `ping` into a continuous telemetry stream.
 
-In this guide, we break down how to run, read, and interpret MTR traces to distinguish between **local network faults**, **ISP last-mile congestion**, **BGP peering bottlenecks**, and **destination server overload**.
+In this guide, we break down how to run, read, and interpret MTR traces for diagnosing ISP throttling vs peering congestion, helping you distinguish between **local network faults**, **intentional bandwidth throttling**, **ISP last-mile congestion**, **BGP peering bottlenecks**, and **destination server overload**.
 
 ---
 

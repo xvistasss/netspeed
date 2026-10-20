@@ -1,7 +1,8 @@
 import type { APIRoute } from "astro";
-import { isLocalHost } from "../../speed-test/utils/speedTestUtils";
-import { CONFIG } from "../../speed-test/utils/speedTestConfig";
+import { isLocalHost } from "../../speed-test/utils";
+import { CONFIG } from "../../speed-test/constants";
 import { getClientIP } from "./rateLimiter";
+
 
 // Response headers that prevent ALL caching layers from storing the result.
 const NO_CACHE_HEADERS: Record<string, string> = {
