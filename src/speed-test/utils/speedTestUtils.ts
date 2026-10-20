@@ -85,7 +85,24 @@ export const calculateExponentialMovingAverage = (arr: number[], alpha: number =
   return ema;
 };
 
-// Generate non-compressible random text payload for upload tests
+// Reusable pre-allocated binary buffer for upload tests
+// Eliminates V8 heap string allocations and garbage collection pauses during active streams
+const MAX_PREALLOCATED_CHUNK = 2 * 1024 * 1024;
+let preallocatedBuffer: ArrayBuffer | null = null;
+
+export function getUploadPayload(size: number): Blob {
+  if (!preallocatedBuffer) {
+    preallocatedBuffer = new ArrayBuffer(MAX_PREALLOCATED_CHUNK);
+    const view = new Uint8Array(preallocatedBuffer);
+    for (let i = 0; i < MAX_PREALLOCATED_CHUNK; i++) {
+      view[i] = (Math.random() * 256) | 0;
+    }
+  }
+  const safeSize = Math.max(1, Math.min(size, MAX_PREALLOCATED_CHUNK));
+  return new Blob([new Uint8Array(preallocatedBuffer, 0, safeSize)]);
+}
+
+// Generate non-compressible random text payload for backwards compatibility
 const RANDOM_BLOCK_SIZE = 65536;
 let randomBlockCache: string | null = null;
 function getRandomBlock(): string {
@@ -139,6 +156,9 @@ export function buildDirectCloudflareUrl(
 }
 
 // ICMP Estimate Calculator
+// Browser JavaScript cannot send raw Layer-3 ICMP Echo packets due to web security sandboxing.
+// HTTP RTT includes TLS 1.3 cryptographic framing, HTTP/2 multiplexing, and server execution.
+// We dynamically estimate the underlying Layer-3 wire ping based on protocol overhead.
 export function calculateICMPEstimate(
   httpRtt: number,
   webrtcRtt: number | null,
@@ -157,12 +177,16 @@ export function calculateICMPEstimate(
     networkType === "3g" ||
     networkType === "2g";
 
-  const offsetMs = isCellular
-    ? CONFIG.ICMP_OVERHEAD_FIXED_CELLULAR_MS
-    : CONFIG.ICMP_OVERHEAD_FIXED_WIFI_MS;
+  // Real-world TLS + HTTP framing and Cloudflare edge execution typically adds
+  // 7ms to 12ms over raw ICMP wire ping.
+  // Bounded so estimate never drops below 1ms or 40% of measured HTTP RTT.
+  const baselineOffset = isCellular ? 11 : 8.5;
+  const maxAllowableOffset = Math.max(0, httpRtt * 0.58);
+  const offsetMs = Math.round(Math.min(baselineOffset, maxAllowableOffset) * 10) / 10;
+  const estimatedValue = Math.max(1, Math.round((httpRtt - offsetMs) * 10) / 10);
 
   return {
-    value: Math.max(0, httpRtt - offsetMs),
+    value: estimatedValue,
     source: "http-fallback",
     offsetApplied: offsetMs,
   };

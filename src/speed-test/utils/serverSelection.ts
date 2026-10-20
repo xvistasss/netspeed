@@ -11,14 +11,9 @@
  * 3. Explicit region hints — passed to Cloudflare's speed test endpoints
  */
 
-export interface EdgeLocation {
-  id: string;
-  city: string;
-  region: string;
-  country: string;
-  lat: number;
-  lon: number;
-}
+import type { EdgeLocation, ServerSelectionResult } from "../types";
+
+
 
 // Major Cloudflare edge datacenters with coordinates.
 // This is a representative subset — Cloudflare has 300+ edges but
@@ -136,17 +131,7 @@ export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2
   return R * c;
 }
 
-export interface ServerSelectionResult {
-  edge: EdgeLocation;
-  distanceKm: number;
-  estimatedLatencyMs: number;
-  allEdges: Array<{
-    id: string;
-    city: string;
-    country: string;
-    distanceKm: number;
-  }>;
-}
+
 
 /**
  * Select the nearest Cloudflare edge based on client geolocation.

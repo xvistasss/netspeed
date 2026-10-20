@@ -98,13 +98,19 @@ export function buildCspHeader(): string {
     }
   };
 
+  // Vite HMR dev client uses a blob: worker to poll dev server reconnection
+  const workerOrigins = [
+    ...CSP.workerSrc,
+    ...(import.meta.env?.DEV ? ["blob:"] : []),
+  ];
+
   add("script-src", CSP.scriptSrc);
   add("style-src", CSP.styleSrc);
   add("img-src", CSP.imgSrc);
   add("connect-src", CSP.connectSrc);
   add("font-src", CSP.fontSrc);
   add("manifest-src", CSP.manifestSrc);
-  add("worker-src", CSP.workerSrc);
+  add("worker-src", workerOrigins);
   add("frame-src", CSP.frameSrc);
 
   return directives.join('; ') + ';';

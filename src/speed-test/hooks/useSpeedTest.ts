@@ -38,7 +38,7 @@ export function useSpeedTest(): UseSpeedTestReturn {
     upgradeToPreciseLocation,
   } = useGeolocation({
     appendLogs: (lines) => terminal.appendLogs(lines),
-    setStatusMessage: (msg) => runner.statusMessage,
+    setStatusMessage: (_msg) => runner.statusMessage,
   });
 
   const terminal = useTerminalLogs({

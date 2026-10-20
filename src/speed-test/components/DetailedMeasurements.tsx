@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+
 import type { DetailPingStats, SpeedTestRequest } from "../types";
 import { Wifi, AlertTriangle, ArrowDown, ArrowUp } from "lucide-react";
 import LatencyTable from "./molecules/LatencyTable";

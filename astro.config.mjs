@@ -32,7 +32,10 @@ export default defineConfig({
     },
     optimizeDeps: {
       include: ['chart.js'],
-      exclude: ['@astrojs/cloudflare'],
+      exclude: ['@astrojs/cloudflare', 'lucide-react'],
+    },
+    ssr: {
+      noExternal: ['lucide-react'],
     },
   }
 });

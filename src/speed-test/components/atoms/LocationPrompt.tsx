@@ -2,7 +2,7 @@ import { MapPin } from "lucide-react";
 
 interface LocationPromptProps {
   waiting: boolean;
-  timeLeft: number;
+  timeLeft: number | null;
   onAllow: () => void;
   onSkip: () => void;
 }
@@ -14,6 +14,8 @@ export default function LocationPrompt({
   onSkip,
 }: LocationPromptProps) {
   if (!waiting) return null;
+
+  const displayTime = timeLeft !== null ? `${timeLeft}s` : "5s";
 
   return (
     <section
@@ -31,7 +33,7 @@ export default function LocationPrompt({
           <p className="text-xs text-body leading-relaxed max-w-xl">
             Use GPS to find the closest edge server for highest accuracy.
             Falls back to IP location in{" "}
-            <span className="font-mono font-bold text-primary tabular-nums">{timeLeft}s</span>
+            <span className="font-mono font-bold text-primary tabular-nums">{displayTime}</span>
             {" "}if no action is taken.
           </p>
         </div>

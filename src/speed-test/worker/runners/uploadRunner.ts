@@ -3,7 +3,7 @@ import {
   calculateMean,
   calculateFilteredJitter,
   getAdaptiveUploadMinChunk,
-  generateRandomText,
+  getUploadPayload,
   getLoadedPingInterval,
   sleepWithAbort,
 } from "../../utils";
@@ -203,7 +203,8 @@ export async function runUploadTest(options: UploadRunnerOptions): Promise<void>
       signal.addEventListener("abort", abortHandler);
 
       const runStream = async (): Promise<void> => {
-        let streamSpeedEstimate = 1000 * 1000;
+        let streamSpeedEstimate =
+          downloadSpeed > 0 ? Math.max(2_000_000, downloadSpeed * 0.4) : 1000 * 1000;
         let streamNextChunkSize = adaptiveMinChunk;
         let uploadConsecutiveFailures = 0;
         const UPLOAD_MAX_CONSECUTIVE_FAILURES = 3;
@@ -241,7 +242,7 @@ export async function runUploadTest(options: UploadRunnerOptions): Promise<void>
 
             const response = await fetch(url, {
               method: "POST",
-              body: generateRandomText(currentChunkSize),
+              body: getUploadPayload(currentChunkSize),
               signal: fetchController.signal,
             });
 
