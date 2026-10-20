@@ -120,4 +120,4 @@ Changing DNS on your router updates every phone, tablet, smart TV, and computer 
    * **Secondary DNS:** `1.0.0.1` (or `8.8.8.8`)
 5. Save and apply settings.
 
-To verify overall network responsiveness and packet latency after updating your DNS, run a quick baseline test on [NetSpeed](/) to ensure your round-trip ping remains low and stable.
+To verify overall network responsiveness and packet latency after updating your DNS, run a quick baseline test on [our speed test](/) to ensure your round-trip ping remains low and stable.

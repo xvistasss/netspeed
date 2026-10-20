@@ -117,7 +117,7 @@ netsh int tcp set global autotuninglevel=normal
 
 Determine whether the bottleneck is per-stream rate limiting or an absolute aggregate throttle:
 
-1. Test on [NetSpeed](/) to observe upload throughput across 6 concurrent parallel Web Worker sockets.
+1. Test on [our speed test engine](/) to observe upload throughput across 6 concurrent parallel Web Worker sockets.
 2. If multi-stream upload achieves 500+ Mbps but single-stream upload is stuck at 40 Mbps, the issue is **TCP latency/congestion window throttling**, not a physical link constraint.
 3. If aggregate upload across all streams hard-caps at a specific plateau (e.g. exactly 50 Mbps, 100 Mbps, or 200 Mbps), the link is being shaped by an ISP provisioning profile.
 

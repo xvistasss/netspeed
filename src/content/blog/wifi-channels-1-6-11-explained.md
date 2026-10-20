@@ -120,5 +120,5 @@ If you live near an airport or weather radar station and notice your 5 GHz Wi-Fi
 After locking your 2.4 GHz channel to the cleanest option among **1, 6, or 11** at **20 MHz**, and your 5 GHz to a non-conflicting 80 MHz block:
 
 1. Reconnect your devices.
-2. Run a full telemetry test on [NetSpeed](/) to benchmark your download, upload, and packet jitter.
+2. Run a full telemetry test on [NetSpeed's speed test](/) to benchmark your download, upload, and packet jitter.
 3. Observe your **Jitter (RMS)** and **Packet Loss** metrics—with adjacent channel overlap eliminated, transmission jitter drops into the low single digits.

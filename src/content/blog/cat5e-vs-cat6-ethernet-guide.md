@@ -86,4 +86,4 @@ Once your cable is plugged in, verify that your computer negotiated a full Gigab
 3. Look at **Speed:** It should display **1.0 Gbps (1000 Mbps)** or **2.5 Gbps**.
    * *If it says 100 Mbps:* One of the 8 pins in your cable is damaged, bent, or failing, forcing the port into 100 Mbps fallback mode.
 
-Once verified, run a test on [NetSpeed](/) to benchmark your real-world throughput, latency, and packet stability over the wire.
+Once verified, run a test on [our online speed test](/) to benchmark your real-world throughput, latency, and packet stability over the wire.

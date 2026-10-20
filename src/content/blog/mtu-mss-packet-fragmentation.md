@@ -150,6 +150,6 @@ If you need to configure the interface MTU directly on a Windows PC:
 
 After setting your MTU to match your link's physical encapsulation ceiling:
 * Run the ping test with the `DF` flag set to confirm packets pass through cleanly without fragmentation errors.
-* Execute a test on [NetSpeed](/) to verify that download and upload pipelines ramp up to peak line throughput without packet drops.
+* Execute a test on [our throughput testing tool](/) to verify that download and upload pipelines ramp up to peak line throughput without packet drops.
 
 Properly configured MTU and MSS clamping completely eliminate mysterious website connection stalls, optimize packet routing efficiency, and reduce round-trip latency overhead across all devices on your local network.

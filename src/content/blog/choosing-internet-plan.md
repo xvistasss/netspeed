@@ -58,4 +58,4 @@ If you are consistently getting speeds well above what your activities require, 
 
 Speed is only one part of the equation. Latency, reliability, customer service, contract terms, and equipment quality all matter. A cheaper plan with lower speed but better latency and reliability might serve you better than an expensive plan that delivers high speed but inconsistent performance.
 
-Before choosing a plan, read reviews from other customers in your area, check what equipment the ISP provides, and ask about data caps and contract terms. Then run a [speed test](/) after you are set up to verify that you are getting what you paid for.
+Before choosing a plan, read reviews from other customers in your area, check what equipment the ISP provides, and ask about data caps and contract terms. Then run a [verification benchmark](/) after you are set up to verify that you are getting what you paid for.
