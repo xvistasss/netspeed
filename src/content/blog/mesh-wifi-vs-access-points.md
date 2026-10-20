@@ -78,7 +78,7 @@ If running Ethernet cables across your home is not an option:
 
 To test whether your mesh system is performing optimally:
 
-1. Stand directly next to your main router and run a speed test on [NetSpeed](/) to establish your baseline connection.
+1. Stand directly next to your main router and run a speed test on [our diagnostic platform](/) to establish your baseline connection.
 2. Walk to your bedroom or home office where the satellite mesh pod is located.
 3. Wait 10 seconds for your phone or laptop to roam to the satellite node.
 4. Run the test again and compare:

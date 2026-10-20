@@ -10,7 +10,7 @@ Slow internet is frustrating because the cause can be anywhere — your device, 
 
 ## Step one: establish a baseline
 
-Before you change anything, run a [speed test](/) on the device that feels slow. Write down the download speed, upload speed, latency, and jitter. Then test on a different device if you have one available. If both devices show similar results, the problem is likely with your network, not a single device. If only one device is slow, the problem is probably that specific device.
+Before you change anything, run a [baseline speed test](/) on the device that feels slow. Write down the download speed, upload speed, latency, and jitter. Then test on a different device if you have one available. If both devices show similar results, the problem is likely with your network, not a single device. If only one device is slow, the problem is probably that specific device.
 
 ## Step two: the restart sequence
 
@@ -56,7 +56,7 @@ Ask everyone in the household to pause heavy usage temporarily, then run your te
 
 If your speeds are fine when the network is idle but everything feels slow when someone starts a large download, you likely have bufferbloat. This is a condition where oversized buffers in your router cause latency to spike under load, making the connection feel slow even though raw speed is fine.
 
-Our [speed test](/) measures loaded latency during the download and upload phases. Compare your idle ping to your loaded ping. If the loaded ping is 200 ms or more higher than idle, bufferbloat is a problem. Enabling Smart Queue Management (SQM) on your router — if it supports it — is the most effective fix.
+Our [speed test engine](/) measures loaded latency during the download and upload phases. Compare your idle ping to your loaded ping. If the loaded ping is 200 ms or more higher than idle, bufferbloat is a problem. Enabling Smart Queue Management (SQM) on your router — if it supports it — is the most effective fix.
 
 ## Step seven: rule out device problems
 

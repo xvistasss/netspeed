@@ -21,12 +21,8 @@ const aboutSchema = {
 <Layout
   title="About Us — NetSpeed Internet Telemetry & Diagnostics"
   description="Learn about the design, methodology, and engineering behind NetSpeed. Our speed test engine provides uncompromised telemetry via optimal server selection."
+  structuredData={aboutSchema}
 >
-  <script
-    type="application/ld+json"
-    is:inline
-    set:html={JSON.stringify(aboutSchema)}
-  />
   <main class="flex-1 py-16 px-4 md:px-8">
     <div class="max-w-4xl mx-auto flex flex-col gap-12">
       {/* Hero Header Block */}

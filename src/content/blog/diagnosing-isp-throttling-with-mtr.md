@@ -164,6 +164,6 @@ Host                                Loss%   Snt   Last    Avg   Best  Wrst StDev
 ## Actionable Next Steps
 
 By saving and exporting MTR logs:
-1. Run a parallel diagnostic on [NetSpeed](/) to establish baseline bandwidth and loaded latency.
+1. Run a parallel diagnostic on [our network benchmark](/) to establish baseline bandwidth and loaded latency.
 2. If packet loss originates at Hop 2 or 3, export the MTR report to a `.txt` file and provide it to your ISP's tier-2 networking team.
 3. If packet loss originates at an upstream transit handoff (Hop 4+), testing through a low-latency VPN that routes through an alternate ISP transit provider can bypass the congested interconnect.

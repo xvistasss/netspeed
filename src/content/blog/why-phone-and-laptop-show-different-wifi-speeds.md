@@ -184,10 +184,10 @@ Run a few tests, keep the conditions consistent, and look for a repeatable patte
 
 ### Ready to Check Your Connection?
 
-Use [NetSpeed](https://freenetspeed.com/) to measure your download speed, upload speed, latency, and other available network metrics. Compare results across devices to help understand how your connection performs in practice.
+Use [NetSpeed's network diagnostic tool](/) to measure your download speed, upload speed, latency, and other available network metrics. Compare results across devices to help understand how your connection performs in practice.
 
 ### Further reading
 
-- [How to Read and Understand Your Speed Test Results](https://freenetspeed.com/blog/understanding-speed-test-results)
-- [Why Your WiFi Speed Differs from Ethernet](https://freenetspeed.com/blog/wifi-vs-ethernet)
-- [How to Troubleshoot Slow Internet at Home](https://freenetspeed.com/blog/troubleshooting-slow-internet)
+- [How to Read and Understand Your Speed Test Results](/blog/understanding-speed-test-results)
+- [Why Your WiFi Speed Differs from Ethernet](/blog/wifi-vs-ethernet)
+- [How to Troubleshoot Slow Internet at Home](/blog/troubleshooting-slow-internet)

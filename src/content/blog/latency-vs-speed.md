@@ -44,7 +44,7 @@ Latency is the dominant factor for activities that involve real-time interaction
 
 Many people judge their internet quality solely by the download speed number from a speed test. This creates a misleading picture. A connection that delivers 500 Mbps download but has 120 ms latency will feel worse for gaming and video calls than a connection that delivers 100 Mbps with 15 ms latency.
 
-The right way to evaluate your connection is to look at all the metrics together. Our [speed test](/) shows you download speed, upload speed, latency, jitter, and packet loss in a single view, giving you a complete picture rather than just one number.
+The right way to evaluate your connection is to look at all the metrics together. Our [speed test engine](/) shows you download speed, upload speed, latency, jitter, and packet loss in a single view, giving you a complete picture rather than just one number.
 
 ## Real-world scenarios
 
@@ -72,4 +72,4 @@ If latency is your problem, here are the most effective fixes:
 
 ## The bottom line
 
-Speed determines how much you can do at once. Latency determines how responsive it feels. For most people, a balanced connection with good numbers in both areas provides the best experience. Run a [speed test](/) that shows all metrics, not just speed, so you can make informed decisions about your connection.
+Speed determines how much you can do at once. Latency determines how responsive it feels. For most people, a balanced connection with good numbers in both areas provides the best experience. Run a [full network diagnostic](/) that shows all metrics, not just speed, so you can make informed decisions about your connection.

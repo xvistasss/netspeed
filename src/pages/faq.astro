@@ -23,12 +23,8 @@ const faqSchema = {
 <Layout
   title="Frequently Asked Questions — NetSpeed"
   description="Answers to common questions about internet speed, network metrics, speed testing, and how to diagnose connection problems."
+  structuredData={faqSchema}
 >
-  <script
-    type="application/ld+json"
-    is:inline
-    set:html={JSON.stringify(faqSchema)}
-  />
   <main class="flex-1 py-16 px-4 md:px-8">
     <div class="max-w-3xl mx-auto flex flex-col gap-10">
       {/* Header */}

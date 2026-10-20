@@ -152,20 +152,18 @@ const navLinks = [
     id="mobile-menu-drawer"
     class="hidden lg:hidden absolute top-full left-0 w-full bg-canvas/95 backdrop-blur-md border-b border-hairline px-4 py-4 shadow-lg flex-col gap-2"
   >
-    {
-      navLinks.map((link) => (
-        <a
-          href={link.href}
-          class="text-sm font-medium text-ink hover:text-link hover:bg-canvas-soft-2 px-3 py-2.5 rounded-md transition-colors block"
-        >
-          {link.label}
-        </a>
-      ))
-    }
   </div>
 </header>
 
 <script>
+  const navLinks = [
+    { href: "/", label: "Speed Test" },
+    { href: "/how-it-works", label: "How It Works" },
+    { href: "/blog", label: "Guides" },
+    { href: "/faq", label: "FAQ" },
+    { href: "/about", label: "About" },
+  ];
+
   const setupMobileMenu = () => {
     const toggleBtn = document.getElementById("header-mobile-menu-toggle");
     const drawer = document.getElementById("mobile-menu-drawer");
@@ -174,6 +172,14 @@ const navLinks = [
 
     if (toggleBtn && drawer && menuIcon && closeIcon) {
       toggleBtn.addEventListener("click", () => {
+        if (drawer.children.length === 0) {
+          drawer.innerHTML = navLinks
+            .map(
+              (link) =>
+                `<a href="${link.href}" class="text-sm font-medium text-ink hover:text-link hover:bg-canvas-soft-2 px-3 py-2.5 rounded-md transition-colors block">${link.label}</a>`,
+            )
+            .join("");
+        }
         const isHidden = drawer.classList.contains("hidden");
         if (isHidden) {
           drawer.classList.remove("hidden");

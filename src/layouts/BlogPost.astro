@@ -78,7 +78,11 @@ const jsonLd = {
 };
 ---
 
-<Layout title={`${title} — NetSpeed Blog`} description={description}>
+<Layout
+  title={`${title} — NetSpeed Blog`}
+  description={description}
+  structuredData={jsonLd}
+>
   <main class="flex-1 py-16 px-4 md:px-8">
     <article class="max-w-3xl mx-auto flex flex-col gap-10">
       {/* Article Header */}
@@ -134,19 +138,6 @@ const jsonLd = {
               </>
             )
           }
-          <span class="text-hairline-strong">·</span>
-          <span
-            class="text-emerald-600 dark:text-emerald-400 font-sans text-[11px] font-medium inline-flex items-center gap-1"
-          >
-            <svg
-              class="w-3 h-3 stroke-current"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke-width="2.5"
-              ><polyline points="20 6 9 17 4 12"></polyline></svg
-            >
-            Technical Review Verified
-          </span>
         </div>
 
         <p
@@ -226,10 +217,4 @@ const jsonLd = {
       </footer>
     </article>
   </main>
-
-  <script
-    type="application/ld+json"
-    is:inline
-    set:html={JSON.stringify(jsonLd)}
-  />
 </Layout>

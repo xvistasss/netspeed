@@ -126,4 +126,4 @@ If neither Bridge Mode nor AP Mode is an option:
 After applying your fix, restart both devices and check your setup:
 1. Re-run `tracert 1.1.1.1`: You should now see only one private local hop before hitting your ISP.
 2. Check your gaming console's network test: Your NAT status should immediately transition to **Open** (or **Type 2**).
-3. Run a network benchmark on [NetSpeed](/) to verify that packet throughput and latency stability remain optimal across your home network.
+3. Run a network benchmark on [NetSpeed's telemetry suite](/) to verify that packet throughput and latency stability remain optimal across your home network.
