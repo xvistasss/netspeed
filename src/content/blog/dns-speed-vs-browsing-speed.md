@@ -59,7 +59,7 @@ You can measure your DNS lookup latency in milliseconds using your computer's te
 
 Use the built-in `nslookup` utility:
 
-```cmd
+```powershell
 nslookup freenetspeed.com 1.1.1.1
 ```
 

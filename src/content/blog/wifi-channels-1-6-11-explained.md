@@ -85,7 +85,7 @@ You can check which channels your surrounding neighbors are using in seconds usi
 ### On Windows
 Open Command Prompt and run:
 
-```cmd
+```powershell
 netsh wlan show networks mode=bssid
 ```
 
