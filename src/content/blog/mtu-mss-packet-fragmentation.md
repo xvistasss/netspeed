@@ -60,7 +60,7 @@ You can find the exact unfragmented MTU supported by your path using native term
 
 We use the `ping` utility with the `-f` (Don't Fragment) and `-l` (Buffer Size) flags to test against a reliable public endpoint:
 
-```cmd
+```powershell
 ping 1.1.1.1 -f -l 1472
 ```
 
@@ -72,7 +72,7 @@ ping 1.1.1.1 -f -l 1472
 * If you receive: `Packet needs to be fragmented but DF set.`  
   Your connection does not support 1500 MTU.
 * Decrease the payload size in decrements of 10 until packets reply without fragmentation:
-  ```cmd
+  ```powershell
   ping 1.1.1.1 -f -l 1464
   ```
   If 1464 succeeds, test upwards to find the exact boundary. If `1464` is the highest value that returns a reply:  

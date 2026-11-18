@@ -1,0 +1,63 @@
+.prose pre {
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem;
+  color: var(--color-ink);
+  background-color: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: 8px;
+}
+
+.prose pre code {
+  display: block;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.prose pre .token.comment,
+.prose pre .token.prolog,
+.prose pre .token.doctype,
+.prose pre .token.cdata {
+  color: var(--color-mute);
+}
+
+.prose pre .token.punctuation,
+.prose pre .token.operator {
+  color: var(--color-body);
+}
+
+.prose pre .token.keyword,
+.prose pre .token.atrule,
+.prose pre .token.attr-value {
+  color: var(--color-link-deep);
+}
+
+.prose pre .token.string,
+.prose pre .token.char,
+.prose pre .token.inserted,
+.prose pre .token.builtin {
+  color: var(--color-success);
+}
+
+.prose pre .token.function,
+.prose pre .token.class-name {
+  color: var(--color-accent-upload);
+}
+
+.prose pre .token.number,
+.prose pre .token.boolean,
+.prose pre .token.constant,
+.prose pre .token.regex {
+  color: var(--color-warning);
+}
+
+.prose pre .token.deleted {
+  color: var(--color-error);
+}

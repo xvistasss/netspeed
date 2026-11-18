@@ -95,7 +95,7 @@ Max Throughput = Buffer Size (Bits) / RTT (Seconds)
 
 Verify that autotuning is enabled:
 
-```cmd
+```powershell
 netsh int tcp show global
 ```
 
@@ -107,7 +107,7 @@ Receive Window Auto-Tuning Level    : normal
 
 If it is set to `disabled` or `restricted`, enable it:
 
-```cmd
+```powershell
 netsh int tcp set global autotuninglevel=normal
 ```
 

@@ -35,6 +35,8 @@ pnpm-debug.log*
 # ai tooling (local config, not for remote)
 .agents/
 .kilo/
+.claude/
+.continue/
 AGENTS.md
 DESIGN.md
 GEMINI.md

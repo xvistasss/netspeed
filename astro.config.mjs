@@ -15,12 +15,19 @@ export default defineConfig({
   site: 'https://freenetspeed.com',
   trailingSlash: 'never',
   output: 'server',
+  markdown: {
+    syntaxHighlight: 'prism',
+  },
   integrations: [react()],
+  devToolbar: {
+    enabled: false,
+  },
 
   adapter: cloudflare(),
 
   security: {
-    checkOrigin: true
+    checkOrigin: true,
+    csp: true,
   },
 
   vite: {

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./prism.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

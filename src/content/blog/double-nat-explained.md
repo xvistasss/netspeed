@@ -61,7 +61,7 @@ You can confirm Double NAT in less than 60 seconds from your computer or phone.
 ### Method 2: Run a Traceroute in Command Prompt / Terminal
 On Windows, open Command Prompt and type:
 
-```cmd
+```powershell
 tracert 1.1.1.1
 ```
 
