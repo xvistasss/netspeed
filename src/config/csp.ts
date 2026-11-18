@@ -183,7 +183,7 @@ export async function extractInlineCspHashes(html: string): Promise<{
     destination.push(`'sha256-${btoa(binaryDigest)}'`);
   };
 
-  const scripts = [...strippedHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
+  const scripts = [...strippedHtml.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)];
   for (const [, attributes, content] of scripts) {
     if (!/\bsrc\s*=/i.test(attributes)) {
       await addHash(content, hashes.script);
