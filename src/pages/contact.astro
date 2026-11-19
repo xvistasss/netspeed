@@ -1,5 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import { TURNSTILE_ACTION, TURNSTILE_SITE_KEY } from "../contact";
 ---
 
 <Layout
@@ -29,6 +30,27 @@ import Layout from "../layouts/Layout.astro";
 
       {/* Main Container */}
       <div class="relative min-h-[350px]">
+        <script is:inline>
+          window.onTurnstileLoad = () => {
+            const container = document.getElementById("turnstile-widget");
+            const sitekey = container?.dataset.sitekey;
+            const action = container?.dataset.action;
+
+            if (!container || !sitekey || !action || container.dataset.widgetId || !window.turnstile) {
+              return;
+            }
+
+            container.dataset.widgetId = window.turnstile.render(container, {
+              sitekey,
+              action,
+            });
+          };
+        </script>
+        <script
+          is:inline
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad"
+          defer
+        ></script>
         {/* Contact Form */}
         <form
           id="contact-form"
@@ -114,6 +136,11 @@ import Layout from "../layouts/Layout.astro";
             ></textarea>
           </div>
 
+          <div
+            id="turnstile-widget"
+            data-sitekey={TURNSTILE_SITE_KEY}
+            data-action={TURNSTILE_ACTION}
+          ></div>
           <div id="form-error" class="hidden text-sm text-error bg-error/10 border border-error/20 rounded-md px-4 py-3 mt-2" role="alert"></div>
           <div class="pt-2">
             <button
@@ -171,6 +198,15 @@ import Layout from "../layouts/Layout.astro";
       const successView = document.getElementById("success-view");
       const submitBtn = document.getElementById("submit-button");
       const resetBtn = document.getElementById("reset-button");
+      const resetTurnstile = () => {
+        const widgetId = document.getElementById("turnstile-widget")?.dataset.widgetId;
+        const api = Reflect.get(window, "turnstile") as
+          | { reset?: (id: string) => void }
+          | undefined;
+        if (widgetId) {
+          api?.reset?.(widgetId);
+        }
+      };
 
       if (form instanceof HTMLFormElement && successView && submitBtn instanceof HTMLButtonElement && resetBtn) {
         form.addEventListener("submit", async (e) => {
@@ -186,6 +222,7 @@ import Layout from "../layouts/Layout.astro";
           const email = formData.get("email");
           const subject = formData.get("subject");
           const message = formData.get("message");
+          const turnstileToken = formData.get("cf-turnstile-response");
 
           try {
             const res = await fetch("/api/contact", {
@@ -193,7 +230,7 @@ import Layout from "../layouts/Layout.astro";
               headers: {
                 "Content-Type": "application/json",
               },
-              body: JSON.stringify({ name, email, subject, message }),
+              body: JSON.stringify({ name, email, subject, message, turnstileToken }),
             });
 
             if (!res.ok) {
@@ -217,6 +254,7 @@ import Layout from "../layouts/Layout.astro";
             }, 300);
           } catch (err) {
             console.error(err);
+            resetTurnstile();
             const errorEl = document.getElementById("form-error");
             if (errorEl) {
               errorEl.textContent = "Submission failed. Please check your internet connection and try again.";
@@ -231,6 +269,7 @@ import Layout from "../layouts/Layout.astro";
         resetBtn.addEventListener("click", () => {
           // Clear inputs
           form.reset();
+          resetTurnstile();
           submitBtn.disabled = false;
           submitBtn.textContent = "Send Message";
           submitBtn.classList.remove("opacity-80");
@@ -253,7 +292,13 @@ import Layout from "../layouts/Layout.astro";
       }
     };
 
-    setupContactForm();
-    document.addEventListener("astro:after-swap", setupContactForm);
+    const setupContactPage = () => {
+      setupContactForm();
+      const onTurnstileLoad = Reflect.get(window, "onTurnstileLoad");
+      if (typeof onTurnstileLoad === "function") onTurnstileLoad();
+    };
+
+    setupContactPage();
+    document.addEventListener("astro:after-swap", setupContactPage);
   </script>
 </Layout>

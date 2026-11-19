@@ -1,5 +1,7 @@
 import type { APIRoute } from "astro";
+import { env as cloudflareEnv } from "cloudflare:workers";
 import { checkRateLimit, getClientIP, createRateLimitHeaders } from "./rateLimiter";
+import { verifyTurnstileToken } from "../../contact";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -122,6 +124,16 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({ error: "Please enter a valid email address." }),
         {
           status: 400,
+          headers: corsHeaders,
+        },
+      );
+    }
+
+    if (!await verifyTurnstileToken(data.turnstileToken, cloudflareEnv)) {
+      return new Response(
+        JSON.stringify({ error: "Please complete the security check and try again." }),
+        {
+          status: 403,
           headers: corsHeaders,
         },
       );
