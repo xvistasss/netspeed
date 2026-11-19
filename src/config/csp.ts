@@ -8,6 +8,7 @@
  */
 const CSP = {
   scriptSrc: [
+    "https://challenges.cloudflare.com",
     // Monetag uses WebAssembly compilation; avoid the broader 'unsafe-eval'.
     "'wasm-unsafe-eval'",
     "https://www.googletagmanager.com",
@@ -55,6 +56,7 @@ const CSP = {
   ],
 
   connectSrc: [
+    "https://challenges.cloudflare.com",
     // Browser-side speed test and observed analytics/ad-quality requests.
     "https://speed.cloudflare.com",
     "https://api-bdc.io",
@@ -106,6 +108,7 @@ const CSP = {
   ],
 
   frameSrc: [
+    "https://challenges.cloudflare.com",
     "https://googleads.g.doubleclick.net",
     "https://pagead2.googlesyndication.com",
     "https://tpc.googlesyndication.com",

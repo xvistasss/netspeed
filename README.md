@@ -93,6 +93,12 @@ npm run dev
 
 The terminal will print a local URL, usually **`http://localhost:4321/`**. Open this address in your web browser.
 
+### Contact Form Verification
+
+The contact form uses the existing Cloudflare Turnstile widget. Configure the `net-speed-test` Worker with `TURNSTILE_SECRET` as a secret and `TURNSTILE_HOSTNAMES` as a non-secret variable. Set the production hostname variable to `freenetspeed.com` only.
+
+For local development, create an ignored `.dev.vars` file with the widget secret and `TURNSTILE_HOSTNAMES=localhost,127.0.0.1`. The widget must allow these local hostnames as well as `freenetspeed.com`.
+
 ---
 
 ##  Genie Commands
